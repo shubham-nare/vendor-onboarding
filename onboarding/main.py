@@ -8,10 +8,12 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse
+from urllib.parse import quote
+
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from onboarding import db
+from onboarding import auth, db
 from onboarding.models import Base
 from onboarding.pipeline import sweep_interrupted
 
@@ -23,6 +25,11 @@ async def lifespan(_app: FastAPI):
     try:
         async with db.engine().begin() as conn:
             await conn.run_sync(Base.metadata.create_all)  # no-op when tables exist
+        from onboarding.pipeline import sessions
+        from onboarding.seeding import ensure_demo_logins
+        async with sessions()() as s:  # a fresh deploy can always be logged into
+            await ensure_demo_logins(s)
+            await s.commit()
         n = await sweep_interrupted()
         if n:
             log.warning("marked %s unfinished run(s) as interrupted", n)
@@ -33,6 +40,21 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="Vendor onboarding", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=__file__.rsplit("main.py", 1)[0] + "static"), name="static")
+
+
+# Company pages (the console) need an employee login; vendor pages have their own login (portal.py).
+COMPANY_AREAS = {"console", "act-as", "invites", "runs", "files", "outbox", "check", "assumptions", "system", "demo", "bills", "vendors"}
+
+
+@app.middleware("http")
+async def company_login_required(request: Request, call_next):
+    area = request.url.path.strip("/").split("/", 1)[0]
+    if area in COMPANY_AREAS and auth.read_session(request.cookies.get(auth.COMPANY_COOKIE), purpose="company") is None:
+        if request.method != "GET" or request.url.path.endswith(("/events", "/stream")):
+            return JSONResponse({"error": "Please log in to the company console."}, status_code=401)
+        nxt = request.url.path + (f"?{request.url.query}" if request.url.query else "")
+        return RedirectResponse(f"/company/login?next={quote(nxt)}", status_code=303)
+    return await call_next(request)
 
 
 @app.exception_handler(HTTPException)

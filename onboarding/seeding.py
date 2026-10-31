@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import secrets
 from datetime import timedelta
 
@@ -10,14 +11,21 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from onboarding import demo_data as dd
 from onboarding.db import engine
-from onboarding.models import Base, Blocklist, Employee, Invite, SimRegistry, VendorMaster, now
+from onboarding import auth
+from onboarding.models import Base, Blocklist, Employee, Invite, SimRegistry, StaffLogin, VendorAccount, VendorMaster, now
 
 EMPLOYEES = [
-    dict(name="Priya Nair", department="Operations, Plant 2", role="sponsor", email="priya.nair@buyer.example.com"),
-    dict(name="Rahul Desai", department="Plant Head, Pune", role="sponsor", email="rahul.desai@buyer.example.com"),
-    dict(name="Arjun Mehta", department="Procurement", role="maker", email="arjun.mehta@buyer.example.com"),
-    dict(name="Kavita Rao", department="Finance", role="checker", email="kavita.rao@buyer.example.com"),
+    dict(name="Priya Nair", department="Operations, Plant 2", role="sponsor", email="priya.nair@vardhan.example.com"),
+    dict(name="Rahul Desai", department="Plant Head, Pune", role="sponsor", email="rahul.desai@vardhan.example.com"),
+    dict(name="Arjun Mehta", department="Procurement", role="maker", email="arjun.mehta@vardhan.example.com"),
+    dict(name="Kavita Rao", department="Finance", role="checker", email="kavita.rao@vardhan.example.com"),
 ]
+
+# Demo logins (fictional people, shown on the login pages so anyone reviewing the demo can sign in).
+# Every employee logs in with their own email; one vendor account is ready, with no registration yet.
+DEMO_PASSWORD = os.environ.get("DEMO_PASSWORD", "vardhan-demo-26")
+DEMO_COMPANY_EMAIL = "arjun.mehta@vardhan.example.com"
+DEMO_VENDOR = dict(email=dd.KESARI["contact"]["email"], company_name=dd.KESARI["legal_name"], contact_name=dd.KESARI["contact"]["name"])
 
 INVITES = {  # scenario_key -> (sponsor, company, reason, category, band, high)
     "happy_nilgiri": ("Priya Nair", dd.NILGIRI["legal_name"], "Corrugated boxes and protective packaging for Plant 2, replacing a supplier with late deliveries", "Packaging", "10-25 lakh", False),
@@ -82,7 +90,10 @@ async def seed(reset: bool = False, dispose: bool = True) -> dict:
                 obj = Employee(**e)
                 s.add(obj)
                 emp[e["name"]] = obj
+            else:
+                emp[e["name"]].email, emp[e["name"]].department = e["email"], e["department"]
         await s.flush()
+        await ensure_demo_logins(s)
 
         existing = {i.scenario_key for i in (await s.execute(select(Invite))).scalars() if i.scenario_key}
         for key, (sponsor, company, reason, cat, band, high) in INVITES.items():
@@ -105,9 +116,21 @@ async def seed(reset: bool = False, dispose: bool = True) -> dict:
         await s.commit()
 
         counts = {}
-        for model in (Employee, Invite, VendorMaster, Blocklist, SimRegistry):
+        for model in (Employee, StaffLogin, VendorAccount, Invite, VendorMaster, Blocklist, SimRegistry):
             counts[model.__tablename__] = len((await s.execute(select(model))).scalars().all())
     if dispose:
         await eng.dispose()
     return counts
 
+
+
+async def ensure_demo_logins(s: AsyncSession) -> None:
+    """Give every seeded employee a console login and create the demo vendor account, if missing.
+    Called by seed() and at app start (so a fresh deploy can always be logged into)."""
+    have = {sl.employee_id for sl in (await s.execute(select(StaffLogin))).scalars()}
+    for e in (await s.execute(select(Employee))).scalars():
+        if e.id not in have:
+            s.add(StaffLogin(employee_id=e.id, password_hash=auth.hash_password(DEMO_PASSWORD)))
+    if not (await s.execute(select(VendorAccount).where(VendorAccount.email == DEMO_VENDOR["email"]))).scalar_one_or_none():
+        s.add(VendorAccount(password_hash=auth.hash_password(DEMO_PASSWORD), **DEMO_VENDOR))
+    await s.flush()

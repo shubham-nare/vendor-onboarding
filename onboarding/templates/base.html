@@ -134,7 +134,7 @@
   </style>
 </head>
 <body class="min-h-screen">
-  {% set landing = path == '/' %}
+  {% set landing = path == '/' or path.startswith('/company/') %}
   {% set vendor_page = path.startswith('/apply') or path.startswith('/status') or path == '/bill' or path.startswith('/bill?') or path.startswith('/vendor') %}
   {% macro seal(size=34, light=false) -%}
     <svg width="{{ size }}" height="{{ size }}" viewBox="0 0 40 40" aria-hidden="true">
@@ -148,7 +148,7 @@
   <header class="border-b border-slate-200 bg-white/70 backdrop-blur">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 flex items-center gap-3">
       {{ seal(32) }}
-      <div class="leading-tight"><div class="font-display text-lg">Vendor Assurance</div><div class="kicker !text-[10px]">{{ BUYER.legal_name }}</div></div>
+      <a href="/" class="leading-tight"><div class="font-display text-lg">Vendor Assurance</div><div class="kicker !text-[10px]">{{ BUYER.legal_name }}</div></a>
     </div>
   </header>
   {% elif vendor_page %}
@@ -204,7 +204,7 @@
         <form method="post" action="/act-as" class="absolute right-0 top-full mt-2 z-50 w-[23rem] max-w-[calc(100vw-2rem)] rounded-xl border border-slate-300 bg-white text-slate-900 shadow-[0_12px_40px_rgba(28,27,24,.28)] overflow-hidden fade-in">
           <div class="px-4 pt-3.5 pb-3 border-b border-slate-200 bg-slate-50">
             <div class="kicker !text-[10px]">Switch person · demo</div>
-            <p class="text-[12.5px] text-slate-600 mt-1 leading-snug">There are no logins in this demo. Pick who you are to see what that person is allowed to do.</p>
+            <p class="text-[12.5px] text-slate-600 mt-1 leading-snug">{% if staff %}Logged in as <b>{{ staff.name }}</b>. {% endif %}For the demo you can act as anyone without logging out, to see what each person is allowed to do. In production each person logs in as themselves.</p>
           </div>
           <ul class="divide-y divide-slate-100">
             {% for e in employees %}
@@ -227,6 +227,7 @@
           </ul>
         </form>
       </details>
+      <form method="post" action="/company/logout" class="shrink-0"><button class="rounded-md border border-slate-700 bg-slate-800/80 hover:bg-slate-800 px-3 py-2 text-[12.5px] text-slate-200" title="{{ ('Logged in as ' ~ staff.name) if staff else '' }}">Log out</button></form>
       <script>
         document.addEventListener('click', e => { const d = document.getElementById('persona'); if (d && d.open && !d.contains(e.target)) d.open = false; });
         document.addEventListener('keydown', e => { const d = document.getElementById('persona'); if (e.key === 'Escape' && d && d.open) { d.open = false; d.querySelector('summary').focus(); } });

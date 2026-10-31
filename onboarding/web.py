@@ -92,7 +92,14 @@ async def _employees(s) -> list[Employee]:
     return list((await s.execute(select(Employee).order_by(Employee.id))).scalars())
 
 
+async def staff_member(request: Request, s) -> Employee | None:
+    """The employee logged in to the company console (signed company_session cookie), if any."""
+    emp_id = auth.read_session(request.cookies.get(auth.COMPANY_COOKIE), purpose="company")
+    return await s.get(Employee, emp_id) if emp_id else None
+
+
 async def _actor(request: Request, s) -> Employee | None:
+    """Who the console is acting as: the person picked in the demo switcher, else whoever logged in."""
     emps = await _employees(s)
     if not emps:
         return None
@@ -100,11 +107,15 @@ async def _actor(request: Request, s) -> Employee | None:
         wanted = int(request.cookies.get("actor", "0"))
     except ValueError:
         wanted = 0
+    if not wanted:
+        me = await staff_member(request, s)
+        wanted = me.id if me else 0
     return next((e for e in emps if e.id == wanted), None) or next((e for e in emps if e.role == "maker"), emps[0])
 
 
 async def render(request: Request, s, name: str, **ctx) -> HTMLResponse:
-    ctx.update(request=request, actor=await _actor(request, s), employees=await _employees(s), path=request.url.path)
+    ctx.update(request=request, actor=await _actor(request, s), employees=await _employees(s), path=request.url.path,
+               staff=await staff_member(request, s))
     if "vendor_account" not in ctx:
         ctx["vendor_account"] = await vendor_account(request, s)
     return templates.TemplateResponse(request, name, ctx)
@@ -293,7 +304,7 @@ async def _vendor_link(s, token: str) -> tuple[Invite | None, Bill | None, Appli
 
 
 async def _resolve_employee(s, text: str) -> Employee | None:
-    """Match 'Priya Nair', 'priya', 'priya.nair@buyer.example.com' to one employee (None if unknown or ambiguous)."""
+    """Match 'Priya Nair', 'priya', 'priya.nair@vardhan.example.com' to one employee (None if unknown or ambiguous)."""
     t = " ".join((text or "").lower().replace(".", " ").split())
     if not t:
         return None

@@ -3,7 +3,9 @@
 Standard library only:
   - passwords: scrypt (salted, memory-hard), compared in constant time
   - session: "<account id>.<issued at>.<HMAC-SHA256>" in an http-only cookie; 14 days
-The company side has no login in this demo (it would sit behind company single sign-on).
+Employees log in the same way (their work email), with a separate cookie. Each cookie's signature
+includes its purpose, so a vendor's cookie can never be replayed as an employee's (or the reverse).
+In production the company side would use the company's single sign-on instead.
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ import time
 from onboarding.config import get_settings
 
 COOKIE = "vendor_session"
+COMPANY_COOKIE = "company_session"
 MAX_AGE = 14 * 24 * 3600
 MIN_PASSWORD = 8
 _N, _R, _P = 2 ** 14, 8, 1
@@ -48,17 +51,17 @@ def _sign(payload: str) -> str:
     return hmac.new(_key(), payload.encode(), hashlib.sha256).hexdigest()
 
 
-def make_session(account_id: int) -> str:
+def make_session(account_id: int, purpose: str = "vendor") -> str:
     payload = f"{account_id}.{int(time.time())}"
-    return f"{payload}.{_sign(payload)}"
+    return f"{payload}.{_sign(purpose + '|' + payload)}"
 
 
-def read_session(value: str | None) -> int | None:
-    """The account id in a valid, unexpired cookie, else None."""
+def read_session(value: str | None, purpose: str = "vendor") -> int | None:
+    """The id in a valid, unexpired cookie made for this purpose, else None."""
     if not value or value.count(".") != 2:
         return None
     acct, issued, sig = value.split(".")
-    if not hmac.compare_digest(sig, _sign(f"{acct}.{issued}")):
+    if not hmac.compare_digest(sig, _sign(f"{purpose}|{acct}.{issued}")):
         return None
     try:
         if time.time() - int(issued) > MAX_AGE:

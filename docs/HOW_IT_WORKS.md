@@ -36,7 +36,7 @@ It also writes the vendor a clear message saying exactly what is needed.
 
 The home page (`/`) asks **"Who are you?"**:
 
-- **"I work at Vardhan Engineering"** → the internal console (`/console`): dashboard, runs, bills, vendors, invites. In production this sits behind the company's single sign-on. In the demo it's open, and the "Acting as" menu switches between employees.
+- **"I work at Vardhan Engineering"** → **Employee log in** (`/company/login`), then the internal console (`/console`): dashboard, runs, bills, vendors, invites. Every company page needs an employee login, because the console shows vendors' bank details, PAN and documents. In production this would be the company's single sign-on.
 - **"I'm a vendor or supplier"** → the **supplier portal**:
   - **Accounts:** a vendor **creates an account** (company, name, work email, password) and **logs in** on later visits.
     - Passwords are stored only as salted **scrypt** hashes.
@@ -61,7 +61,16 @@ The home page (`/`) asks **"Who are you?"**:
 | **Finance controller** | Kavita Rao (Finance) | Everything the reviewer can do, plus the high-risk cases: vendors with spend of **₹50 lakh a year or more**, or any **fraud-class signal**. Only the Finance controller can reject after a review. (The *checker*.) |
 | **Vendor** | The supplier's contact | Gets a private link, fills the form, uploads documents, sees their status page and the messages sent to them. Never sees internal reasoning. |
 
-There are no logins in the demo. The **"Acting as"** menu in the header (top right) stands in for single sign-on. It lists each person with their role and what they're allowed to do, so you can switch and watch the permissions change.
+**Logins.** Employees log in with their work email; vendors log in to the supplier portal with the account they created. The two use separate cookies, each signed for its purpose, so a vendor's login can never open a company page. Passwords are stored only as salted scrypt hashes.
+
+**Demo logins** (fictional, created by `seeding.py` and again at app start if missing; the login pages list them with a **Fill** button, and the shared demo password is `DEMO_PASSWORD` in `onboarding/seeding.py`):
+
+| Who | Email | What they see |
+|---|---|---|
+| Company (Arjun Mehta, Procurement reviewer) | `arjun.mehta@vardhan.example.com` | The console. Priya, Rahul and Kavita log in the same way with their own `@vardhan.example.com` emails. |
+| Vendor (Sneha Kulkarni, Kesari Facility Services) | `billing@kesarifacility.example.com` | An empty vendor account, ready to register with a bill (a demo link pre-fills Kesari's details and documents). |
+
+After logging in, the **"Acting as"** menu (top right) lets the demo switch person without logging out. It lists each person with their role and what they're allowed to do, so you can watch the permissions change. In production each person logs in as themselves and the menu doesn't exist.
 
 ---
 
@@ -668,7 +677,7 @@ The dashboard's **Try a scenario** list starts each case through a fresh invite 
 
 - **Plug in the real sources** (GSTN, PAN, penny-drop, MCA, Udyam) through a KYB provider. The adapters already share one shape, and facts would then reach A4.
 - **Signature trust chain:** check that the signer certificate chains to the CCA India root at signing time, with revocation data.
-- **Real sign-in** (single sign-on) instead of the "Acting as" menu; email delivery instead of the Outbox.
+- **Single sign-on** for employees instead of demo passwords and the "Acting as" menu; password reset and email verification for vendors; email delivery instead of the Outbox.
 - **Re-verification over time:** GST status, blocklist and sanctions on a schedule. **Bank change requests**, the biggest fraud vector after onboarding, should go through the same checks.
 - **ERP sync** of activated vendors.
 - **Approval is not payment.** Invoices are still paid only after purchase-order and goods-receipt matching, which is outside this tool.

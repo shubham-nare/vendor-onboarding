@@ -27,6 +27,20 @@
     {% if mode == 'register' %}Already have an account? <a class="text-indigo-700 underline" href="/vendor/login?next={{ next | urlencode }}">Log in</a>
     {% else %}New supplier? <a class="text-indigo-700 underline" href="/vendor/register?next={{ next | urlencode }}">Create an account</a>{% endif %}
   </p>
+  {% if mode == 'login' and demo %}
+  <section class="mt-5 rounded-xl border border-dashed border-slate-300 bg-white/60 p-4 text-sm flex items-center gap-3">
+    <span class="flex-1 min-w-0"><span class="kicker !text-[10px] block">Demo vendor account</span>
+      <span class="font-medium">{{ demo.vendor.company_name }}</span>
+      <span class="block mono text-[11.5px] text-slate-500 truncate">{{ demo.vendor.email }}</span></span>
+    <button type="button" id="fill" class="shrink-0 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs hover:border-slate-500">Fill</button>
+  </section>
+  <script>
+    document.getElementById('fill').addEventListener('click', () => {
+      const f = document.querySelector('form[action="/vendor/login"]');
+      f.email.value = {{ demo.vendor.email | tojson }}; f.password.value = {{ demo.password | tojson }}; f.querySelector('button').focus();
+    });
+  </script>
+  {% endif %}
   <p class="mt-6 text-xs text-slate-500 text-center">Demo: no email is sent and there's no password reset; in production both come by email.</p>
 </div>
 {% endblock %}

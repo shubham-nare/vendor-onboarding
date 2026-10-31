@@ -7,6 +7,7 @@
   /vendor/bills/{id}    the vendor's view of one bill (and the fix-and-resubmit form)
   /bills, /bills/{id}   company side: every vendor bill, with checks, the vendor's verified profile and actions
   /vendors              company side: every vendor account and where it stands
+  /company/login        employees log in with their work email (every company page needs it; see main.py)
 """
 
 from __future__ import annotations
@@ -20,9 +21,10 @@ from sqlalchemy import select
 
 from onboarding import auth
 from onboarding import bills as B
-from onboarding.demo_data import KESARI
-from onboarding.models import (Application, Bill, Employee, Fact, Invite, Message, Run, StoredFile, VendorAccount, VendorBill, VendorLink,
-                               VendorMaster, now)
+from onboarding.demo_data import KESARI, SCENARIOS
+from onboarding.models import (Application, Bill, Employee, Fact, Invite, Message, Run, StaffLogin, StoredFile, VendorAccount, VendorBill,
+                               VendorLink, VendorMaster, now)
+from onboarding.seeding import DEMO_COMPANY_EMAIL, DEMO_PASSWORD, DEMO_VENDOR
 from onboarding.pipeline import sessions
 from onboarding.rules import money
 from onboarding.web import (MAX_BYTES, ROLE_LABEL, _actor, _employees, _latest_run, _resolve_employee, render, safe_next, vendor_account)
@@ -41,9 +43,45 @@ DEMO_BILLS = {
 }
 
 
-def _cookie(resp: RedirectResponse, request: Request, account_id: int) -> RedirectResponse:
+def _cookie(resp: RedirectResponse, request: Request, account_id: int, purpose: str = "vendor") -> RedirectResponse:
     secure = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
-    resp.set_cookie(auth.COOKIE, auth.make_session(account_id), max_age=auth.MAX_AGE, httponly=True, samesite="lax", secure=secure)
+    name = auth.COMPANY_COOKIE if purpose == "company" else auth.COOKIE
+    resp.set_cookie(name, auth.make_session(account_id, purpose), max_age=auth.MAX_AGE, httponly=True, samesite="lax", secure=secure)
+    return resp
+
+
+# Demo logins shown on the login pages (fictional people; defined in seeding.py)
+DEMO = dict(password=DEMO_PASSWORD, company_email=DEMO_COMPANY_EMAIL, vendor=DEMO_VENDOR)
+
+
+# --- company login ---------------------------------------------------------------------------------
+@router.get("/company/login", response_class=HTMLResponse)
+async def company_login_form(request: Request, next: str = ""):
+    async with sessions()() as s:
+        return await render(request, s, "company_login.html", next=safe_next(next, "/console"), email="", error="", demo=DEMO)
+
+
+@router.post("/company/login", response_class=HTMLResponse)
+async def company_login(request: Request, email: str = Form(""), password: str = Form(""), next: str = Form("")):
+    email, nxt = email.strip().lower(), safe_next(next, "/console")
+    async with sessions()() as s:
+        emp = (await s.execute(select(Employee).where(Employee.email == email))).scalars().first()
+        login = (await s.execute(select(StaffLogin).where(StaffLogin.employee_id == emp.id))).scalar_one_or_none() if emp else None
+        if not login or not auth.verify_password(password, login.password_hash):
+            return await render(request, s, "company_login.html", next=nxt, email=email, demo=DEMO,
+                                error="That email and password don't match an employee login.")
+        login.last_login_at = now()
+        await s.commit()
+        resp = _cookie(RedirectResponse(nxt, status_code=303), request, emp.id, "company")
+        resp.set_cookie("actor", str(emp.id), max_age=auth.MAX_AGE, samesite="lax")   # start as yourself
+        return resp
+
+
+@router.post("/company/logout")
+async def company_logout():
+    resp = RedirectResponse("/", status_code=303)
+    resp.delete_cookie(auth.COMPANY_COOKIE)
+    resp.delete_cookie("actor")
     return resp
 
 
@@ -102,7 +140,7 @@ async def register(request: Request, company_name: str = Form(""), contact_name:
 async def login_form(request: Request, next: str = ""):
     async with sessions()() as s:
         nxt = safe_next(next)
-        return await render(request, s, "vendor_auth.html", mode="login", next=nxt, values={}, invite=await _invite_from_next(s, nxt), error="")
+        return await render(request, s, "vendor_auth.html", mode="login", next=nxt, values={}, invite=await _invite_from_next(s, nxt), error="", demo=DEMO)
 
 
 @router.post("/vendor/login", response_class=HTMLResponse)
@@ -113,7 +151,7 @@ async def login(request: Request, email: str = Form(""), password: str = Form(""
         if not acct or not auth.verify_password(password, acct.password_hash):
             # same message either way: don't reveal which emails have accounts
             return await render(request, s, "vendor_auth.html", mode="login", next=nxt, values={"email": email}, invite=None,
-                                error="That email and password don't match.")
+                                error="That email and password don't match.", demo=DEMO)
         acct.last_login_at = now()
         await s.commit()
         return _cookie(RedirectResponse(nxt, status_code=303), request, acct.id)
@@ -158,7 +196,9 @@ async def vendor_home(request: Request, submitted: int = 0):
         acct = await vendor_account(request, s)
         if not acct:
             return RedirectResponse("/vendor/login", status_code=303)
-        return await render(request, s, "vendor_home.html", acct=acct, submitted=submitted, B=B, **await _portfolio(s, acct))
+        # demo shortcut: the demo vendor account can pre-fill its bill-first registration
+        demo_bill = next((k for k, sc in SCENARIOS.items() if sc.get("bill") and sc["form"].get("contact_email") == acct.email), "")
+        return await render(request, s, "vendor_home.html", acct=acct, submitted=submitted, B=B, demo_bill=demo_bill, **await _portfolio(s, acct))
 
 
 @router.post("/vendor/invite")

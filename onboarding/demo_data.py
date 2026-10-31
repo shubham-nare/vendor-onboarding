@@ -430,7 +430,7 @@ SCENARIOS: dict[str, dict] = {
             "bill_mode": True, "bill_invoice_number": "BCS/26-27/0877", "bill_invoice_date": "2026-10-24",
             "bill_amount": "98472.00",  # digits swapped: the invoice says 94,872.00
             "bill_description": "Breakdown repair of the Plant 2 control-room AC (compressor replaced)",
-            "bill_engaged_by": "rahul.desai@buyer.example.com", "bill_po": ""},
+            "bill_engaged_by": "rahul.desai@vardhan.example.com", "bill_po": ""},
         "documents": {
             "gst_certificate": gst_cert(BRINDAVAN),
             "pan_card": pan_card(BRINDAVAN["legal_name"], BRINDAVAN["pan"], date_label="Date of Incorporation/Formation", date=BRINDAVAN["incorporated"]),

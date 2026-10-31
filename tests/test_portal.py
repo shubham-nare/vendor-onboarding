@@ -64,11 +64,21 @@ def flows(tmp_path_factory):
         t = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=t, base_url="http://t") as v, httpx.AsyncClient(transport=t, base_url="http://t") as staff, \
                 httpx.AsyncClient(transport=t, base_url="http://t") as other:
+            from onboarding.seeding import DEMO_COMPANY_EMAIL, DEMO_PASSWORD, DEMO_VENDOR
             out["landing"] = (await v.get("/")).text
+            out["console_anon"] = (await staff.get("/console")).headers.get("location", "")
+            out["action_anon"] = (await staff.post("/runs/1/action", data={"action": "activate"})).status_code
+            out["staff_bad"] = (await staff.post("/company/login", data={"email": DEMO_COMPANY_EMAIL, "password": "not-it"})).text
+            out["staff_login"] = (await staff.post("/company/login", data={"email": DEMO_COMPANY_EMAIL, "password": DEMO_PASSWORD, "next": "/bills"})).headers.get("location", "")
             out["console"] = (await staff.get("/console")).status_code
+            out["console_page"] = (await staff.get("/console")).text
+            r = await other.post("/vendor/login", data={"email": DEMO_VENDOR["email"], "password": DEMO_PASSWORD})
+            out["demo_vendor"] = (r.status_code, (await other.get("/vendor")).text)
+            out["vendor_cookie_on_console"] = (await other.get("/console")).headers.get("location", "")
+            other.cookies.clear()
             out["portal_anon"] = (await v.get("/vendor")).headers.get("location", "")
             out["bill_anon"] = (await v.get("/bill")).headers.get("location", "")
-            reg = {"company_name": "Kesari Facility Services Private Limited", "contact_name": "Sneha Kulkarni", "email": "billing@kesarifacility.example.com"}
+            reg = {"company_name": "Kesari Facility Services Private Limited", "contact_name": "Sneha Kulkarni", "email": "accounts@kesarifacility.example.com"}
             out["weak"] = (await v.post("/vendor/register", data=reg | {"password": "short"})).text
             r = await v.post("/vendor/register", data=reg | {"password": PW})
             out["registered"] = (r.status_code, r.headers.get("set-cookie", ""))
@@ -134,6 +144,26 @@ def flows(tmp_path_factory):
 
 def test_two_doors(flows):
     assert "I work at" in flows["landing"] and "vendor or supplier" in flows["landing"] and flows["console"] == 200
+
+
+def test_company_pages_need_an_employee_login(flows):
+    assert flows["console_anon"].startswith("/company/login?next=")
+    assert flows["action_anon"] == 401
+    assert "match an employee login" in flows["staff_bad"]
+    assert flows["staff_login"] == "/bills"
+    assert "Arjun Mehta" in flows["console_page"] and "Log out" in flows["console_page"]
+
+
+def test_demo_vendor_account_and_cookies_dont_cross_over(flows):
+    code, home = flows["demo_vendor"]
+    assert code == 303 and "Hello, Sneha" in home and "demo=bill_kesari" in home
+    assert flows["vendor_cookie_on_console"].startswith("/company/login")    # a vendor's cookie is not an employee's
+
+
+def test_cookie_purposes_are_separate():
+    from onboarding import auth
+    c = auth.make_session(3)                     # a vendor cookie for account 3
+    assert auth.read_session(c) == 3 and auth.read_session(c, purpose="company") is None
 
 
 def test_vendor_pages_need_an_account(flows):

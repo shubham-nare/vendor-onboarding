@@ -53,6 +53,9 @@ def flows(tmp_path_factory):
         cat = web.demo_catalog()
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://t") as c:
+            from onboarding.seeding import DEMO_COMPANY_EMAIL, DEMO_PASSWORD
+            await c.post("/company/login", data={"email": DEMO_COMPANY_EMAIL, "password": DEMO_PASSWORD})
+
             async def as_(who):
                 c.cookies.set("actor", str(emp[who]))
 

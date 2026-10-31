@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% block title %}Employee log in{% endblock %}
+{% block content %}
+<div class="reveal max-w-md mx-auto">
+  <div class="kicker">{{ BUYER.legal_name }}</div>
+  <h1 class="text-[30px] sm:text-[36px] leading-tight mt-1">Employee log in</h1>
+  <p class="text-slate-600 text-sm mt-2">The console shows vendors' bank details, PAN and documents, so only employees can open it. Log in with your work email.</p>
+
+  {% if error %}<div class="mt-4 rounded-md bg-rose-50 border border-rose-200 p-3 text-sm text-rose-800" role="alert">{{ error }}</div>{% endif %}
+
+  <form id="login" method="post" action="/company/login" class="mt-5 bg-white rounded-xl border p-5 space-y-4 text-sm">
+    <input type="hidden" name="next" value="{{ next }}">
+    <label class="block">Work email<input name="email" type="email" required value="{{ email }}" autocomplete="username" class="mt-1 w-full rounded-md border px-3 py-2.5"></label>
+    <label class="block">Password<input name="password" type="password" required autocomplete="current-password" class="mt-1 w-full rounded-md border px-3 py-2.5"></label>
+    <button class="w-full rounded-md bg-slate-900 text-white font-medium py-3 hover:bg-slate-800 shadow-[3px_3px_0_rgba(28,27,24,.18)]">Log in</button>
+  </form>
+
+  <section class="mt-5 rounded-xl border border-dashed border-slate-300 bg-white/60 p-4 text-sm">
+    <div class="kicker !text-[10px]">Demo employees · one password for all</div>
+    <ul class="mt-2 divide-y divide-slate-100">
+      {% for e in employees %}
+      <li class="flex items-center gap-3 py-2">
+        <span class="flex-1 min-w-0"><span class="font-medium">{{ e.name }}</span> <span class="text-slate-500">· {{ ROLE_LABEL[e.role] }}</span>
+          <span class="block mono text-[11.5px] text-slate-500 truncate">{{ e.email }}</span></span>
+        <button type="button" data-email="{{ e.email }}" class="fill shrink-0 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs hover:border-slate-500 {{ 'ring-2 ring-indigo-200' if e.email == demo.company_email }}">Fill</button>
+      </li>
+      {% endfor %}
+    </ul>
+    <p class="mt-2 text-xs text-slate-500">After logging in, "Acting as" (top right) lets the demo switch person without logging out. In production each person logs in as themselves, through the company's single sign-on.</p>
+  </section>
+  <p class="mt-5 text-sm text-center"><a href="/" class="text-slate-500 underline decoration-dotted underline-offset-4">← Back to the start</a></p>
+</div>
+<script>
+  document.querySelectorAll('.fill').forEach(b => b.addEventListener('click', () => {
+    const f = document.getElementById('login');
+    f.email.value = b.dataset.email; f.password.value = {{ demo.password | tojson }}; f.querySelector('button').focus();
+  }));
+</script>
+{% endblock %}

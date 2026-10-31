@@ -420,7 +420,7 @@ def evaluate(ctx: Context) -> list[R]:
     # Layer 7: risk (vendor master, blocklist, reused files) ------------------------------------------
     if ctx.blocklist:
         add(R("R-RISK-01", "risk", FAIL, "PAN, GSTIN or bank account is on the blocklist", "REJECT", {"hits": ctx.blocklist},
-              vendor_text="After review, we're unable to proceed with your registration. If you believe this is a mistake, please contact procurement@buyer.example.com.",
+              vendor_text="After review, we're unable to proceed with your registration. If you believe this is a mistake, please contact procurement@vardhan.example.com.",
               internal=f"Blocklist reason: {ctx.blocklist[0].get('reason')}", fraud=True))
     else:
         add(R("R-RISK-01", "risk", PASS, "Not on the blocklist"))

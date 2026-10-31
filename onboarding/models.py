@@ -25,6 +25,15 @@ class Employee(Base):
     email: Mapped[str] = mapped_column(String(200), default="")
 
 
+class StaffLogin(Base):
+    """An employee's password for the company console (salted scrypt hash). The email is the employee's."""
+    __tablename__ = "staff_logins"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id"), unique=True)
+    password_hash: Mapped[str] = mapped_column(String(300))
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class Invite(Base):
     __tablename__ = "invites"
     id: Mapped[int] = mapped_column(primary_key=True)

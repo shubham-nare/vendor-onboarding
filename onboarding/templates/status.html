@@ -49,7 +49,7 @@
       <p class="mt-2 text-sm text-slate-500">No messages yet.</p>
     {% endfor %}
   {% endif %}
-  <p class="mt-8 text-xs text-slate-400">Demo note: this is the vendor's view. Internal reviewers see the full reasoning{% if run %} on <a class="underline" href="/runs/{{ run.id }}">the run page</a>{% endif %}.</p>
+  <p class="mt-8 text-xs text-slate-400">Demo note: this is the vendor's view. Internal reviewers see the full reasoning{% if run and staff %} on <a class="underline" href="/runs/{{ run.id }}">the run page</a>{% endif %}.</p>
 </div>
 </div>
 {% endblock %}
