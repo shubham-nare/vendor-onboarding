@@ -246,5 +246,23 @@
     <span class="text-center leading-relaxed sm:max-w-3xl">Demo build for a case study · all vendors fictional · GST, PAN, penny-drop, CIN and Udyam answers are <span class="tag text-amber-700 !text-[9.5px]">simulated</span> · bank-branch lookup is live</span>
     <span class="hidden sm:block h-px flex-1 bg-slate-300"></span>
   </footer>
+  <script>
+    /* Show / hide button on every password field (spacing and flex sizing move to the wrapper). */
+    document.querySelectorAll('input[type=password]').forEach(inp => {
+      const wrap = document.createElement('span');
+      wrap.className = 'relative block';
+      [...inp.classList].filter(c => /^(sm:)?(mt-|flex-|min-w-)/.test(c)).forEach(c => { inp.classList.remove(c); wrap.classList.add(c); });
+      inp.classList.add('w-full', 'pr-16');
+      inp.parentNode.insertBefore(wrap, inp);
+      wrap.appendChild(inp);
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'absolute inset-y-0 right-0 px-3 text-xs font-medium text-slate-600 hover:text-slate-900 rounded-r-md';
+      const set = shown => { b.textContent = shown ? 'Hide' : 'Show'; b.setAttribute('aria-label', shown ? 'Hide password' : 'Show password'); b.setAttribute('aria-pressed', String(shown)); };
+      set(false);
+      b.addEventListener('click', () => { const shown = inp.type === 'password'; inp.type = shown ? 'text' : 'password'; set(shown); inp.focus(); });
+      wrap.appendChild(b);
+    });
+  </script>
 </body>
 </html>
