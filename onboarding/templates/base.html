@@ -134,7 +134,7 @@
   </style>
 </head>
 <body class="min-h-screen">
-  {% set vendor_page = path.startswith('/apply') or path.startswith('/status') %}
+  {% set vendor_page = path.startswith('/apply') or path.startswith('/status') or path.startswith('/bill') %}
   {% macro seal(size=34, light=false) -%}
     <svg width="{{ size }}" height="{{ size }}" viewBox="0 0 40 40" aria-hidden="true">
       <circle cx="20" cy="20" r="18.5" fill="none" stroke="#BD4826" stroke-width="1.5"/>

@@ -17,8 +17,8 @@ from onboarding import sources as S
 from onboarding.ai.read import DocRead, read_with_cache
 from onboarding.authenticity.assess import assess
 from onboarding.db import engine
-from onboarding.models import (Application, Blocklist, Document, Fact, Invite, Message, Run, RunEvent, RuleResult, StoredFile,
-                               VendorMaster, now)
+from onboarding.models import (Application, Bill, Blocklist, Document, Employee, Fact, Invite, Message, Run, RunEvent, RuleResult,
+                               StoredFile, VendorMaster, now)
 from onboarding.rules import SLOT_TITLE, Context, DocInfo, evaluate
 
 STAGES = [
@@ -31,12 +31,18 @@ STAGES = [
     ("consistency", "Cross-document & name checks"),
     ("sources", "Source verification"),
     ("risk", "Risk checks"),
+    ("bill", "Bill checks"),
     ("decision", "Decision"),
 ]
+
+
+def stages_for(form: dict | None) -> list[tuple[str, str]]:
+    """The bill stage only exists for bill-first registrations."""
+    return [st for st in STAGES if st[0] != "bill" or (form or {}).get("bill_mode")]
 STATUS_TEXT = {"APPROVED": "Approved", "PENDING_VENDOR": "Pending: vendor to fix", "PENDING_REVIEW": "Pending: internal review", "REJECTED": "Rejected"}
 LAYER_STAGE = {"invite": "invite", "scope": "completeness", "completeness": "completeness", "documents": "read",
                "authenticity": "authenticity", "identifiers": "identifiers", "bank": "identifiers", "consistency": "consistency",
-               "names": "consistency", "sources": "sources", "risk": "risk", "msme": "consistency"}
+               "names": "consistency", "sources": "sources", "risk": "risk", "msme": "consistency", "bill": "bill"}
 
 
 def sessions() -> async_sessionmaker:
@@ -108,7 +114,9 @@ async def run_pipeline(run_id: int, *, prefer_cache: bool = False, pace: float =
             inv = dict(status=invite.status, company_name=invite.company_name, expires_at=invite.expires_at.replace(tzinfo=invite.expires_at.tzinfo or timezone.utc),
                        application_id=first_app, sponsor=f"{invite.sponsor.name} ({invite.sponsor.department})", reason=invite.business_reason,
                        high_spend=invite.high_spend, spend_band=invite.spend_band)
-        await ev.emit("invite", "done", f"Requested by {inv['sponsor']}: {inv['reason']}" if inv else "No invite: unsolicited application",
+        no_invite = (f"No invite: registered with a bill for work already done (engaged by {form.get('bill_engaged_by') or 'nobody named'})"
+                     if form.get("bill_mode") else "No invite: unsolicited application")
+        await ev.emit("invite", "done", f"Requested by {inv['sponsor']}: {inv['reason']}" if inv else no_invite,
                       {"invite": {k: str(v) for k, v in (inv or {}).items()}})
 
         # S1 intake
@@ -163,7 +171,21 @@ async def run_pipeline(run_id: int, *, prefer_cache: bool = False, pace: float =
                 if (other_form or {}).get("pan", "").upper() != pan:
                     reused.append({"file": fn, "other_application": ref})
 
-        ctx = Context(form=form, docs=infos, invite=inv, application_id=app.id, sources=srcs, master=master, blocklist=block, reused_files=reused)
+        bill_ctx = None
+        if form.get("bill_mode"):
+            bill = (await s.execute(select(Bill).where(Bill.application_id == app.id))).scalar_one_or_none()
+            emp = await s.get(Employee, bill.engaged_employee_id) if bill and bill.engaged_employee_id else None
+            dups = []
+            number = "".join(ch for ch in form.get("bill_invoice_number", "").upper() if ch.isalnum())
+            if number:
+                q = select(Run.form, Application.ref).join(Application, Application.id == Run.application_id).where(Run.application_id != app.id)
+                for other_form, ref in (await s.execute(q)).all():
+                    of = other_form or {}
+                    if of.get("bill_mode") and of.get("gstin", "").upper() == gstin and "".join(ch for ch in of.get("bill_invoice_number", "").upper() if ch.isalnum()) == number:
+                        dups.append({"ref": ref})
+            bill_ctx = {"engaged_employee": emp.name if emp else None, "engaged_department": emp.department if emp else "", "duplicates": dups}
+        ctx = Context(form=form, docs=infos, invite=inv, application_id=app.id, sources=srcs, master=master, blocklist=block, reused_files=reused,
+                      bill=bill_ctx)
         rules = evaluate(ctx)
         dec = D.decide(rules, ctx, ref=app.ref)
 
@@ -171,7 +193,7 @@ async def run_pipeline(run_id: int, *, prefer_cache: bool = False, pace: float =
         by_stage: dict[str, list] = {}
         for r in rules:
             by_stage.setdefault(LAYER_STAGE.get(r.layer, r.layer), []).append(r)
-        for stage, _label in STAGES:
+        for stage, _label in stages_for(form):
             if stage in ("invite", "intake", "decision"):
                 continue
             rs = by_stage.get(stage, [])

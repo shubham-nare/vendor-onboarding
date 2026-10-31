@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 
-from onboarding.rules import ERROR, FAIL, PASS, SKIPPED, WARN, Context, R
+from onboarding.rules import BILL_HIGH_RISK, ERROR, FAIL, PASS, SKIPPED, WARN, Context, R, inr, money
 from onboarding.validators import mask_account, mask_pan
 
 APPROVED, PENDING_VENDOR, PENDING_REVIEW, REJECTED = "APPROVED", "PENDING_VENDOR", "PENDING_REVIEW", "REJECTED"
@@ -79,6 +79,8 @@ def decide(rules: list[R], ctx: Context, ref: str = "") -> Decision:
 
 def _tier(rules: list[R], ctx: Context, fraud: bool) -> str:
     if fraud or (ctx.invite and ctx.invite.get("high_spend")):
+        return "high"
+    if ctx.form.get("bill_mode") and (money(ctx.form.get("bill_amount")) or 0) >= BILL_HIGH_RISK:
         return "high"
     by_id = {r.rule_id: r for r in rules}
     personal = by_id.get("R-NAME-03") and "proprietor" in by_id["R-NAME-03"].title
@@ -155,6 +157,10 @@ def _messages(d: Decision, rules: list[R], ctx: Context, ref: str) -> None:
         d.vendor_subject = f"Your vendor registration (Ref {ref}) is approved"
         d.vendor_body = f"{hi}\n\nGood news: {company} has passed our checks. You'll receive a confirmation once your vendor account is activated.\n\nVendor Onboarding Team"
         d.vendor_state = "held"
+    if f.get("bill_mode") and d.status in (PENDING_REVIEW, APPROVED):
+        note = (f"About your bill {f.get('bill_invoice_number', '')} for {inr(money(f.get('bill_amount')))}: we'll process it once your registration is "
+                "complete and our team has confirmed the work. Payment then follows our usual purchase-order and receipt checks.")
+        d.vendor_body = d.vendor_body.replace("\n\nVendor Onboarding Team", f"\n\n{note}\n\nVendor Onboarding Team")
     lines = [f"Status: {d.status} | risk tier: {d.risk_tier}" + (" | FRAUD-CLASS SIGNAL (vendor told nothing specific)" if d.fraud else "")]
     for r in rules:
         if r.result in (FAIL, ERROR, WARN):

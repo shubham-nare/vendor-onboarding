@@ -5,7 +5,7 @@
 <div class="max-w-2xl mx-auto">
   <div class="kicker">Supplier registration</div>
 <h1 class="text-[30px] sm:text-[38px] leading-tight mt-1">Your vendor registration</h1>
-  <p class="text-slate-500 text-sm mt-1">{{ invite.company_name }}{% if app %} · Reference <span class="mono">{{ app.ref }}</span>{% endif %}</p>
+  <p class="text-slate-500 text-sm mt-1">{{ company }}{% if app %} · Reference <span class="mono">{{ app.ref }}</span>{% endif %}</p>
 
   {% if not app %}
     <div class="mt-6 bg-white rounded-xl border p-5 text-sm">You haven't submitted yet. <a class="text-indigo-700 underline" href="/apply/{{ token }}">Start your registration</a>.</div>
@@ -24,6 +24,19 @@
       {% if st == 'PENDING_VENDOR' %}<a href="/apply/{{ token }}" class="block sm:inline-block text-center mt-4 rounded-md bg-indigo-600 text-white text-sm font-medium px-5 py-2.5 hover:bg-indigo-700 shadow-[3px_3px_0_rgba(28,27,24,.18)]">Update my submission</a>{% endif %}
       {% if st == 'IN_PROGRESS' %}<script>setTimeout(() => location.reload(), 3000)</script>{% endif %}
     </div>
+
+    {% if bill and run %}
+    {% set f = run.form %}
+    <div class="mt-4 rounded-xl border bg-white p-4 sm:p-5 text-sm">
+      <div class="kicker !text-[10px]">Your bill</div>
+      <div class="mt-1"><span class="mono">{{ f.bill_invoice_number }}</span> · <b>{{ inr(money(f.bill_amount)) }}</b></div>
+      <div class="text-slate-600 mt-1">
+        {% if bill.confirmation == 'confirmed' and st == 'ACTIVE' %}Passed to accounts payable. It is paid once the purchase order and receipt are matched.
+        {% elif bill.confirmation == 'confirmed' %}Our team has confirmed the work. It goes for payment once your registration is complete.
+        {% else %}Waiting for our team to confirm the work. No action is needed from you.{% endif %}
+      </div>
+    </div>
+    {% endif %}
 
     <h2 class="mt-10 text-2xl">Messages</h2>
     {% for m in msgs %}

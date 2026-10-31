@@ -55,6 +55,22 @@ class Application(Base):
     runs: Mapped[list["Run"]] = relationship(back_populates="application", order_by="Run.id")
 
 
+class Bill(Base):
+    """A bill submitted with a vendor's self-registration (no invite): the vendor already did work for us.
+    The vendor's private link (token) works like an invite link for status and resubmission. The bill's
+    figures live in each run's form; this row holds who must confirm the engagement, and their answer."""
+    __tablename__ = "bills"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    application_id: Mapped[int] = mapped_column(ForeignKey("applications.id"), unique=True, index=True)
+    token: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    engaged_by_text: Mapped[str] = mapped_column(String(200), default="")      # what the vendor typed
+    engaged_employee_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id"), nullable=True)
+    confirmation: Mapped[str] = mapped_column(String(20), default="awaiting")  # awaiting | confirmed | denied
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    engaged_employee: Mapped[Employee | None] = relationship()
+
+
 class Run(Base):
     __tablename__ = "runs"
     id: Mapped[int] = mapped_column(primary_key=True)

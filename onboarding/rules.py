@@ -24,10 +24,13 @@ SLOT_TYPES = {
     "pan_card": {"PAN_CARD"},
     "bank_proof": {"CANCELLED_CHEQUE", "BANK_LETTER"},
     "udyam_certificate": {"UDYAM_CERTIFICATE"},
+    "invoice": {"TAX_INVOICE"},
 }
 SLOT_LABEL = {"gst_certificate": "GST registration certificate", "pan_card": "PAN card",
-              "bank_proof": "cancelled cheque or bank letter", "udyam_certificate": "Udyam (MSME) certificate"}
-SLOT_TITLE = {"gst_certificate": "GST certificate", "pan_card": "PAN card", "bank_proof": "Bank proof", "udyam_certificate": "Udyam certificate"}
+              "bank_proof": "cancelled cheque or bank letter", "udyam_certificate": "Udyam (MSME) certificate",
+              "invoice": "bill (tax invoice)"}
+SLOT_TITLE = {"gst_certificate": "GST certificate", "pan_card": "PAN card", "bank_proof": "Bank proof", "udyam_certificate": "Udyam certificate",
+              "invoice": "Bill"}
 DOC_LABEL = {"GST_CERTIFICATE": "GST certificate", "PAN_CARD": "PAN card", "CANCELLED_CHEQUE": "cancelled cheque",
              "BANK_LETTER": "bank letter", "UDYAM_CERTIFICATE": "Udyam certificate", "TAX_INVOICE": "tax invoice",
              "AADHAAR": "Aadhaar card", "OTHER": "different document"}
@@ -35,7 +38,8 @@ FIELD_LABEL = {"legal_name": "Legal name", "gstin": "GSTIN", "pan": "PAN", "addr
                "state": "State", "contact_name": "Contact name", "contact_email": "Contact email",
                "bank_holder": "Account holder name", "bank_account": "Bank account number", "ifsc": "IFSC",
                "business_type": "Business type", "cin": "CIN", "llpin": "LLPIN", "proprietor_name": "Proprietor's name",
-               "udyam_no": "Udyam number"}
+               "udyam_no": "Udyam number", "bill_invoice_number": "Invoice number", "bill_amount": "Bill amount",
+               "bill_description": "What the work was", "bill_engaged_by": "Who at our company engaged you"}
 
 
 @dataclass
@@ -80,6 +84,7 @@ class Context:
     master: list[dict] = field(default_factory=list)       # vendor-master rows sharing PAN/GSTIN/account
     blocklist: list[dict] = field(default_factory=list)    # matching blocklist rows
     reused_files: list[dict] = field(default_factory=list)  # same file in another vendor's application
+    bill: dict | None = None              # bill-first registration: {engaged_employee, engaged_department, duplicates}
 
 
 # --- helpers ----------------------------------------------------------------------------
@@ -125,11 +130,14 @@ def required_fields(form: dict) -> list[str]:
         req.append("proprietor_name")
     if form.get("msme"):
         req.append("udyam_no")
+    if form.get("bill_mode"):
+        req += ["bill_invoice_number", "bill_amount", "bill_description", "bill_engaged_by"]
     return req
 
 
 def required_docs(form: dict) -> list[str]:
-    return ["gst_certificate", "pan_card", "bank_proof"] + (["udyam_certificate"] if form.get("msme") else [])
+    return (["gst_certificate", "pan_card", "bank_proof"] + (["udyam_certificate"] if form.get("msme") else [])
+            + (["invoice"] if form.get("bill_mode") else []))
 
 
 def reupload(slot: str, what: str) -> str:
@@ -146,7 +154,13 @@ def evaluate(ctx: Context) -> list[R]:
 
     # Layer 0: invite ------------------------------------------------------------------
     inv = ctx.invite
-    if not inv:
+    if not inv and ctx.bill is not None:
+        who = ctx.bill.get("engaged_employee")
+        add(R("R-INV-01", "invite", WARN, "No invite: the vendor registered with a bill for work already done"
+              + (f". {who} must confirm the engagement before the vendor is activated" if who else ""), "WARN",
+              {"engaged_by": f.get("bill_engaged_by", "")},
+              internal="Bill-first registration. Nobody vouched for this vendor in advance; the employee the vendor named must confirm."))
+    elif not inv:
         add(R("R-INV-01", "invite", FAIL, "Application did not come through an employee's invite", "REVIEW",
               internal="Unsolicited application: no valid invite token. Never auto-approved.", fraud=True))
     else:
@@ -438,7 +452,170 @@ def evaluate(ctx: Context) -> list[R]:
               vendor_text="" if okn else f"The Udyam certificate you uploaded shows {un}, which doesn't match the number you entered ({f.get('udyam_no')}). Please check it."))
         if any(t in etype for t in ("MICRO", "SMALL")):
             add(R("R-MSME-02", "msme", WARN, f"{etype.title()} enterprise: pay within 15 days, or up to 45 days with a written agreement (MSMED Act s.15)", "WARN"))
+
+    # Layer 9: the bill (bill-first registrations) --------------------------------------------------------
+    if f.get("bill_mode"):
+        _bill_rules(add, ctx, docs.get("invoice") if usable(docs.get("invoice"), "invoice") else None)
     return out
+
+
+# --- bills ----------------------------------------------------------------------------------------------
+BILL_HIGH_RISK = 10_00_000   # a single bill of Rs 10 lakh or more needs the Finance controller
+BILL_MAX_AGE_DAYS = 365      # older bills risk losing the GST input credit: a person decides
+
+
+def money(text) -> float | None:
+    """'1,25,670.00', 'Rs. 1,25,670', 'INR 125670' -> 125670.0 (None if not a number)."""
+    if text is None:
+        return None
+    t = str(text).replace(",", "").replace("\u20b9", "").replace("INR", "").replace("Rs.", "").replace("Rs", "").strip()
+    try:
+        return round(float(t), 2)
+    except ValueError:
+        return None
+
+
+def inr(x: float | None) -> str:
+    """Indian digit grouping: 125670 -> 'Rs 1,25,670.00'."""
+    if x is None:
+        return "-"
+    whole, frac = f"{x:.2f}".split(".")
+    neg = whole.startswith("-")
+    whole = whole.lstrip("-")
+    if len(whole) > 3:
+        head, tail = whole[:-3], whole[-3:]
+        groups = []
+        while len(head) > 2:
+            groups.insert(0, head[-2:])
+            head = head[:-2]
+        if head:
+            groups.insert(0, head)
+        whole = ",".join(groups + [tail])
+    return f"{'-' if neg else ''}\u20b9{whole}.{frac}"
+
+
+def _parse_any_date(text: str | None) -> datetime | None:
+    for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%d.%m.%Y", "%Y-%m-%d", "%d %b %Y", "%d %B %Y"):
+        try:
+            return datetime.strptime((text or "").strip(), fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def _bill_rules(add, ctx: Context, inv_doc: DocInfo | None) -> None:
+    from onboarding.demo_data import BUYER  # the buying company (us)
+
+    f = ctx.form
+    bill = ctx.bill or {}
+    gstin = V.normalise_id(f.get("gstin", ""))
+    typed_amount = money(f.get("bill_amount"))
+
+    # Who engaged the vendor: must be a real employee (they confirm it after the run).
+    who = bill.get("engaged_employee")
+    if who:
+        add(R("R-BILL-09", "bill", PASS, f"Engaged by {who} ({bill.get('engaged_department', '')}): they will be asked to confirm",
+              {"typed": f.get("bill_engaged_by"), "employee": who}))
+    else:
+        add(R("R-BILL-09", "bill", FAIL, f"Nobody called '{f.get('bill_engaged_by', '')}' works here", "REVIEW",
+              {"typed": f.get("bill_engaged_by")},
+              internal="The vendor named someone who isn't in the employee directory. Find out who engaged them before anything else."))
+
+    # Same invoice already submitted (double billing).
+    if bill.get("duplicates"):
+        d = bill["duplicates"][0]
+        add(R("R-BILL-08", "bill", FAIL, f"Invoice {f.get('bill_invoice_number')} was already submitted ({d['ref']})", "REVIEW",
+              {"other_application": d["ref"]}, internal="Same seller GSTIN and invoice number on another application: possible double billing.", fraud=True))
+
+    if not inv_doc:
+        return  # wrong or missing invoice file: R-DOC-01 / R-COMP-02 already ask for it
+
+    # Invoice number on the form vs the bill
+    num, nleg = val(inv_doc, "invoice_number")
+    if num and nleg == "clear":
+        same = V.normalise_id(num).replace("/", "").replace("-", "") == V.normalise_id(f.get("bill_invoice_number", "")).replace("/", "").replace("-", "")
+        add(R("R-BILL-01", "bill", PASS if same else FAIL, "Invoice number matches the bill" if same else f"Invoice number differs from the bill ({num})", "VENDOR",
+              {"form": f.get("bill_invoice_number"), "invoice": num},
+              vendor_text="" if same else f"The invoice number you entered ({f.get('bill_invoice_number')}) doesn't match the bill you uploaded ({num}). Please correct it."))
+    elif nleg in ("partial", "unreadable"):
+        add(R("R-BILL-01", "bill", FAIL, "Invoice number couldn't be read on the bill", "VENDOR", vendor_text=reupload("invoice", "invoice number")))
+
+    # The bill is from this vendor
+    sg, sleg = val(inv_doc, "seller_gstin")
+    m = M.compare_id("gstin", gstin, sg, sleg)
+    if m.status in (M.MATCH, M.MATCH_CORRECTED):
+        add(R("R-BILL-02", "bill", PASS, "The bill is issued by this vendor (seller GSTIN matches)", {"seller_gstin": m.doc_value}))
+    elif m.status == M.MISMATCH:
+        add(R("R-BILL-02", "bill", FAIL, f"The bill was issued by a different GSTIN ({m.doc_value})", "REVIEW",
+              {"seller_gstin": m.doc_value, "vendor_gstin": gstin},
+              internal="The invoice belongs to another registration: a related company's bill, or someone else's invoice reused."))
+    else:
+        add(R("R-BILL-02", "bill", FAIL, "Seller GSTIN couldn't be read on the bill", "VENDOR", vendor_text=reupload("invoice", "seller GSTIN")))
+
+    # The bill is addressed to us
+    bg, bleg = val(inv_doc, "buyer_gstin")
+    bm = M.compare_id("gstin", BUYER["gstin"], bg, bleg)
+    to_us = (f"Please issue the bill to {BUYER['legal_name']}, GSTIN {BUYER['gstin']}, {BUYER['address']}. "
+             "We can only pay, and claim GST credit on, a bill addressed to us.")
+    if bm.status in (M.MATCH, M.MATCH_CORRECTED):
+        add(R("R-BILL-03", "bill", PASS, f"The bill is addressed to us ({BUYER['legal_name']})"))
+    elif bm.status == M.MISMATCH:
+        add(R("R-BILL-03", "bill", FAIL, f"The bill is addressed to another GSTIN ({bm.doc_value})", "VENDOR", {"buyer_gstin": bm.doc_value},
+              vendor_text=f"Your bill is addressed to GSTIN {bm.doc_value}, which isn't ours. " + to_us))
+    elif bleg == "not_present":
+        add(R("R-BILL-03", "bill", FAIL, "The bill doesn't show our GSTIN", "VENDOR", vendor_text="Your bill doesn't show our GSTIN. " + to_us))
+    else:
+        add(R("R-BILL-03", "bill", FAIL, "Buyer GSTIN couldn't be read on the bill", "VENDOR", vendor_text=reupload("invoice", "buyer GSTIN")))
+
+    # Amount typed vs the bill's total
+    total_txt, tleg = val(inv_doc, "total_amount")
+    total = money(total_txt)
+    if total is None:
+        add(R("R-BILL-04", "bill", FAIL, "The bill's total couldn't be read", "VENDOR", vendor_text=reupload("invoice", "total amount")))
+    elif typed_amount is not None and abs(total - typed_amount) <= 1:
+        add(R("R-BILL-04", "bill", PASS, f"Amount entered matches the bill: {inr(total)}", {"form": typed_amount, "invoice": total}))
+    else:
+        add(R("R-BILL-04", "bill", FAIL, f"Amount entered ({inr(typed_amount)}) differs from the bill's total ({inr(total)})", "VENDOR",
+              {"form": typed_amount, "invoice": total},
+              vendor_text=f"The amount you entered ({inr(typed_amount)}) doesn't match your bill's total ({inr(total)}). Please correct the amount."))
+
+    # The bill adds up, and charges the right kind of GST
+    taxable = money(val(inv_doc, "taxable_value")[0])
+    cg, sg_, ig = (money(val(inv_doc, k)[0]) or 0.0 for k in ("cgst_amount", "sgst_amount", "igst_amount"))
+    if taxable is not None and total is not None:
+        ok = abs(taxable + cg + sg_ + ig - total) <= 1
+        add(R("R-BILL-05", "bill", PASS if ok else FAIL, "The bill adds up (taxable value + GST = total)" if ok else "The bill doesn't add up", "VENDOR",
+              {"taxable": taxable, "cgst": cg, "sgst": sg_, "igst": ig, "total": total},
+              vendor_text="" if ok else f"Your bill's figures don't add up: taxable value {inr(taxable)} plus GST {inr(cg + sg_ + ig)} isn't the total {inr(total)}. Please send a corrected invoice."))
+    seller_state, buyer_state = gstin[:2], BUYER["gstin"][:2]
+    s_name, b_name = V.GST_STATE_CODES.get(seller_state, seller_state), V.GST_STATE_CODES.get(buyer_state, buyer_state)
+    if cg + sg_ + ig == 0:
+        add(R("R-BILL-06", "bill", WARN, "No GST charged on the bill", "WARN", internal="Check whether the supply is exempt or the vendor is a composition dealer."))
+    elif seller_state == buyer_state:
+        ok = cg > 0 and sg_ > 0 and ig == 0
+        add(R("R-BILL-06", "bill", PASS if ok else FAIL, f"Right GST for a supply within {b_name}: CGST + SGST" if ok else "Wrong type of GST for a supply within the same state", "VENDOR",
+              {"seller_state": s_name, "buyer_state": b_name, "cgst": cg, "sgst": sg_, "igst": ig},
+              vendor_text="" if ok else f"You and we are both in {b_name}, so the bill must charge CGST + SGST, not IGST. Please send a corrected invoice."))
+    else:
+        ok = ig > 0 and cg == 0 and sg_ == 0
+        add(R("R-BILL-06", "bill", PASS if ok else FAIL, f"Right GST for a supply from {s_name} to {b_name}: IGST" if ok else f"Wrong type of GST: a supply from {s_name} to {b_name} needs IGST", "VENDOR",
+              {"seller_state": s_name, "buyer_state": b_name, "cgst": cg, "sgst": sg_, "igst": ig},
+              vendor_text="" if ok else (f"Your bill charges CGST + SGST, but you're in {s_name} and we're in {b_name}, so this is an inter-state supply and must "
+                                         f"charge IGST instead. We can't claim the GST credit otherwise. Please send a corrected invoice.")))
+
+    # Date
+    dtxt, _ = val(inv_doc, "invoice_date")
+    d = _parse_any_date(dtxt) or _parse_any_date(f.get("bill_invoice_date"))
+    if d:
+        age = (datetime.now() - d).days
+        if age < 0:
+            add(R("R-BILL-07", "bill", FAIL, f"The bill is dated in the future ({d:%d %b %Y})", "VENDOR",
+                  vendor_text=f"Your bill is dated {d:%d %b %Y}, which is in the future. Please check the invoice date."))
+        elif age > BILL_MAX_AGE_DAYS:
+            add(R("R-BILL-07", "bill", FAIL, f"The bill is {age} days old", "REVIEW", {"date": f"{d:%Y-%m-%d}"},
+                  internal="Old bill: the GST input credit may no longer be claimable, and old work is hard to verify."))
+        else:
+            add(R("R-BILL-07", "bill", PASS, f"Bill dated {d:%d %b %Y} ({age} days ago)"))
 
 
 def _xd(add, rule_id: str, title: str, m: M.IdMatch, slot: str, what: str, mismatch_text: str) -> None:

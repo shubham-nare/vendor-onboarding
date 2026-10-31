@@ -71,14 +71,27 @@ def render(env: Environment, doc: dict, out_base: Path, profile: str) -> Path:
 
 
 def main() -> None:
+    """No arguments: re-render everything. With scenario keys: render only those and keep the rest
+    (re-rendering changes the files' bytes, which invalidates their saved AI readings)."""
     env = Environment(loader=FileSystemLoader(TEMPLATES), undefined=StrictUndefined, autoescape=True)
-    if OUT.exists():
-        shutil.rmtree(OUT)
-    OUT.mkdir(parents=True)
+    only = set(sys.argv[1:])
+    unknown = only - set(SCENARIOS)
+    if unknown:
+        sys.exit(f"Unknown scenario(s): {', '.join(sorted(unknown))}")
     manifest: dict[str, dict] = {}
+    if only:
+        manifest = json.loads((OUT / "manifest.json").read_text(encoding="utf-8"))
+    else:
+        if OUT.exists():
+            shutil.rmtree(OUT)
+        OUT.mkdir(parents=True)
     with tempfile.TemporaryDirectory() as profile:
         for key, sc in SCENARIOS.items():
+            if only and key not in only:
+                continue
             folder = OUT / key
+            if folder.exists():
+                shutil.rmtree(folder)
             folder.mkdir()
             files = {}
             for slot, doc in sc["documents"].items():

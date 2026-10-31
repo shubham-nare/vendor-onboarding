@@ -125,6 +125,45 @@ def flows(tmp_path_factory):
             out["sponsor_invite"] = (r.status_code, r.headers.get("location", ""))
             out["invites_page"] = (await c.get(r.headers["location"])).text
 
+            # bill-first: a vendor who already did work registers with its bill (no invite)
+            async def submit_bill(key):
+                r = await c.get(f"/demo/{key}")
+                assert r.status_code == 303 and r.headers["location"].startswith("/bill")
+                assert (await c.get(r.headers["location"])).status_code == 200
+                d = _form_data(cat[key]["form"], key)
+                d["bill_mode"] = "1"
+                r = await c.post("/bill", data=d)
+                assert r.status_code == 303, r.text
+                await asyncio.gather(*pending)
+                pending.clear()
+                rid = int(re.search(r"/runs/(\d+)", r.headers["location"]).group(1))
+                page = (await c.get(r.headers["location"])).text
+                token = re.search(r'href="/status/([^"]+)"', page).group(1)
+                return rid, token
+
+            rid, tok = await submit_bill("bill_kesari")
+            out["kesari_page"] = (await c.get(f"/runs/{rid}")).text
+            out["kesari_events"] = (await c.get(f"/runs/{rid}/events")).json()
+            steps = []
+            for who, action in (("maker", "activate"), ("maker", "confirm_engagement"), ("Priya Nair", "confirm_engagement"),
+                                ("Priya Nair", "activate"), ("maker", "activate")):
+                await as_(who)
+                steps.append((who, action, (await c.post(f"/runs/{rid}/action", data={"action": action})).status_code))
+            out["kesari_steps"] = steps
+            out["kesari_after"] = (await c.get(f"/runs/{rid}")).text
+            out["kesari_status"] = (await c.get(f"/status/{tok}")).text
+            rid, _ = await submit_bill("bill_kesari")  # the same invoice again
+            out["kesari_dup_events"] = (await c.get(f"/runs/{rid}/events")).json()
+
+            rid, tok = await submit_bill("bill_brindavan")
+            out["brindavan_page"] = (await c.get(f"/runs/{rid}")).text
+            await as_("Rahul Desai")
+            out["brindavan_deny"] = (await c.post(f"/runs/{rid}/action", data={"action": "deny_engagement", "comment": "I never asked them for this work."})).status_code
+            await as_("maker")
+            out["brindavan_maker_approve"] = (await c.post(f"/runs/{rid}/action", data={"action": "review_approve", "comment": "seems fine"})).status_code
+            out["brindavan_after"] = (await c.get(f"/runs/{rid}")).text
+            out["brindavan_status"] = (await c.get(f"/status/{tok}")).text
+
             for p in ("/", "/outbox", "/assumptions", "/system", "/check?sample=genuine", "/invites"):
                 out[p] = await c.get(p)
         await dbm.engine().dispose()
@@ -192,3 +231,38 @@ def test_other_pages_render(flows):
     for p in ("/", "/outbox", "/assumptions", "/system", "/check?sample=genuine", "/invites"):
         assert flows[p].status_code == 200, p
     assert "Intact and cryptographically valid" in flows["/check?sample=genuine"].text
+
+
+def _rules(events, stage="bill"):
+    return {r["rule_id"]: r["result"] for e in events["events"] if e["stage"] == stage for r in e["evidence"].get("rules", [])}
+
+
+def test_bill_first_clean_bill_is_approved_but_needs_the_engager(flows):
+    page = flows["kesari_page"]
+    assert "Approved" in page and "The bill" in page and "Waiting for Priya Nair to confirm" in page
+    bill = _rules(flows["kesari_events"])
+    assert all(bill.get(r) == "PASS" for r in ("R-BILL-01", "R-BILL-02", "R-BILL-03", "R-BILL-04", "R-BILL-05", "R-BILL-06", "R-BILL-09"))
+    assert "R-INV-01" in page and "No invite: the vendor registered with a bill" in page  # a warning, not a block
+
+
+def test_bill_first_only_the_named_employee_confirms_and_cannot_approve(flows):
+    assert [code for _, _, code in flows["kesari_steps"]] == [403, 403, 303, 403, 303]
+    assert "Confirmed by Priya Nair" in flows["kesari_after"] and "Passed to accounts payable" in flows["kesari_after"]
+    assert "Passed to accounts payable" in flows["kesari_status"]
+
+
+def test_bill_first_same_invoice_twice_is_flagged(flows):
+    assert _rules(flows["kesari_dup_events"]).get("R-BILL-08") == "FAIL"
+
+
+def test_bill_first_wrong_gst_type_and_amount_go_back_to_the_vendor(flows):
+    page = flows["brindavan_page"]
+    assert "Pending: vendor to fix" in page
+    assert "must charge IGST" in page and "98,472.00" in page and "94,872.00" in page
+
+
+def test_bill_first_denied_engagement_goes_to_finance_and_vendor_learns_nothing(flows):
+    assert flows["brindavan_deny"] == 303
+    assert flows["brindavan_maker_approve"] == 403
+    assert "says they didn't engage this vendor" in flows["brindavan_after"]
+    assert "didn't engage" not in flows["brindavan_status"] and "Waiting for our team to confirm the work" in flows["brindavan_status"]

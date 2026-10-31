@@ -159,6 +159,65 @@ SHINDE = {  # proprietorship: legal name = owner, trade name = business
 }
 
 
+# The buying company (us). Bills must be addressed to it; its state decides CGST+SGST vs IGST.
+BUYER = {
+    "legal_name": "Vardhan Engineering Private Limited",
+    "pan": "AAKCV3382N",
+    "gstin": gstin("27", "AAKCV3382N"),
+    "address": "Gat No. 418, Chakan Industrial Area Phase I, Pune, Maharashtra, 410501",
+    "state": "Maharashtra",
+}
+
+# Bill-first vendors: they already did work for us and register to get paid.
+KESARI = {  # Pune (same state as us): CGST + SGST is right
+    "legal_name": "Kesari Facility Services Private Limited",
+    "pan": "AAKCK4417F",
+    "gstin": gstin("27", "AAKCK4417F"),
+    "cin": "U74900MH2015PTC268431",
+    "incorporated": "09/06/2015",
+    "address": "Office 6, Shivneri Complex, Bhosari MIDC",
+    "city": "Pune",
+    "state": "Maharashtra",
+    "pin": "411026",
+    "constitution": "Private Limited Company",
+    "liability_date": "01/07/2017",
+    "gst_issue_date": "27/07/2017",
+    "bank": {
+        "ifsc": "HDFC0000007",
+        "bank": "HDFC Bank",
+        "branch": "Pune - Law College Road",
+        "account": "50200088412375",
+        "holder": "KESARI FACILITY SERVICES PVT LTD",
+        "type": "Current",
+    },
+    "contact": {"name": "Sneha Kulkarni", "email": "billing@kesarifacility.example.com", "phone": "+91 98901 22745"},
+}
+
+BRINDAVAN = {  # Bengaluru (other state): should charge IGST, but its bill charges CGST + SGST
+    "legal_name": "Brindavan Cooling Systems Private Limited",
+    "pan": "AAFCB6623Q",
+    "gstin": gstin("29", "AAFCB6623Q"),
+    "cin": "U29199KA2017PTC104287",
+    "incorporated": "23/02/2017",
+    "address": "No. 61, 3rd Cross, Yeshwanthpur Industrial Suburb",
+    "city": "Bengaluru",
+    "state": "Karnataka",
+    "pin": "560022",
+    "constitution": "Private Limited Company",
+    "liability_date": "01/07/2017",
+    "gst_issue_date": "19/07/2017",
+    "bank": {
+        "ifsc": "UTIB0000009",
+        "bank": "Axis Bank",
+        "branch": "Bangalore",
+        "account": "921020033457781",
+        "holder": "BRINDAVAN COOLING SYSTEMS PVT LTD",
+        "type": "Current",
+    },
+    "contact": {"name": "Manjunath Gowda", "email": "accounts@brindavancooling.example.com", "phone": "+91 97411 30982"},
+}
+
+
 # --- Documents (what the generator renders) ---------------------------------
 
 def gst_cert(b: dict, *, legal_name: str | None = None, trade_name: str = "", proprietor: str = "") -> dict:
@@ -213,6 +272,44 @@ def tax_invoice(b: dict) -> dict:
         "cgst": 9,
         "sgst": 9,
     }
+
+
+def service_invoice(b: dict, *, invoice_no: str, date: str, lines: list[dict], igst: int = 0, cgst: int = 0, sgst: int = 0) -> dict:
+    """A services tax invoice addressed to us (BUYER)."""
+    return {
+        "kind": "tax_invoice",
+        "seller": b["legal_name"].upper(),
+        "seller_gstin": b["gstin"],
+        "seller_address": f"{b['address']}, {b['city']}, {b['state']}, {b['pin']}",
+        "invoice_no": invoice_no,
+        "date": date,
+        "buyer": BUYER["legal_name"].upper(),
+        "buyer_gstin": BUYER["gstin"],
+        "buyer_address": BUYER["address"],
+        "place_of_supply": "Maharashtra (27)",
+        "desc_label": "Description of Services",
+        "code_label": "SAC",
+        "lines": lines,
+        "cgst": cgst,
+        "sgst": sgst,
+        "igst": igst,
+        "bank_line": f"Bank: {b['bank']['bank']}, A/c {b['bank']['account']}, IFSC {b['bank']['ifsc']}",
+    }
+
+
+def invoice_total(lines: list[dict], rate_pct: int) -> float:
+    taxable = sum(l["qty"] * l["rate"] for l in lines)
+    return round(taxable * (1 + rate_pct / 100), 2)
+
+
+KESARI_LINES = [
+    {"desc": "Emergency deep cleaning of Plant 2 shop floor after waterlogging (3 days, 14 staff)", "hsn": "998533", "qty": 1, "rate": 84000.00},
+    {"desc": "Cleaning chemicals, absorbents and disposal of sludge", "hsn": "998533", "qty": 1, "rate": 22500.00},
+]
+BRINDAVAN_LINES = [
+    {"desc": "Breakdown repair of Plant 2 control-room AC: compressor replacement", "hsn": "998719", "qty": 1, "rate": 62000.00},
+    {"desc": "Refrigerant top-up, labour and site visit charges", "hsn": "998719", "qty": 1, "rate": 18400.00},
+]
 
 
 # --- Form submissions -------------------------------------------------------
@@ -306,6 +403,39 @@ SCENARIOS: dict[str, dict] = {
             "gst_certificate": gst_cert(SHINDE, legal_name=SHINDE["proprietor"], trade_name=SHINDE["trade_name"], proprietor=SHINDE["proprietor"]),
             "pan_card": pan_card(SHINDE["proprietor"], SHINDE["pan"], date_label="Date of Birth", date=SHINDE["dob"], father=SHINDE["father"]) | {"as_image": True},
             "bank_proof": cheque(SHINDE, signatory=SHINDE["bank"]["holder"]),
+        },
+    },
+    "bill_kesari": {
+        "title": "No invite: did work for us, registers with its bill",
+        "expected": "APPROVED",
+        "bill": True,
+        "form": form(KESARI, "PVT_LTD", cin=KESARI["cin"]) | {
+            "bill_mode": True, "bill_invoice_number": "KFS/2026-27/0193", "bill_invoice_date": "2026-10-21",
+            "bill_amount": f"{invoice_total(KESARI_LINES, 18):.2f}",
+            "bill_description": "Emergency deep cleaning of the Plant 2 shop floor after the waterlogging on 17 Oct",
+            "bill_engaged_by": "Priya Nair", "bill_po": ""},
+        "documents": {
+            "gst_certificate": gst_cert(KESARI),
+            "pan_card": pan_card(KESARI["legal_name"], KESARI["pan"], date_label="Date of Incorporation/Formation", date=KESARI["incorporated"]),
+            "bank_proof": cheque(KESARI, signatory=KESARI["bank"]["holder"]),
+            "invoice": service_invoice(KESARI, invoice_no="KFS/2026-27/0193", date="21/10/2026", lines=KESARI_LINES, cgst=9, sgst=9),
+        },
+    },
+    "bill_brindavan": {
+        "title": "Bill with the wrong GST type and a mistyped amount",
+        "expected": "PENDING_VENDOR",
+        "bill": True,
+        "form": form(BRINDAVAN, "PVT_LTD", cin=BRINDAVAN["cin"]) | {
+            "bill_mode": True, "bill_invoice_number": "BCS/26-27/0877", "bill_invoice_date": "2026-10-24",
+            "bill_amount": "98472.00",  # digits swapped: the invoice says 94,872.00
+            "bill_description": "Breakdown repair of the Plant 2 control-room AC (compressor replaced)",
+            "bill_engaged_by": "rahul.desai@buyer.example.com", "bill_po": ""},
+        "documents": {
+            "gst_certificate": gst_cert(BRINDAVAN),
+            "pan_card": pan_card(BRINDAVAN["legal_name"], BRINDAVAN["pan"], date_label="Date of Incorporation/Formation", date=BRINDAVAN["incorporated"]),
+            "bank_proof": cheque(BRINDAVAN, signatory=BRINDAVAN["bank"]["holder"]),
+            # Karnataka -> Maharashtra is an inter-state supply (IGST), but the bill charges CGST + SGST
+            "invoice": service_invoice(BRINDAVAN, invoice_no="BCS/26-27/0877", date="24/10/2026", lines=BRINDAVAN_LINES, cgst=9, sgst=9),
         },
     },
 }

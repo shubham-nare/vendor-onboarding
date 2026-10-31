@@ -36,6 +36,8 @@ def sim_records() -> list[dict]:
         (dd.KAVERI_FOODS, dd.KAVERI_FOODS["legal_name"], ""),
         (dd.RANGOLI, dd.RANGOLI["legal_name"], ""),
         (dd.SHINDE, dd.SHINDE["proprietor"], dd.SHINDE["trade_name"]),
+        (dd.KESARI, dd.KESARI["legal_name"], ""),
+        (dd.BRINDAVAN, dd.BRINDAVAN["legal_name"], ""),
     ]
     for b, legal, trade in gst:
         recs.append(dict(kind="gst", key=b["gstin"], data=dict(
@@ -48,17 +50,18 @@ def sim_records() -> list[dict]:
         (dd.NILGIRI["pan"], dd.NILGIRI["legal_name"]), (dd.TEJAS["pan"], dd.TEJAS["legal_name"]),
         (dd.KAVERI_TRADERS["pan"], dd.KAVERI_TRADERS["legal_name"]), (dd.KAVERI_FOODS["pan"], dd.KAVERI_FOODS["legal_name"]),
         (dd.RANGOLI["pan"], dd.RANGOLI["legal_name"]), (dd.SHINDE["pan"], dd.SHINDE["proprietor"]),
+        (dd.KESARI["pan"], dd.KESARI["legal_name"]), (dd.BRINDAVAN["pan"], dd.BRINDAVAN["legal_name"]),
     ]
     for pan, name in pans:
         recs.append(dict(kind="pan", key=pan, data=dict(name=name.upper(), status="VALID", aadhaar_linked=True)))
-    banks = [dd.NILGIRI, dd.TEJAS, dd.KAVERI_TRADERS, dd.SHINDE]
+    banks = [dd.NILGIRI, dd.TEJAS, dd.KAVERI_TRADERS, dd.SHINDE, dd.KESARI, dd.BRINDAVAN]
     for b in banks:
         recs.append(dict(kind="bank", key=f"{b['bank']['account']}@{b['bank']['ifsc']}",
                          data=dict(holder_name=b["bank"]["holder"], status="VALID")))
     # Rangoli's account really belongs to vendor V-0042: a penny-drop returns that holder.
     recs.append(dict(kind="bank", key=f"{dd.RANGOLI['bank']['account']}@{dd.RANGOLI['bank']['ifsc']}",
                      data=dict(holder_name="DECCAN OFFICE SUPPLIES", status="VALID")))
-    for b in (dd.NILGIRI, dd.TEJAS, dd.RANGOLI):
+    for b in (dd.NILGIRI, dd.TEJAS, dd.RANGOLI, dd.KESARI, dd.BRINDAVAN):
         recs.append(dict(kind="cin", key=b["cin"], data=dict(name=b["legal_name"].upper(), status="Active", incorporated=b["incorporated"])))
     recs.append(dict(kind="udyam", key=dd.TEJAS["udyam"]["number"], data=dict(
         name=dd.TEJAS["legal_name"].upper(), type=dd.TEJAS["udyam"]["type"], status="Active")))

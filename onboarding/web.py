@@ -24,18 +24,19 @@ from onboarding import runner
 from onboarding import validators as V
 from onboarding.authenticity.assess import assess
 from onboarding.config import get_settings
-from onboarding.demo_data import SCENARIOS
-from onboarding.models import (Application, Document, Employee, Fact, HumanAction, Invite, Message, Run, RunEvent, RuleResult, StoredFile,
+from onboarding.demo_data import BUYER, SCENARIOS
+from onboarding.models import (Application, Bill, Document, Employee, Fact, HumanAction, Invite, Message, Run, RunEvent, RuleResult, StoredFile,
                                VendorMaster, now)
-from onboarding.pipeline import STAGES, create_run, sessions
-from onboarding.rules import SLOT_LABEL, SLOT_TITLE
+from onboarding.pipeline import STAGES, create_run, sessions, stages_for
+from onboarding.rules import BILL_HIGH_RISK, SLOT_LABEL, SLOT_TITLE, inr, money
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "fixtures" / "documents"
 PRIVATE = ROOT / "private_inputs"
 PUBLIC_SAMPLE = ROOT / "fixtures" / "public" / "gst_certificate_signed_igr_maharashtra.pdf"
 MAX_BYTES = 10 * 1024 * 1024
-SLOTS = ["gst_certificate", "pan_card", "bank_proof", "udyam_certificate"]
+SLOTS = ["gst_certificate", "pan_card", "bank_proof", "udyam_certificate", "invoice"]
+BILL_FIELDS = ("bill_invoice_number", "bill_invoice_date", "bill_amount", "bill_description", "bill_engaged_by", "bill_po")
 STATUS_LABEL = {"APPROVED": "Approved", "PENDING_VENDOR": "Pending: vendor to fix", "PENDING_REVIEW": "Pending: internal review",
                 "REJECTED": "Rejected", "ACTIVE": "Active vendor", "IN_PROGRESS": "In progress", "": "Running"}
 LEVEL_NAMES = {"A0": "Declared", "A1": "Evidenced", "A2": "Genuine", "A3": "Cryptographically proven", "A4": "Confirmed at source"}
@@ -76,7 +77,7 @@ templates.env.filters["dt"] = _fmt_dt
 templates.env.filters["sigdate"] = lambda v: (f"{v[6:8]}/{v[4:6]}/{v[:4]} {v[8:10]}:{v[10:12]}" if isinstance(v, str) and len(v) >= 12 and v[:12].isdigit() else v)
 templates.env.filters["mask"] = lambda value, name="": _mask(name, value)
 templates.env.globals.update(STATUS_LABEL=STATUS_LABEL, LEVEL_NAMES=LEVEL_NAMES, SLOT_TITLE=SLOT_TITLE, SLOT_LABEL=SLOT_LABEL,
-                             ROLE_LABEL=ROLE_LABEL, ROLE_HINT=ROLE_HINT, BUSINESS_TYPES=V.BUSINESS_TYPES, mask_pan=V.mask_pan, mask_account=V.mask_account)
+                             ROLE_LABEL=ROLE_LABEL, ROLE_HINT=ROLE_HINT, inr=inr, money=money, BUYER=BUYER, BUSINESS_TYPES=V.BUSINESS_TYPES, mask_pan=V.mask_pan, mask_account=V.mask_account)
 
 
 # --- shared helpers ------------------------------------------------------------------------------
@@ -105,8 +106,8 @@ def demo_catalog() -> dict[str, dict]:
     out = {}
     for key, sc in SCENARIOS.items():
         files = {p.stem: p for p in sorted((DOCS / key).glob("*"))}
-        out[key] = dict(title=sc["title"], expected=sc["expected"], form=sc["form"], files=files, invite_scenario=key,
-                        resubmission_of=sc.get("resubmission_of"), private=False)
+        out[key] = dict(title=sc["title"], expected=sc["expected"], form=sc["form"], files=files, invite_scenario=None if sc.get("bill") else key,
+                        resubmission_of=sc.get("resubmission_of"), private=False, bill=bool(sc.get("bill")))
     variants = {
         "handwritten_nilgiri": ("Hand-written PAN on plain paper (phone photo)", "PENDING_VENDOR", {"pan_card": "handwritten_pan.jpg"}),
         "ai_pan_nilgiri": ("AI-generated PAN card image", "PENDING_REVIEW", {"pan_card": "ai_pan.jpg"}),
@@ -118,7 +119,7 @@ def demo_catalog() -> dict[str, dict]:
         paths = {slot: PRIVATE / fn for slot, fn in swap.items()}
         if all(p.exists() for p in paths.values()):  # private inputs exist only on Shubham's laptop
             out[key] = dict(base, title=title, expected=expected, files={**base["files"], **paths}, private=True)
-    out["unsolicited_nilgiri"] = dict(base, title="Application with no invite (unsolicited)", expected="PENDING_REVIEW", invite_scenario=None)
+    out["unsolicited_nilgiri"] = dict(base, title="Application with no invite (unsolicited)", expected="PENDING_REVIEW", invite_scenario=None, bill=False)
     return out
 
 
@@ -143,12 +144,16 @@ async def dashboard(request: Request):
         origin: dict[int, list[str]] = {}
         for run_id, read in docs:
             origin.setdefault(run_id, []).append((read or {}).get("origin", ""))
+        bills = {b.application_id: b for b in (await s.execute(select(Bill))).scalars()}
         runs = []
         for run, app in rows:
             inv = sponsors.get(app.invite_id)
+            b = bills.get(app.id)
             secs = (run.finished_at - run.started_at).total_seconds() if run.finished_at and run.started_at else None
             o = origin.get(run.id, [])
-            runs.append(dict(run=run, app=app, sponsor=emps[inv.sponsor_id].name if inv and inv.sponsor_id in emps else "",
+            who = (emps[inv.sponsor_id].name if inv and inv.sponsor_id in emps else
+                   ((emps[b.engaged_employee_id].name if b.engaged_employee_id in emps else "unknown") + " · bill" if b else ""))
+            runs.append(dict(run=run, app=app, sponsor=who, bill=b,
                              seconds=secs, fraud=(run.summary or {}).get("fraud"), resubmission=bool(run.parent_run_id),
                              reads="live" if o and all(x == "live" for x in o) else ("saved" if o else "")))
         apps = {r["app"].id: r["app"] for r in runs}
@@ -202,6 +207,8 @@ async def demo_start(key: str):
     if key not in cat:
         raise HTTPException(404, "Unknown scenario")
     sc = cat[key]
+    if sc.get("bill"):
+        return RedirectResponse(f"/bill?demo={key}", status_code=303)
     if sc["invite_scenario"] is None:
         return RedirectResponse(f"/apply?demo={key}", status_code=303)
     async with sessions()() as s:
@@ -222,11 +229,34 @@ async def _invite_or_404(s, token: str) -> Invite:
     return inv
 
 
+async def _vendor_link(s, token: str) -> tuple[Invite | None, Bill | None, Application | None]:
+    """A vendor's private link is an invite token or, for bill-first registrations, a bill token."""
+    bill = (await s.execute(select(Bill).where(Bill.token == token))).scalar_one_or_none()
+    if bill:
+        return None, bill, await s.get(Application, bill.application_id)
+    inv = await _invite_or_404(s, token)
+    app = (await s.execute(select(Application).where(Application.invite_id == inv.id))).scalars().first()
+    return inv, None, app
+
+
+async def _resolve_employee(s, text: str) -> Employee | None:
+    """Match 'Priya Nair', 'priya', 'priya.nair@buyer.example.com' to one employee (None if unknown or ambiguous)."""
+    t = " ".join((text or "").lower().replace(".", " ").split())
+    if not t:
+        return None
+    emps = await _employees(s)
+    exact = [e for e in emps if (text or "").strip().lower() in (e.name.lower(), e.email.lower())]
+    if exact:
+        return exact[0]
+    words = set(t.replace("@", " ").split())
+    hits = [e for e in emps if set(e.name.lower().split()) <= words or (len(words) == 1 and words <= set(e.name.lower().split()))]
+    return hits[0] if len(hits) == 1 else None
+
+
 @router.get("/apply/{token}", response_class=HTMLResponse)
 async def apply_form(request: Request, token: str, demo: str = ""):
     async with sessions()() as s:
-        inv = await _invite_or_404(s, token)
-        app = (await s.execute(select(Application).where(Application.invite_id == inv.id))).scalars().first()
+        inv, bill, app = await _vendor_link(s, token)
         prev, message = None, None
         if app:
             prev = await _latest_run(s, app.id)
@@ -234,14 +264,22 @@ async def apply_form(request: Request, token: str, demo: str = ""):
                 return RedirectResponse(f"/status/{token}", status_code=303)
             message = (await s.execute(select(Message).where(Message.run_id == prev.id, Message.audience == "vendor"))).scalars().first()
         prev_docs = {d.slot: d for d in (await s.execute(select(Document).where(Document.run_id == prev.id))).scalars()} if prev else {}
-        return await render(request, s, "apply.html", invite=inv, token=token, app=app, prev=prev, prev_docs=prev_docs, message=message,
+        return await render(request, s, "apply.html", invite=inv, bill=bill, token=token, app=app, prev=prev, prev_docs=prev_docs, message=message,
                             **_form_context(demo, prev.form if prev else {"legal_name": inv.company_name, "contact_email": inv.contact_email}))
 
 
 @router.get("/apply", response_class=HTMLResponse)
 async def apply_unsolicited(request: Request, demo: str = ""):
     async with sessions()() as s:
-        return await render(request, s, "apply.html", invite=None, token="", app=None, prev=None, prev_docs={}, message=None, **_form_context(demo, {}))
+        return await render(request, s, "apply.html", invite=None, bill=None, token="", app=None, prev=None, prev_docs={}, message=None, **_form_context(demo, {}))
+
+
+@router.get("/bill", response_class=HTMLResponse)
+async def bill_form(request: Request, demo: str = ""):
+    """Self-registration for a vendor who already did work for us and wants to be paid."""
+    async with sessions()() as s:
+        return await render(request, s, "apply.html", invite=None, bill=None, bill_mode=True, token="", app=None, prev=None, prev_docs={},
+                            message=None, **_form_context(demo, {"bill_mode": True}))
 
 
 def _form_context(demo: str, values: dict) -> dict:
@@ -265,6 +303,12 @@ async def _collect_form(request: Request) -> tuple[dict, dict[str, tuple[str, by
     f["country"] = f["country"] or "India"
     f["msme"] = data.get("msme") == "on"
     f["gst_registered"] = data.get("gst_registered", "on") == "on"
+    if data.get("bill_mode") == "1":
+        f["bill_mode"] = True
+        for k in BILL_FIELDS:
+            f[k] = str(data.get(k) or "").strip()
+        f["bill_invoice_number"] = f["bill_invoice_number"].upper()
+        f["bill_amount"] = f["bill_amount"].replace(",", "").replace("\u20b9", "").strip()
     files: dict[str, tuple[str, bytes]] = {}
     for slot in SLOTS:
         up = data.get(slot)
@@ -280,7 +324,7 @@ async def _collect_form(request: Request) -> tuple[dict, dict[str, tuple[str, by
 def _fill_files(files: dict, demo: str, prev_files: dict[str, tuple[str, bytes]], form: dict) -> dict:
     """Uploaded file > demo scenario file > the file sent last time (resubmissions)."""
     sc = demo_catalog().get(demo)
-    needed = SLOTS if form.get("msme") else SLOTS[:3]
+    needed = SLOTS[:3] + (["udyam_certificate"] if form.get("msme") else []) + (["invoice"] if form.get("bill_mode") else [])
     for slot in needed:
         if slot in files:
             continue
@@ -296,8 +340,10 @@ def _fill_files(files: dict, demo: str, prev_files: dict[str, tuple[str, bytes]]
 async def apply_submit(request: Request, token: str):
     form, files, demo = await _collect_form(request)
     async with sessions()() as s:
-        inv = await _invite_or_404(s, token)
-        app = (await s.execute(select(Application).where(Application.invite_id == inv.id))).scalars().first()
+        inv, bill, app = await _vendor_link(s, token)
+        if bill and bill.confirmation == "awaiting":
+            emp = await _resolve_employee(s, form.get("bill_engaged_by", ""))
+            bill.engaged_by_text, bill.engaged_employee_id = form.get("bill_engaged_by", ""), emp.id if emp else None
         prev_files, parent = {}, None
         if app:
             prev = await _latest_run(s, app.id)
@@ -308,10 +354,27 @@ async def apply_submit(request: Request, token: str):
                 sf = await s.get(StoredFile, d.sha256)
                 prev_files[d.slot] = (d.filename, sf.data)
         files = _fill_files(files, demo, prev_files, form)
-        run = await create_run(s, form, files, invite_token=token, parent_run_id=parent)
+        run = await create_run(s, form, files, invite_token=token if inv else None, parent_run_id=parent)
         if app:
             app.current_status = "IN_PROGRESS"
             await s.commit()
+    runner.start(run.id)
+    return RedirectResponse(f"/runs/{run.id}?from=vendor", status_code=303)
+
+
+@router.post("/bill")
+async def bill_submit(request: Request):
+    form, files, demo = await _collect_form(request)
+    form["bill_mode"] = True
+    for k in BILL_FIELDS:
+        form.setdefault(k, "")
+    files = _fill_files(files, demo, {}, form)
+    async with sessions()() as s:
+        run = await create_run(s, form, files, invite_token=None)
+        emp = await _resolve_employee(s, form.get("bill_engaged_by", ""))
+        s.add(Bill(application_id=run.application_id, token=secrets.token_urlsafe(18), engaged_by_text=form.get("bill_engaged_by", ""),
+                   engaged_employee_id=emp.id if emp else None))
+        await s.commit()
     runner.start(run.id)
     return RedirectResponse(f"/runs/{run.id}?from=vendor", status_code=303)
 
@@ -330,15 +393,15 @@ async def apply_unsolicited_submit(request: Request):
 async def vendor_status(request: Request, token: str):
     """What the vendor sees: their reference, status and the messages sent to them."""
     async with sessions()() as s:
-        inv = await _invite_or_404(s, token)
-        app = (await s.execute(select(Application).where(Application.invite_id == inv.id))).scalars().first()
+        inv, bill, app = await _vendor_link(s, token)
         msgs, run = [], None
         if app:
             run = await _latest_run(s, app.id)
             run_ids = [r for (r,) in (await s.execute(select(Run.id).where(Run.application_id == app.id))).all()]
             msgs = (await s.execute(select(Message).where(Message.run_id.in_(run_ids), Message.audience == "vendor", Message.state == "sent")
                                     .order_by(Message.id.desc()))).scalars().all()
-        return await render(request, s, "status.html", invite=inv, app=app, run=run, msgs=msgs, token=token)
+        company = inv.company_name if inv else (run.form.get("legal_name") if run else "")
+        return await render(request, s, "status.html", invite=inv, bill=bill, company=company, app=app, run=run, msgs=msgs, token=token)
 
 
 # --- run view ------------------------------------------------------------------------------------
@@ -361,6 +424,8 @@ async def run_view(request: Request, run_id: int):
         app = await s.get(Application, run.application_id)
         inv = await s.get(Invite, app.invite_id) if app.invite_id else None
         sponsor = await s.get(Employee, inv.sponsor_id) if inv else None
+        bill = (await s.execute(select(Bill).where(Bill.application_id == app.id))).scalar_one_or_none()
+        bill_emp = await s.get(Employee, bill.engaged_employee_id) if bill and bill.engaged_employee_id else None
         events = [_event_dict(e) for e in (await s.execute(select(RunEvent).where(RunEvent.run_id == run_id).order_by(RunEvent.seq))).scalars()]
         docs = sorted((await s.execute(select(Document).where(Document.run_id == run_id))).scalars().all(),
                       key=lambda d: SLOTS.index(d.slot) if d.slot in SLOTS else 99)
@@ -374,9 +439,10 @@ async def run_view(request: Request, run_id: int):
         latest = history[-1].id == run.id
         vendor = (await s.execute(select(VendorMaster).where(VendorMaster.source_run_id.in_([r.id for r in history])))).scalars().first()
         actor = await _actor(request, s)
-        return await render(request, s, "run.html", run=run, app=app, invite=inv, sponsor=sponsor, events=events, stages=STAGES, docs=docs,
+        return await render(request, s, "run.html", run=run, app=app, invite=inv, sponsor=sponsor, bill=bill, bill_emp=bill_emp,
+                            vendor_token=inv.token if inv else (bill.token if bill else ""), events=events, stages=stages_for(run.form), docs=docs,
                             rules=rules, facts=facts, vendor_msg=msgs.get("vendor"), all_vendor_msgs=extra_msgs, internal=msgs.get("internal"),
-                            actions=actions, history=history, latest=latest, vendor=vendor, allowed=_allowed_actions(run, app, inv, actor),
+                            actions=actions, history=history, latest=latest, vendor=vendor, allowed=_allowed_actions(run, app, inv, actor, bill, bill_emp),
                             from_vendor=request.query_params.get("from") == "vendor")
 
 
@@ -430,24 +496,40 @@ ACTIONS = {
     "review_approve": "Approve and activate",
     "ask_vendor": "Ask the vendor for something",
     "review_reject": "Reject",
+    "confirm_engagement": "Yes, I engaged this vendor",
+    "deny_engagement": "No, I didn't engage them",
 }
 
 
-def _allowed_actions(run: Run, app: Application, inv: Invite | None, actor: Employee | None) -> dict:
+def _allowed_actions(run: Run, app: Application, inv: Invite | None, actor: Employee | None, bill: Bill | None = None,
+                     bill_emp: Employee | None = None) -> dict:
     """Which actions apply now, and for each, whether the current person may take it (and why not)."""
     if run.state != "done":
         return {}
     status = app.current_status
     applicable = {"APPROVED": ["activate"], "REJECTED": ["confirm_reject", "override_reject"],
                   "PENDING_REVIEW": ["review_approve", "ask_vendor", "review_reject"]}.get(status, [])
+    if bill and bill_emp and bill.confirmation == "awaiting" and status not in ("REJECTED", "ACTIVE"):
+        applicable = ["confirm_engagement", "deny_engagement"] + applicable
+    requester_id = inv.sponsor_id if inv else (bill.engaged_employee_id if bill else None)
     out = {}
-    high = run.risk_tier == "high" or (run.summary or {}).get("fraud")
+    high = run.risk_tier == "high" or (run.summary or {}).get("fraud") or (bill is not None and bill.confirmation == "denied")
     for a in applicable:
         why = ""
+        if a in ("confirm_engagement", "deny_engagement"):
+            if not actor or actor.id != bill.engaged_employee_id:
+                why = f"Only {bill_emp.name}, who the vendor named, can answer this. Switch 'Acting as' to them."
+            out[a] = dict(label=ACTIONS[a], blocked=why, needs_comment=a == "deny_engagement")
+            continue
         if not actor:
             why = "Pick who you're acting as."
-        elif actor.role == "sponsor" or (inv and inv.sponsor_id == actor.id):
+        elif actor.role == "sponsor" or (requester_id and requester_id == actor.id):
             why = "Segregation of duties: the employee who requested this vendor can't approve, activate or reject it."
+        elif a in ("activate", "review_approve") and bill and bill.confirmation == "awaiting":
+            why = (f"Waiting for {bill_emp.name} to confirm they engaged this vendor." if bill_emp
+                   else "Nobody has confirmed engaging this vendor: find out who did before approving.")
+        elif a in ("activate", "review_approve") and bill and bill.confirmation == "denied":
+            why = f"{bill_emp.name if bill_emp else 'The named employee'} says they didn't engage this vendor."
         elif a in ("review_reject",) and actor.role != "checker":
             why = "Only the Finance controller can reject after review."
         elif a in ("activate", "review_approve") and high and actor.role != "checker":
@@ -464,9 +546,11 @@ async def _activate(s, run: Run, app: Application) -> VendorMaster:
     s.add(vm)
     app.current_status = "ACTIVE"
     hi = f"Hi {f.get('contact_name') or 'there'},"
+    bill_note = (f"\n\nYour bill {f.get('bill_invoice_number')} for {inr(money(f.get('bill_amount')))} has been passed to accounts payable. "
+                 "It is paid once a purchase order is raised for the work and the receipt is recorded." if f.get("bill_mode") else "")
     s.add(Message(run_id=run.id, audience="vendor", subject=f"Your vendor account is active (Ref {app.ref})", state="sent",
                   body=f"{hi}\n\n{f.get('legal_name')} is now an active vendor. Your vendor ID is {vm.vendor_id}. Please quote it on every invoice; "
-                       "invoices are paid after the purchase order and goods receipt are matched.\n\nVendor Onboarding Team"))
+                       f"invoices are paid after the purchase order and goods receipt are matched.{bill_note}\n\nVendor Onboarding Team"))
     return vm
 
 
@@ -482,17 +566,25 @@ async def run_action(request: Request, run_id: int, action: str = Form(...), com
             raise HTTPException(409, "A newer submission exists; act on that one.")
         inv = await s.get(Invite, app.invite_id) if app.invite_id else None
         actor = await _actor(request, s)
-        allowed = _allowed_actions(run, app, inv, actor)
+        comment = comment.strip()
+        bill =(await s.execute(select(Bill).where(Bill.application_id == app.id))).scalar_one_or_none()
+        bill_emp = await s.get(Employee, bill.engaged_employee_id) if bill and bill.engaged_employee_id else None
+        allowed = _allowed_actions(run, app, inv, actor, bill, bill_emp)
         if action not in allowed:
             raise HTTPException(409, "That action doesn't apply to this application right now.")
         if allowed[action]["blocked"]:
             raise HTTPException(403, allowed[action]["blocked"])
-        comment = comment.strip()
-        if allowed[action]["needs_comment"] and len(comment) < 5:
+        if allowed[action]["needs_comment"] and len(comment.strip()) < 5:
             raise HTTPException(400, "Please write a short reason: it goes on the audit trail.")
         held = (await s.execute(select(Message).where(Message.run_id == run.id, Message.audience == "vendor", Message.state == "held"))).scalars().first()
         hi = f"Hi {run.form.get('contact_name') or 'there'},"
-        if action == "activate":
+        if action == "confirm_engagement":
+            bill.confirmation, bill.decided_at = "confirmed", now()
+        elif action == "deny_engagement":
+            bill.confirmation, bill.decided_at = "denied", now()
+            if app.current_status in ("APPROVED", "PENDING_VENDOR"):
+                app.current_status = "PENDING_REVIEW"  # a person who never engaged them: the Finance controller decides
+        elif action == "activate":
             if held:
                 held.state = "sent"
             await _activate(s, run, app)

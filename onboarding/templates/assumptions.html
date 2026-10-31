@@ -56,6 +56,7 @@
     <li><b>Reject</b> only for an identity conflict (e.g. a GSTIN belonging to a different PAN) or the blocklist, and a person confirms before the vendor is told.</li>
     <li>Authenticity heuristics never reject. A suspected fake goes to a person; the vendor gets a neutral "under review" message so a fraudster learns nothing.</li>
     <li>"Couldn't read clearly" is never treated as "read and different": unclear documents mean "please upload a clearer copy". Misread characters are corrected only where provable (a PAN's letter positions, the GSTIN check digit); account numbers are never corrected.</li>
+    <li><b>Bill-first registration:</b> a vendor who already did work can register at /bill with its invoice. The bill is checked (issued by this vendor, addressed to us, amount, arithmetic, CGST+SGST vs IGST, date, duplicates), the employee the vendor names must confirm the engagement, and that employee then counts as the requester. Bills of &#8377;10 lakh or more need the Finance controller. A bill is never paid automatically.</li>
     <li>The employee who requested a vendor (the requester) can't approve it. High-risk vendors (≥ ₹50 lakh a year, or any fraud signal) need the Finance controller.</li>
     <li>Approval is not payment: invoices are still paid only after PO and goods-receipt matching (out of scope here).</li>
   </ul>

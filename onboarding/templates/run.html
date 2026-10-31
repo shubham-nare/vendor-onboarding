@@ -9,7 +9,7 @@
 {% if from_vendor %}
 <div class="mb-5 rounded-lg border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-900 flex flex-wrap items-center justify-between gap-2">
   <span>The vendor just submitted. This is the <b>internal</b> live view; the vendor only sees their status page and the messages we send.</span>
-  {% if invite %}<a class="inline-flex items-center gap-1 text-xs font-medium underline underline-offset-4" href="/status/{{ invite.token }}">Open the vendor's view {{ icon('arrow', 'h-3.5 w-3.5') }}</a>{% endif %}
+  {% if vendor_token %}<a class="inline-flex items-center gap-1 text-xs font-medium underline underline-offset-4" href="/status/{{ vendor_token }}">Open the vendor's view {{ icon('arrow', 'h-3.5 w-3.5') }}</a>{% endif %}
 </div>
 {% endif %}
 
@@ -19,6 +19,8 @@
     <h1 class="text-[28px] sm:text-[36px] leading-tight mt-1 break-words">{{ app.legal_name }}</h1>
     <div class="text-[14px] text-slate-600 mt-1 max-w-3xl">
       {% if invite %}Requested by <b class="text-slate-900 font-medium">{{ sponsor.name }}</b> <span class="text-slate-500">({{ sponsor.department }})</span>: {{ invite.business_reason }} <span class="mono text-[11.5px] text-slate-500 whitespace-nowrap">· spend {{ invite.spend_band }}</span>
+      {% elif bill %}<span class="tag text-indigo-600 !text-[9.5px] mr-1 align-middle">bill-first</span> No invite: registered with a bill for work already done. Engaged by
+        <b class="text-slate-900 font-medium">{{ bill_emp.name if bill_emp else ('"' ~ bill.engaged_by_text ~ '"') }}</b>{% if bill_emp %} <span class="text-slate-500">({{ bill_emp.department }})</span>{% else %} <span class="text-rose-600">(not found in the employee directory)</span>{% endif %}
       {% else %}<span class="text-rose-600 font-medium">No invite from an employee: unsolicited application</span>{% endif %}
     </div>
   </div>
@@ -117,6 +119,47 @@
       </div>
     </section>
 
+    {% if bill %}
+    {% set f = run.form %}
+    {% set conf = bill.confirmation %}
+    <section id="bill" class="bg-white rounded-xl border overflow-hidden">
+      <div class="px-4 sm:px-6 py-4 border-b border-slate-200 flex flex-wrap items-baseline justify-between gap-2">
+        <h2 class="text-xl">The bill</h2>
+        <span class="kicker !text-[10px]">submitted with the registration · never paid automatically</span>
+      </div>
+      <div class="p-4 sm:p-6 grid md:grid-cols-[1fr_auto] gap-6">
+        <dl class="text-[14px] grid grid-cols-[8.5rem_1fr] gap-x-3 gap-y-1.5 min-w-0">
+          <dt class="text-slate-500">Invoice</dt><dd class="mono text-[13px] break-words">{{ f.bill_invoice_number }}{% if f.bill_invoice_date %} · {{ f.bill_invoice_date }}{% endif %}</dd>
+          <dt class="text-slate-500">Amount</dt><dd class="font-display text-[22px] leading-tight">{{ inr(money(f.bill_amount)) }}</dd>
+          <dt class="text-slate-500">Work</dt><dd class="break-words">{{ f.bill_description }}</dd>
+          <dt class="text-slate-500">PO number</dt><dd>{{ f.bill_po or 'none (work done without a purchase order)' }}</dd>
+          <dt class="text-slate-500">Engaged by</dt><dd>{{ bill_emp.name if bill_emp else bill.engaged_by_text }}{% if bill_emp %} <span class="text-slate-500">· {{ bill_emp.department }}</span>{% endif %}</dd>
+        </dl>
+        <div class="md:w-64 rounded-lg border p-4 {{ 'border-emerald-200 bg-emerald-50' if conf == 'confirmed' else ('border-rose-200 bg-rose-50' if conf == 'denied' else 'border-amber-200 bg-amber-50') }}">
+          <div class="kicker !text-[10px]">Engagement</div>
+          {% if conf == 'confirmed' %}
+            <div class="font-medium text-emerald-800 mt-1 flex items-center gap-1.5">{{ icon('check', 'h-4 w-4') }} Confirmed by {{ bill_emp.name }}</div>
+            <div class="text-xs text-slate-600 mt-1">{{ bill.decided_at | dt }}</div>
+          {% elif conf == 'denied' %}
+            <div class="font-medium text-rose-700 mt-1">{{ bill_emp.name }} says they didn't engage this vendor</div>
+            <div class="text-xs text-slate-600 mt-1">Treated as possible invoice fraud: the Finance controller decides.</div>
+          {% elif bill_emp %}
+            <div class="font-medium text-amber-800 mt-1">Waiting for {{ bill_emp.name }} to confirm</div>
+            <div class="text-xs text-slate-600 mt-1">The vendor can't be activated until they do.</div>
+          {% else %}
+            <div class="font-medium text-rose-700 mt-1">Nobody to confirm</div>
+            <div class="text-xs text-slate-600 mt-1">"{{ bill.engaged_by_text }}" isn't in the employee directory.</div>
+          {% endif %}
+          <div class="mt-3 pt-3 border-t border-current/10 text-xs text-slate-700">
+            <span class="kicker !text-[9.5px]">Payment</span><br>
+            {% if vendor and conf == 'confirmed' %}Passed to accounts payable: paid once a purchase order is raised and the receipt recorded.
+            {% else %}Not payable yet: needs an active vendor and a confirmed engagement, then PO and receipt matching.{% endif %}
+          </div>
+        </div>
+      </div>
+    </section>
+    {% endif %}
+
     <!-- human actions -->
     <section id="actions" class="bg-white rounded-xl border p-4 sm:p-6">
       <div class="flex flex-wrap items-baseline justify-between gap-2">
@@ -134,12 +177,13 @@
       {% elif allowed %}
         <div class="mt-4 grid gap-3">
         {% for key, a in allowed.items() %}
-          {% set btn = 'bg-rose-600 hover:bg-rose-700' if key in ('confirm_reject', 'review_reject') else ('bg-slate-800 hover:bg-slate-900' if key in ('override_reject', 'ask_vendor') else 'bg-emerald-600 hover:bg-emerald-700') %}
+          {% set btn = 'bg-rose-600 hover:bg-rose-700' if key in ('confirm_reject', 'review_reject', 'deny_engagement') else ('bg-slate-800 hover:bg-slate-900' if key in ('override_reject', 'ask_vendor') else 'bg-emerald-600 hover:bg-emerald-700') %}
           <form method="post" action="/runs/{{ run.id }}/action" class="rounded-lg border {{ 'border-dashed border-slate-300 bg-slate-50' if a.blocked else 'border-slate-200' }} p-3.5">
             <input type="hidden" name="action" value="{{ key }}">
             <div class="flex flex-wrap items-center gap-3">
-              {% if a.needs_comment %}<input name="comment" aria-label="{{ 'Message to the vendor' if key == 'ask_vendor' else 'Reason' }}" class="flex-1 min-w-0 basis-full sm:basis-auto sm:min-w-[14rem] rounded-md border px-3 py-2.5 sm:py-2 text-sm" placeholder="{{ 'Message to the vendor' if key == 'ask_vendor' else 'Reason (goes on the audit trail)' }}" {{ 'disabled' if a.blocked }}>
-              {% else %}<div class="flex-1 basis-full sm:basis-auto sm:min-w-[14rem] text-sm text-slate-600">{{ 'Adds the vendor to the vendor master as active and sends the vendor their ID.' if key == 'activate' else 'Sends the held message to the vendor and closes the application.' }}</div>{% endif %}
+              {% if a.needs_comment %}<input name="comment" aria-label="{{ 'Message to the vendor' if key == 'ask_vendor' else 'Reason' }}" class="flex-1 min-w-0 basis-full sm:basis-auto sm:min-w-[14rem] rounded-md border px-3 py-2.5 sm:py-2 text-sm" placeholder="{{ 'Message to the vendor' if key == 'ask_vendor' else ('What do you know about this bill? (audit trail)' if key == 'deny_engagement' else 'Reason (goes on the audit trail)') }}" {{ 'disabled' if a.blocked }}>
+              {% else %}<div class="flex-1 basis-full sm:basis-auto sm:min-w-[14rem] text-sm text-slate-600">{{ {'activate': 'Adds the vendor to the vendor master as active and sends the vendor their ID.',
+                   'confirm_engagement': 'You asked this vendor for the work on the bill. You become its requester, so someone else approves it.'}.get(key, 'Sends the held message to the vendor and closes the application.') }}</div>{% endif %}
               <button class="w-full sm:w-auto rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium text-white {{ btn }} disabled:bg-slate-300 disabled:text-slate-600 disabled:cursor-not-allowed shadow-[2px_2px_0_rgba(28,27,24,.15)]" {{ 'disabled' if a.blocked }}>{{ a.label }}</button>
             </div>
             {% if a.blocked %}<div class="mt-2 text-xs text-rose-600 flex items-start gap-1.5">{{ icon('lock', 'h-3.5 w-3.5 shrink-0 mt-px') }} <span>{{ a.blocked }}</span></div>{% endif %}

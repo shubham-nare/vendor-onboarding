@@ -95,6 +95,40 @@ Spend of **₹50 lakh a year or more** marks the invite as high-spend, which mak
 
 Someone can also apply at `/apply` without an invite. That application always goes to internal review (`R-INV-01`); it can never be approved automatically.
 
+### Without an invite: registering with a bill (`/bill`)
+
+Real companies also get vendors who **already did the work**: an emergency repair, a one-off service someone arranged, and now the supplier wants to be paid. Procurement calls this *after-the-fact* or *no-PO* spend. It is also the classic route for invoice fraud: a convincing bill from a "vendor" nobody engaged.
+
+The design follows one principle: **a vendor can prove who they are, but only someone inside the company can confirm that we owe them.**
+
+1. **The vendor registers at `/bill`.** It's the same form and documents as an invited vendor, plus a **Your bill** section:
+   - the tax invoice file, invoice number, date and total (including GST);
+   - what the work was;
+   - **who at our company engaged them** (name or work email);
+   - a PO number, if they have one.
+2. **All the normal vendor checks run**, plus a **Bill checks** stage (shown only for these registrations):
+
+   | Rule | Check | If it fails |
+   |---|---|---|
+   | `R-BILL-01` | The invoice number typed matches the bill | VENDOR |
+   | `R-BILL-02` | The bill was issued by this vendor (seller GSTIN = the vendor's GSTIN) | REVIEW (someone else's invoice) |
+   | `R-BILL-03` | The bill is addressed to us (buyer GSTIN = ours). Without that we can't pay it or claim the GST credit. | VENDOR, with our exact name, GSTIN and address |
+   | `R-BILL-04` | The amount typed matches the bill's total (to within ₹1) | VENDOR |
+   | `R-BILL-05` | The bill adds up: taxable value + GST = total | VENDOR |
+   | `R-BILL-06` | **The right kind of GST:** CGST + SGST when the vendor is in our state, IGST when it isn't. Decided from the two GSTINs' state codes. | VENDOR ("send a corrected invoice"); no GST at all is a WARN |
+   | `R-BILL-07` | Dated sensibly: not in the future (VENDOR); not more than a year old (REVIEW: the credit may be lost) | VENDOR / REVIEW |
+   | `R-BILL-08` | The same invoice (same seller GSTIN and invoice number) wasn't already submitted on another application | REVIEW, fraud class (double billing) |
+   | `R-BILL-09` | The person they named is a real employee | REVIEW (nobody to vouch for the work) |
+
+   The bill also goes through the same authenticity checks as every other document (editing software, broken signatures, AI-generated images…).
+3. **`R-INV-01` is a warning, not a block.** "No invite: the vendor registered with a bill." The run can still come out *Approved* (at medium risk), *Vendor to fix* or *Review* on its merits.
+4. **The named employee must confirm.** On the run page they see **"Yes, I engaged this vendor"** and **"No, I didn't engage them"**. Only that employee can press either button.
+   - **Yes:** they become the vendor's **requester**, so segregation of duties applies: they can't approve the vendor themselves.
+   - **No:** the case becomes possible invoice fraud. It goes to internal review, and only the Finance controller can decide. The vendor's status page just says the work is "waiting for our team to confirm", so they learn nothing.
+   - **Activation is blocked until the engagement is confirmed**, even when the automatic decision is *Approved*.
+5. **Risk:** a single bill of **₹10 lakh or more** makes the vendor high risk, so the Finance controller must approve.
+6. **Payment:** never automatic. After activation the bill is "passed to accounts payable" and paid only once a purchase order is raised for the work and the receipt is recorded (outside this demo). The vendor is told the same in plain words.
+
 ---
 
 ## 5. Step 1: the vendor's form and documents
@@ -168,6 +202,9 @@ Fraud patterns in the company's own data. See section 12.
 - `R-RISK-02`: bank account shared with another vendor.
 - `R-RISK-03`: already registered.
 - `R-RISK-04`: same document file submitted by a different applicant.
+
+### Stage 9b: Bill checks (bill-first registrations only)
+`R-BILL-01` to `R-BILL-09`: see "Without an invite: registering with a bill" in section 4.
 
 ### Stage 10: Decision
 A fixed order of precedence turns all the rule results into one status, a risk tier, a proof level for every key fact, a vendor message and an internal note. See sections 13–15.
@@ -541,6 +578,8 @@ The dashboard's **Try a scenario** list starts each case through a fresh invite 
 | 4 | **Shared bank account:** Rangoli Print House | The account already belongs to vendor V-0042 Deccan Office Supplies (`R-RISK-02`); the bank says the holder is Deccan (`R-SRC-BANK`) | **Pending: internal review**, high risk, fraud class; only the Finance controller can act |
 | 5 | **Proprietorship, personal account:** Shinde Electricals | Account in the owner's name; accepted through the proprietorship branch of `R-NAME-03` | **Approved**, medium risk |
 | 6 | **Unsolicited application** (started from `/apply`, not from the scenario list) | No invite (`R-INV-01`) | **Pending: internal review** |
+| 7 | **Bill-first, clean:** Kesari Facility Services (Pune) | No invite; emergency cleaning bill of ₹1,25,670, correctly addressed with CGST + SGST; engaged by Priya Nair | **Approved**, medium risk → Arjun can't activate until Priya confirms → Priya can't approve → Arjun activates |
+| 8 | **Bill-first, flawed bill:** Brindavan Cooling Systems (Bengaluru) | Charges CGST + SGST on a Karnataka → Maharashtra supply (needs IGST, `R-BILL-06`); amount typed ₹98,472 vs bill ₹94,872 (`R-BILL-04`) | **Pending: vendor to fix**, with both corrections explained |
 | — | Real-world files (only on Shubham's machine): hand-written PAN on paper, AI-generated PAN card, screenshot of a GST certificate | `AU-1`, `AU-2`, … | Vendor to fix or internal review |
 
 **Document check:** the genuine GSTN-signed public certificate shows **A3, signature verified** (chain CCA India 2014 → e-Mudhra → GSTN). The same certificate edited in Canva shows no signature, Producer and Creator "Canva," and the editor's name as Author: **"Likely edited," fraud class.**

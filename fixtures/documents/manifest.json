@@ -104,5 +104,47 @@
         "actual_kind": "cancelled_cheque"
       }
     }
+  },
+  "bill_kesari": {
+    "expected": "APPROVED",
+    "files": {
+      "gst_certificate": {
+        "file": "bill_kesari/gst_certificate.pdf",
+        "actual_kind": "gst_certificate"
+      },
+      "pan_card": {
+        "file": "bill_kesari/pan_card.pdf",
+        "actual_kind": "pan_card"
+      },
+      "bank_proof": {
+        "file": "bill_kesari/bank_proof.pdf",
+        "actual_kind": "cancelled_cheque"
+      },
+      "invoice": {
+        "file": "bill_kesari/invoice.pdf",
+        "actual_kind": "tax_invoice"
+      }
+    }
+  },
+  "bill_brindavan": {
+    "expected": "PENDING_VENDOR",
+    "files": {
+      "gst_certificate": {
+        "file": "bill_brindavan/gst_certificate.pdf",
+        "actual_kind": "gst_certificate"
+      },
+      "pan_card": {
+        "file": "bill_brindavan/pan_card.pdf",
+        "actual_kind": "pan_card"
+      },
+      "bank_proof": {
+        "file": "bill_brindavan/bank_proof.pdf",
+        "actual_kind": "cancelled_cheque"
+      },
+      "invoice": {
+        "file": "bill_brindavan/invoice.pdf",
+        "actual_kind": "tax_invoice"
+      }
+    }
   }
 }
