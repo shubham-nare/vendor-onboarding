@@ -16,32 +16,32 @@
 <div class="flex flex-wrap items-end justify-between gap-4">
   <div class="min-w-0">
     <div class="kicker"><a href="/" class="hover:text-slate-900">Register</a> / <span class="text-slate-800">{{ app.ref }}</span> / run {{ run.id }}</div>
-    <h1 class="text-[36px] leading-tight mt-1">{{ app.legal_name }}</h1>
+    <h1 class="text-[28px] sm:text-[36px] leading-tight mt-1 break-words">{{ app.legal_name }}</h1>
     <div class="text-[14px] text-slate-600 mt-1 max-w-3xl">
       {% if invite %}Invited by <b class="text-slate-900 font-medium">{{ sponsor.name }}</b> <span class="text-slate-500">({{ sponsor.department }})</span>: {{ invite.business_reason }} <span class="mono text-[11.5px] text-slate-500 whitespace-nowrap">· spend {{ invite.spend_band }}</span>
       {% else %}<span class="text-rose-600 font-medium">No sponsor invite: unsolicited application</span>{% endif %}
     </div>
   </div>
   {% if history | length > 1 %}
-  <nav class="flex items-center gap-1.5 text-xs" aria-label="Submissions">
+  <nav class="flex flex-wrap items-center gap-1.5 text-xs" aria-label="Submissions">
     {% for h in history %}
-      <a href="/runs/{{ h.id }}" class="rounded-md border px-2.5 py-1.5 {{ 'bg-slate-900 text-white border-slate-900' if h.id == run.id else 'bg-white border-slate-300 hover:border-slate-500' }}">Submission {{ loop.index }}{% if h.status %} · {{ STATUS_LABEL.get(h.status, h.status) }}{% endif %}</a>
+      <a href="/runs/{{ h.id }}" class="rounded-md border px-2.5 py-2 sm:py-1.5 {{ 'bg-slate-900 text-white border-slate-900' if h.id == run.id else 'bg-white border-slate-300 hover:border-slate-500' }}">Submission {{ loop.index }}{% if h.status %} · {{ STATUS_LABEL.get(h.status, h.status) }}{% endif %}</a>
       {% if not loop.last %}<span class="text-slate-400">{{ icon('arrow', 'h-3.5 w-3.5') }}</span>{% endif %}
     {% endfor %}
   </nav>
   {% endif %}
 </div>
 
-<div class="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-6 mt-7">
+<div class="grid grid-cols-1 lg:grid-cols-[340px_1fr] xl:grid-cols-[360px_1fr] 2xl:grid-cols-[400px_1fr] gap-5 sm:gap-6 mt-6 sm:mt-7">
   <!-- live ledger -->
-  <section class="bg-white rounded-xl border self-start lg:sticky lg:top-5 min-w-0" aria-live="polite">
-    <div class="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between">
+  <section class="bg-white rounded-xl border self-start lg:sticky lg:top-5 lg:max-h-[calc(100vh-2.5rem)] lg:overflow-y-auto min-w-0 {{ 'order-last lg:order-none' if done }}" aria-live="polite">
+    <div class="px-4 sm:px-5 py-3.5 border-b border-slate-200 flex items-center justify-between">
       <h2 class="text-lg">Live run</h2>
       <span id="runstate" class="tag {{ 'text-emerald-700' if done else 'text-indigo-600' }}">{{ 'finished' if done else run.state }}</span>
     </div>
     <ol id="stages">
       {% for key, label in stages %}
-      <li data-stage="{{ key }}" class="px-4 py-2.5 border-b border-slate-100 last:border-b-0">
+      <li data-stage="{{ key }}" class="px-4 py-3 sm:py-2.5 border-b border-slate-100 last:border-b-0">
         <details>
           <summary class="flex items-start gap-3">
             <span class="icon mt-0.5 inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border border-slate-300 mono text-[10px] text-slate-400">{{ loop.index }}</span>
@@ -56,12 +56,12 @@
       </li>
       {% endfor %}
     </ol>
-    <p class="px-5 py-2.5 border-t border-slate-200 text-[11px] text-slate-500">Click a stage to see every rule it ran. Updates stream from the database, so refreshing is safe.</p>
+    <p class="px-4 sm:px-5 py-2.5 border-t border-slate-200 text-[11px] text-slate-500">Tap a stage to see every rule it ran. Updates stream from the database, so refreshing is safe.</p>
   </section>
 
   <div class="space-y-6 min-w-0">
   {% if not done %}
-    <section id="waiting" class="bg-white rounded-xl border px-8 py-14 text-center">
+    <section id="waiting" class="bg-white rounded-xl border px-5 sm:px-8 py-10 sm:py-14 text-center">
       {% if run.state in ('failed', 'interrupted') %}
         <span class="stamp text-rose-600 text-lg">{{ run.state }}</span>
         <p class="mt-6 font-display text-xl">This run {{ run.state == 'failed' and 'stopped with an error' or 'was interrupted by a server restart' }}.</p>
@@ -77,17 +77,17 @@
     {% set tone = {'APPROVED': 'text-emerald-600', 'PENDING_VENDOR': 'text-amber-600', 'PENDING_REVIEW': 'text-violet-600', 'REJECTED': 'text-rose-600'}.get(run.status, 'text-slate-600') %}
     {% set word = {'APPROVED': 'Approved', 'PENDING_VENDOR': 'Vendor to fix', 'PENDING_REVIEW': 'For review', 'REJECTED': 'Rejected'}.get(run.status, run.status) %}
     <section class="bg-white rounded-xl border overflow-hidden">
-      <div class="px-6 pt-6 pb-5 flex flex-wrap items-center gap-6 border-b border-slate-200 bg-[repeating-linear-gradient(0deg,transparent_0_27px,#EFE9DC_27px_28px)]">
+      <div class="px-4 sm:px-6 pt-6 pb-5 flex flex-wrap items-center gap-x-6 gap-y-4 border-b border-slate-200 bg-[repeating-linear-gradient(0deg,transparent_0_27px,#EFE9DC_27px_28px)]">
         <span class="stamp stamp-land {{ tone }} text-[19px] sm:text-[26px] max-w-full">{{ word }}<span class="text-[10px] tracking-[.12em] border-l-2 border-current pl-2.5 leading-tight">{{ app.ref }}<br>{{ run.finished_at | dt }}</span></span>
         <div class="flex-1 min-w-[12rem]">
           <div class="kicker">Decision</div>
-          <div class="font-display text-[26px] leading-tight">{{ STATUS_LABEL.get(run.status, run.status) }}</div>
+          <div class="font-display text-[22px] sm:text-[26px] leading-tight">{{ STATUS_LABEL.get(run.status, run.status) }}</div>
           <div class="mt-1.5 flex flex-wrap items-center gap-3">{{ tier_chip(run.risk_tier) }}
             {% if summary.fraud %}<span class="tag text-white bg-rose-600 !border-rose-600">fraud-class signal</span>{% endif %}
             {% if app.current_status != run.status and latest %}<span class="text-sm text-slate-600">Now: {{ status_badge(app.current_status) }}</span>{% endif %}</div>
         </div>
       </div>
-      <div class="p-6">
+      <div class="p-4 sm:p-6">
         {% if summary.cards %}
           <div class="kicker mb-3">Why</div>
           <ol class="space-y-3">
@@ -96,10 +96,10 @@
               <span class="absolute left-0 top-3 bottom-3 w-[3px] rounded-r {{ 'bg-rose-500' if c.fraud else 'bg-slate-400' }}"></span>
               <div class="flex flex-wrap items-baseline gap-x-3">
                 <span class="mono text-[11px] text-slate-500">{{ c.rule }}</span>
-                <span class="text-[15px] font-medium">{{ c.title }}</span>
+                <span class="text-[15px] font-medium leading-snug">{{ c.title }}</span>
               </div>
               {% if c.detail %}<p class="text-[14px] text-slate-700 mt-1">{{ c.detail }}</p>{% endif %}
-              <p class="text-xs text-slate-500 mt-1.5 flex items-center gap-1">{{ icon('arrow', 'h-3 w-3') }} {{ c.next }}</p>
+              <p class="text-xs text-slate-500 mt-1.5 flex items-start gap-1">{{ icon('arrow', 'h-3 w-3 mt-0.5 shrink-0') }} <span>{{ c.next }}</span></p>
             </li>
           {% endfor %}
           </ol>
@@ -118,7 +118,7 @@
     </section>
 
     <!-- human actions -->
-    <section id="actions" class="bg-white rounded-xl border p-6">
+    <section id="actions" class="bg-white rounded-xl border p-4 sm:p-6">
       <div class="flex flex-wrap items-baseline justify-between gap-2">
         <h2 class="text-xl">Decision by a person</h2>
         {% if actor %}<span class="kicker !text-[10px]">acting as {{ actor.name }} · {{ ROLE_LABEL[actor.role] }}</span>{% endif %}
@@ -126,7 +126,7 @@
       {% if not latest %}
         <p class="mt-2 text-sm text-slate-600">A newer submission exists. <a class="underline" href="/runs/{{ history[-1].id }}">Open it</a>.</p>
       {% elif vendor %}
-        <p class="mt-3 flex items-center gap-3"><span class="stamp text-emerald-600 text-sm" style="transform:rotate(-2deg)">Active vendor</span><span class="text-[15px]">Vendor <b class="mono">{{ vendor.vendor_id }}</b> added to the vendor master.</span></p>
+        <p class="mt-3 flex flex-wrap items-center gap-3"><span class="stamp text-emerald-600 text-sm" style="transform:rotate(-2deg)">Active vendor</span><span class="text-[15px]">Vendor <b class="mono">{{ vendor.vendor_id }}</b> added to the vendor master.</span></p>
       {% elif app.current_status == 'PENDING_VENDOR' %}
         <p class="mt-2 text-sm text-slate-600">Waiting for the vendor to fix and resubmit through their link. Nothing to do here.</p>
       {% elif app.current_status == 'REJECTED' %}
@@ -138,11 +138,11 @@
           <form method="post" action="/runs/{{ run.id }}/action" class="rounded-lg border {{ 'border-dashed border-slate-300 bg-slate-50' if a.blocked else 'border-slate-200' }} p-3.5">
             <input type="hidden" name="action" value="{{ key }}">
             <div class="flex flex-wrap items-center gap-3">
-              {% if a.needs_comment %}<input name="comment" aria-label="{{ 'Message to the vendor' if key == 'ask_vendor' else 'Reason' }}" class="flex-1 min-w-[14rem] rounded-md border px-3 py-2 text-sm" placeholder="{{ 'Message to the vendor' if key == 'ask_vendor' else 'Reason (goes on the audit trail)' }}" {{ 'disabled' if a.blocked }}>
-              {% else %}<div class="flex-1 min-w-[14rem] text-sm text-slate-600">{{ 'Adds the vendor to the vendor master as active and sends the vendor their ID.' if key == 'activate' else 'Sends the held message to the vendor and closes the application.' }}</div>{% endif %}
-              <button class="rounded-md px-4 py-2 text-sm font-medium text-white {{ btn }} disabled:bg-slate-300 disabled:text-slate-600 disabled:cursor-not-allowed shadow-[2px_2px_0_rgba(28,27,24,.15)]" {{ 'disabled' if a.blocked }}>{{ a.label }}</button>
+              {% if a.needs_comment %}<input name="comment" aria-label="{{ 'Message to the vendor' if key == 'ask_vendor' else 'Reason' }}" class="flex-1 min-w-0 basis-full sm:basis-auto sm:min-w-[14rem] rounded-md border px-3 py-2.5 sm:py-2 text-sm" placeholder="{{ 'Message to the vendor' if key == 'ask_vendor' else 'Reason (goes on the audit trail)' }}" {{ 'disabled' if a.blocked }}>
+              {% else %}<div class="flex-1 basis-full sm:basis-auto sm:min-w-[14rem] text-sm text-slate-600">{{ 'Adds the vendor to the vendor master as active and sends the vendor their ID.' if key == 'activate' else 'Sends the held message to the vendor and closes the application.' }}</div>{% endif %}
+              <button class="w-full sm:w-auto rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium text-white {{ btn }} disabled:bg-slate-300 disabled:text-slate-600 disabled:cursor-not-allowed shadow-[2px_2px_0_rgba(28,27,24,.15)]" {{ 'disabled' if a.blocked }}>{{ a.label }}</button>
             </div>
-            {% if a.blocked %}<div class="mt-2 text-xs text-rose-600 flex items-center gap-1.5">{{ icon('lock', 'h-3.5 w-3.5') }} {{ a.blocked }}</div>{% endif %}
+            {% if a.blocked %}<div class="mt-2 text-xs text-rose-600 flex items-start gap-1.5">{{ icon('lock', 'h-3.5 w-3.5 shrink-0 mt-px') }} <span>{{ a.blocked }}</span></div>{% endif %}
           </form>
         {% endfor %}
         </div>
@@ -157,17 +157,17 @@
 
     <!-- assurance -->
     <section class="bg-white rounded-xl border">
-      <div class="px-6 py-4 border-b border-slate-200 flex flex-wrap items-baseline justify-between gap-2">
+      <div class="px-4 sm:px-6 py-4 border-b border-slate-200 flex flex-wrap items-baseline justify-between gap-2">
         <h2 class="text-xl">How well each fact is proven</h2>
         <a href="/assumptions#levels" class="text-xs text-indigo-700 underline underline-offset-4">what the levels mean</a>
       </div>
       <div class="overflow-x-auto">
-      <table class="w-full text-sm">
+      <table class="rtable w-full text-sm">
         <tbody class="divide-y divide-slate-100">
         {% for f in facts %}
           <tr>
-            <td class="pl-6 pr-2 py-3 w-36 text-slate-500 whitespace-nowrap">{{ f.name }}</td>
-            <td class="px-2 py-3 mono text-[12.5px]">{{ f.value }}</td>
+            <td class="inline-sm pl-6 pr-2 py-3 w-36 text-slate-500 whitespace-nowrap">{{ f.name }}</td>
+            <td class="inline-sm px-2 py-3 mono text-[12.5px] break-words">{{ f.value }}</td>
             <td class="px-2 py-3">{{ level_chip(f.level) }}</td>
             <td class="pr-6 pl-2 py-3 text-xs text-slate-500">{{ f.source }}{% if f.live %} <span class="tag text-emerald-700 !text-[9px] ml-1">live</span>{% endif %}
               {% for sf in summary.facts or [] %}{% if sf.name == f.name and sf.note %}<div class="text-amber-700 mt-0.5">{{ sf.note }}</div>{% endif %}{% endfor %}</td>
@@ -185,16 +185,16 @@
       {% for d in docs %}
         {% set r = d.read or {} %}
         {% set au = d.authenticity or {} %}
-        <article class="relative bg-white rounded-xl border pt-5 px-5 pb-4 mt-3">
+        <article class="relative bg-white rounded-xl border pt-5 px-4 sm:px-5 pb-4 mt-3 min-w-0">
           <span class="absolute -top-3 left-4 rounded-t-md border border-b-0 border-slate-200 bg-white px-3 pt-1 pb-0.5 kicker !text-[10px] !text-slate-700">{{ SLOT_TITLE.get(d.slot, d.slot) }}</span>
-          <div class="flex items-start justify-between gap-3">
+          <div class="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
             <a href="/files/{{ d.sha256 }}" target="_blank" class="inline-flex items-center gap-1.5 text-[13px] text-indigo-700 hover:underline mono break-all">{{ icon('doc', 'h-4 w-4 shrink-0') }}{{ d.filename }}</a>
-            {% if au.level %}<div class="text-right shrink-0"><div class="kicker !text-[9px] mb-1">the file itself</div>{{ level_chip(au.level) }}</div>{% endif %}
+            {% if au.level %}<div class="sm:text-right shrink-0"><div class="kicker !text-[9px] mb-1">the file itself</div>{{ level_chip(au.level) }}</div>{% endif %}
           </div>
-          <dl class="mt-3 text-[13px] grid grid-cols-[8rem_1fr] gap-y-1">
+          <dl class="mt-3 text-[13px] grid grid-cols-[7.25rem_1fr] sm:grid-cols-[8rem_1fr] gap-x-2 gap-y-1">
             <dt class="text-slate-500">AI read it as</dt><dd class="font-medium">{{ (r.doc_type or 'unreadable') | replace('_', ' ') | lower }}</dd>
             <dt class="text-slate-500">How it was made</dt><dd>{{ (r.document_form or '—') | replace('_', ' ') | lower }}</dd>
-            <dt class="text-slate-500">Reading</dt><dd class="mono text-[11.5px]">{% if r.origin == 'live' %}live · {{ r.model }} · {{ r.seconds }}s{% elif r.origin %}<span class="text-amber-700">{{ 'saved reading (AI unavailable)' if r.origin == 'cache-fallback' else ('saved reading' if r.origin == 'cache' else 'AI unavailable') }}</span>{% endif %}</dd>
+            <dt class="text-slate-500">Reading</dt><dd class="mono text-[11.5px] break-words">{% if r.origin == 'live' %}live · {{ r.model }} · {{ r.seconds }}s{% elif r.origin %}<span class="text-amber-700">{{ 'saved reading (AI unavailable)' if r.origin == 'cache-fallback' else ('saved reading' if r.origin == 'cache' else 'AI unavailable') }}</span>{% endif %}</dd>
           </dl>
           {% if r.document_form_evidence %}<p class="mt-2.5 font-display italic text-[14px] text-slate-600 border-l-2 border-slate-200 pl-3">“{{ r.document_form_evidence }}”</p>{% endif %}
           {% set sigs = au.signals or [] %}
@@ -215,7 +215,7 @@
           <details class="mt-3 group">
             <summary class="text-xs text-indigo-700 inline-flex items-center gap-1"><span class="group-open:rotate-90 transition-transform">{{ icon('arrow', 'h-3 w-3') }}</span> What the AI read ({{ r.fields | length }} fields)</summary>
             <table class="mt-2 w-full text-xs">
-              {% for fld in r.fields %}<tr class="border-t border-slate-100"><td class="py-1 pr-2 text-slate-500">{{ fld.name | replace('_', ' ') }}</td><td class="py-1 mono">{{ fld.value | mask(fld.name) }}</td><td class="py-1 text-right {{ 'text-amber-700' if fld.legibility != 'clear' }}">{{ fld.legibility }}</td></tr>{% endfor %}
+              {% for fld in r.fields %}<tr class="border-t border-slate-100"><td class="py-1 pr-2 text-slate-500">{{ fld.name | replace('_', ' ') }}</td><td class="py-1 mono break-all">{{ fld.value | mask(fld.name) }}</td><td class="py-1 text-right {{ 'text-amber-700' if fld.legibility != 'clear' }}">{{ fld.legibility }}</td></tr>{% endfor %}
             </table>
           </details>
           {% endif %}
@@ -226,38 +226,38 @@
 
     <!-- messages -->
     <section class="grid md:grid-cols-[1.25fr_1fr] gap-5">
-      <div class="bg-white rounded-xl border p-6">
+      <div class="bg-white rounded-xl border p-4 sm:p-6 min-w-0">
         <div class="flex items-center justify-between gap-2"><h2 class="text-lg">Message to the vendor</h2>
           {% if vendor_msg %}{% set ms = vendor_msg.state %}<span class="tag {{ 'text-emerald-700' if ms == 'sent' else 'text-amber-700' }}">{{ {'sent': 'sent', 'held': 'held for a person', 'draft': 'not sent'}[ms] }}</span>{% endif %}</div>
         {% if vendor_msg %}
           <div class="mt-3 border-t border-dashed border-slate-300 pt-3">
             <div class="mono text-[11px] text-slate-500">Subject: {{ vendor_msg.subject }}</div>
-            <pre class="mt-3 whitespace-pre-wrap font-display text-[16px] leading-relaxed text-slate-800">{{ vendor_msg.body }}</pre>
+            <pre class="mt-3 whitespace-pre-wrap break-words font-display text-[16px] leading-relaxed text-slate-800">{{ vendor_msg.body }}</pre>
           </div>
         {% endif %}
         {% if all_vendor_msgs | length > 1 %}<p class="mt-3 text-xs text-slate-500">+ {{ all_vendor_msgs | length - 1 }} later message(s) in the <a class="underline" href="/outbox">outbox</a>.</p>{% endif %}
       </div>
-      <div class="rounded-xl border border-slate-700 bg-slate-900 text-slate-100 p-6">
+      <div class="rounded-xl border border-slate-700 bg-slate-900 text-slate-100 p-4 sm:p-6 min-w-0">
         <h2 class="text-lg text-white">Internal note</h2>
         <div class="kicker !text-slate-400 !text-[10px]">for the reviewer only</div>
-        {% if internal %}<pre class="mt-3 whitespace-pre-wrap text-[12px] leading-relaxed mono text-slate-200">{{ internal.body }}</pre>{% endif %}
+        {% if internal %}<pre class="mt-3 whitespace-pre-wrap break-words text-[12px] leading-relaxed mono text-slate-200">{{ internal.body }}</pre>{% endif %}
       </div>
     </section>
 
     <!-- all rules -->
     <section class="bg-white rounded-xl border">
       <details class="group">
-        <summary class="px-6 py-4 flex items-center justify-between"><h2 class="text-xl">Every rule that ran <span class="mono text-sm text-slate-500">({{ rules | length }})</span></h2><span class="text-xs text-indigo-700"><span class="group-open:hidden">show</span><span class="hidden group-open:inline">hide</span></span></summary>
+        <summary class="px-4 sm:px-6 py-4 flex items-center justify-between gap-3"><h2 class="text-xl">Every rule that ran <span class="mono text-sm text-slate-500">({{ rules | length }})</span></h2><span class="text-xs text-indigo-700"><span class="group-open:hidden">show</span><span class="hidden group-open:inline">hide</span></span></summary>
         <div class="overflow-x-auto">
-        <table class="w-full text-[13px] border-t border-slate-200">
+        <table class="rtable w-full text-[13px] border-t border-slate-200">
           <thead class="bg-slate-50 text-slate-500 text-left"><tr><th class="pl-6 py-2 font-medium">Rule</th><th class="px-2 font-medium">Result</th><th class="px-2 font-medium">Check</th><th class="px-2 pr-6 font-medium">If it fails</th></tr></thead>
           <tbody class="divide-y divide-slate-100">
           {% for r in rules %}
             <tr class="{{ 'bg-rose-50/50' if r.result == 'FAIL' else '' }}">
-              <td class="pl-6 py-2 mono text-[11.5px] text-slate-500 whitespace-nowrap">{{ r.rule_id }}</td>
-              <td class="px-2">{{ result_chip(r.result) }}</td>
+              <td class="inline-sm pl-6 py-2 mono text-[11.5px] text-slate-500 whitespace-nowrap">{{ r.rule_id }}</td>
+              <td class="inline-sm px-2">{{ result_chip(r.result) }}</td>
               <td class="px-2 py-2">{{ r.title }}{% if r.evidence and r.evidence.internal %}<div class="text-slate-500 text-xs">{{ r.evidence.internal }}</div>{% endif %}</td>
-              <td class="px-2 pr-6 mono text-[11px] text-slate-500">{{ r.outcome_if_fail | lower }}</td>
+              <td class="px-2 pr-6 mono text-[11px] text-slate-500" data-label="If it fails">{{ r.outcome_if_fail | lower }}</td>
             </tr>
           {% endfor %}
           </tbody>

@@ -109,6 +109,25 @@
     details > summary { list-style: none; } details > summary::-webkit-details-marker { display: none; }
     ::selection { background: #F6D9CE; }
 
+
+    /* ---- responsive ---- */
+    .no-scrollbar { scrollbar-width: none; } .no-scrollbar::-webkit-scrollbar { display: none; }
+    .fade-r { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); }
+    @media (min-width: 1280px) { .fade-r { -webkit-mask-image: none; mask-image: none; } }
+    @media (max-width: 639px) {
+      /* iOS zooms into inputs under 16px */
+      input:not([type=checkbox]):not([type=file]):not([type=radio]), select, textarea { font-size: 16px !important; }
+      /* tables become stacked cards */
+      .rtable thead { display: none; }
+      .rtable, .rtable tbody, .rtable tr, .rtable td { display: block; width: 100%; }
+      .rtable tr { padding: .8rem 1rem; }
+      .rtable td { padding: .12rem 0 !important; text-align: left !important; white-space: normal !important; }
+      .rtable td.inline-sm { display: inline-block; width: auto; margin-right: .5rem; vertical-align: middle; }
+      .rtable td[data-label]::before { content: attr(data-label); display: block; font-family: "DM Mono", monospace; font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-soft); margin: .35rem 0 .05rem; }
+      .stamp { letter-spacing: .12em; }
+    }
+    @media (hover: none) { .hover-lift:hover { transform: none; } }
+
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0s !important; transition-duration: .01ms !important; }
     }
@@ -126,35 +145,35 @@
   {%- endmacro %}
   {% if vendor_page %}
   <header class="border-b border-slate-200 bg-white/70 backdrop-blur">
-    <div class="max-w-5xl mx-auto px-5 py-3.5 flex items-center gap-3">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 sm:py-3.5 flex items-center gap-3">
       {{ seal(30) }}
-      <div class="leading-tight">
-        <div class="font-display text-lg">Vendor Assurance</div>
+      <div class="leading-tight min-w-0">
+        <div class="font-display text-[17px] sm:text-lg">Vendor Assurance</div>
         <div class="kicker !text-[10px]">Supplier registration</div>
       </div>
-      <a href="/" class="ml-auto text-xs text-slate-500 hover:text-slate-800 underline decoration-dotted underline-offset-4">Internal console (demo) →</a>
+      <a href="/" class="ml-auto shrink-0 py-2 text-xs text-slate-500 hover:text-slate-800 underline decoration-dotted underline-offset-4"><span class="hidden sm:inline">Internal console (demo)</span><span class="sm:hidden">Console</span> →</a>
     </div>
   </header>
   {% else %}
   <header class="guilloche text-white">
-    <div class="max-w-7xl mx-auto px-5 py-3 flex flex-wrap items-center gap-x-8 gap-y-2">
-      <a href="/" class="flex items-center gap-3">
+    <div class="max-w-7xl 2xl:max-w-[88rem] mx-auto px-4 sm:px-6 lg:px-8 pt-2.5 xl:py-3 flex flex-wrap xl:flex-nowrap items-center gap-x-4 xl:gap-x-8 gap-y-1">
+      <a href="/" class="flex items-center gap-2.5 sm:gap-3 shrink-0">
         {{ seal(34) }}
         <span class="leading-tight">
-          <span class="block font-display text-[19px]">Vendor Assurance</span>
-          <span class="block mono text-[10px] tracking-[.18em] uppercase text-slate-400">Onboarding register</span>
+          <span class="block font-display text-[17px] sm:text-[19px] whitespace-nowrap">Vendor Assurance</span>
+          <span class="hidden sm:block mono text-[10px] tracking-[.18em] uppercase text-slate-400">Onboarding register</span>
         </span>
       </a>
-      <nav class="flex flex-wrap gap-1 text-[13.5px]" aria-label="Main">
+      <nav id="mainnav" class="order-last xl:order-none w-full xl:w-auto -mx-4 px-4 sm:mx-0 sm:px-0 flex flex-nowrap overflow-x-auto no-scrollbar fade-r text-[13.5px]" aria-label="Main">
         {% for href, label in [('/', 'Dashboard'), ('/invites', 'Invites'), ('/outbox', 'Outbox'), ('/check', 'Document check'), ('/assumptions', 'What is verified'), ('/system', 'System')] %}
           {% set on = path == href %}
-          <a href="{{ href }}" class="px-3 py-2 border-b-2 {{ 'border-indigo-400 text-white' if on else 'border-transparent text-slate-300 hover:text-white' }}" {{ 'aria-current=page' if on }}>{{ label }}</a>
+          <a href="{{ href }}" class="shrink-0 whitespace-nowrap px-3 py-3 xl:py-2 border-b-2 {{ 'border-indigo-400 text-white' if on else 'border-transparent text-slate-300 hover:text-white' }}" {{ 'aria-current=page' if on }}>{{ label }}</a>
         {% endfor %}
       </nav>
       {% if actor %}
-      <form method="post" action="/act-as" class="ml-auto flex items-center gap-2 text-[13px] min-w-0 max-w-full">
-        <label for="actas" class="mono text-[10px] tracking-[.16em] uppercase text-slate-400">Acting as</label>
-        <select id="actas" name="employee_id" onchange="this.form.submit()" class="!bg-slate-800 !border-slate-700 text-white rounded-md px-2 py-1.5 min-w-0 max-w-[62vw] sm:max-w-none">
+      <form method="post" action="/act-as" class="ml-auto flex items-center gap-2 text-[13px] min-w-0">
+        <label for="actas" class="hidden sm:inline mono text-[10px] tracking-[.16em] uppercase text-slate-400 whitespace-nowrap">Acting as</label>
+        <select id="actas" name="employee_id" aria-label="Acting as" onchange="this.form.submit()" class="!bg-slate-800 !border-slate-700 text-white rounded-md px-2 py-2 sm:py-1.5 min-w-0 w-[42vw] sm:w-auto max-w-[19rem]">
           {% for e in employees %}
             <option value="{{ e.id }}" {{ 'selected' if e.id == actor.id }}>{{ e.name }} · {{ ROLE_LABEL[e.role] }}</option>
           {% endfor %}
@@ -164,14 +183,15 @@
     </div>
     <div class="seal-rule"></div>
   </header>
+  <script>{ const n = document.getElementById('mainnav'), a = n && n.querySelector('[aria-current]'); if (a && a.offsetLeft + a.offsetWidth > n.clientWidth) n.scrollLeft = a.offsetLeft - 16; }</script>
   {% endif %}
-  <main class="{{ 'max-w-5xl' if vendor_page else 'max-w-7xl' }} mx-auto px-5 py-8">
+  <main class="{{ 'max-w-5xl' if vendor_page else 'max-w-7xl 2xl:max-w-[88rem]' }} mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
     {% block content %}{% endblock %}
   </main>
-  <footer class="max-w-7xl mx-auto px-5 pb-10 text-xs text-slate-500 flex items-center gap-3">
-    <span class="h-px flex-1 bg-slate-300"></span>
-    <span>Demo build for a case study · all vendors fictional · GST, PAN, penny-drop, CIN and Udyam answers are <span class="tag text-amber-700 !text-[9.5px]">simulated</span> · bank-branch lookup is live</span>
-    <span class="h-px flex-1 bg-slate-300"></span>
+  <footer class="{{ 'max-w-5xl' if vendor_page else 'max-w-7xl 2xl:max-w-[88rem]' }} mx-auto px-4 sm:px-6 lg:px-8 pb-10 text-xs text-slate-500 flex items-center gap-3">
+    <span class="hidden sm:block h-px flex-1 bg-slate-300"></span>
+    <span class="text-center leading-relaxed sm:max-w-3xl">Demo build for a case study · all vendors fictional · GST, PAN, penny-drop, CIN and Udyam answers are <span class="tag text-amber-700 !text-[9.5px]">simulated</span> · bank-branch lookup is live</span>
+    <span class="hidden sm:block h-px flex-1 bg-slate-300"></span>
   </footer>
 </body>
 </html>

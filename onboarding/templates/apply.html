@@ -6,18 +6,18 @@
 <div class="max-w-3xl mx-auto">
   {% if invite %}
     <div class="kicker">Invitation{% if app %} · {{ app.ref }}{% endif %}</div>
-    <h1 class="text-[38px] leading-tight mt-1">{{ 'Update your registration' if prev else 'Register as a vendor' }}</h1>
+    <h1 class="text-[30px] sm:text-[38px] leading-tight mt-1">{{ 'Update your registration' if prev else 'Register as a vendor' }}</h1>
     <p class="text-slate-500 text-sm mt-1"><b>{{ invite.sponsor.name }}</b> ({{ invite.sponsor.department }}) invited <b>{{ invite.company_name }}</b> to register as a supplier.{% if app %} Reference <span class="mono">{{ app.ref }}</span>.{% endif %}</p>
   {% else %}
     <div class="kicker">No invitation</div>
-    <h1 class="text-[38px] leading-tight mt-1">Register as a vendor</h1>
+    <h1 class="text-[30px] sm:text-[38px] leading-tight mt-1">Register as a vendor</h1>
     <p class="text-sm mt-2 rounded-md bg-amber-50 border border-amber-200 p-3 text-amber-900">You're applying without an invitation link. We'll review your application manually; it can't be approved automatically.</p>
   {% endif %}
 
   {% if demo %}
   <div class="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-900">
     <b>Demo:</b> "{{ demo_title }}". The form is pre-filled. Files left empty below are taken from the scenario:
-    <ul class="mt-1 text-xs mono">{% for slot, fn in demo_files.items() %}<li>{{ SLOT_TITLE.get(slot, slot) }} → {{ fn }}</li>{% endfor %}</ul>
+    <ul class="mt-1 text-xs mono break-all">{% for slot, fn in demo_files.items() %}<li>{{ SLOT_TITLE.get(slot, slot) }} → {{ fn }}</li>{% endfor %}</ul>
     <div class="text-xs mt-1">Upload your own file in any slot to replace it (e.g. a phone photo).</div>
   </div>
   {% endif %}
@@ -33,7 +33,7 @@
     <input type="hidden" name="demo" value="{{ demo }}">
     <input type="hidden" name="country" value="{{ v.get('country', 'India') }}">
 
-    <section class="bg-white rounded-xl border p-5">
+    <section class="bg-white rounded-xl border p-4 sm:p-5">
       <h2 class="text-xl flex items-baseline gap-3"><span class="mono text-[12px] text-indigo-600 tracking-widest">01</span>Business</h2>
       <div class="grid md:grid-cols-2 gap-4 mt-4 text-sm">
         <label class="block">Type of business
@@ -50,7 +50,7 @@
       <label class="mt-4 flex items-center gap-2 text-sm"><input type="checkbox" name="gst_registered" {{ 'checked' if v.get('gst_registered', True) }}> We are registered for GST in India</label>
     </section>
 
-    <section class="bg-white rounded-xl border p-5">
+    <section class="bg-white rounded-xl border p-4 sm:p-5">
       <h2 class="text-xl flex items-baseline gap-3"><span class="mono text-[12px] text-indigo-600 tracking-widest">02</span>Address &amp; contact</h2>
       <div class="grid md:grid-cols-2 gap-4 mt-4 text-sm">
         <label class="block md:col-span-2">Registered address<input name="address" value="{{ v.get('address', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
@@ -68,7 +68,7 @@
       </div>
     </section>
 
-    <section class="bg-white rounded-xl border p-5">
+    <section class="bg-white rounded-xl border p-4 sm:p-5">
       <h2 class="text-xl flex items-baseline gap-3"><span class="mono text-[12px] text-indigo-600 tracking-widest">03</span>Bank account for payments</h2>
       <div class="grid md:grid-cols-3 gap-4 mt-4 text-sm">
         <label class="block">Account holder name<input name="bank_holder" value="{{ v.get('bank_holder', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
@@ -79,19 +79,17 @@
       <label class="block mt-3 text-sm max-w-sm" data-msme>Udyam registration number<input name="udyam_no" value="{{ v.get('udyam_no', '') }}" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase" placeholder="UDYAM-XX-00-0000000"></label>
     </section>
 
-    <section class="bg-white rounded-xl border p-5">
+    <section class="bg-white rounded-xl border p-4 sm:p-5">
       <h2 class="text-xl flex items-baseline gap-3"><span class="mono text-[12px] text-indigo-600 tracking-widest">04</span>Documents</h2>
       <p class="text-xs text-slate-500 mt-1">PDF, JPG or PNG, up to 10 MB each. Please upload the original files: the GST certificate as downloaded from the GST portal, and clear photos or scans of the PAN card and a cancelled cheque.</p>
       <div class="mt-4 space-y-3 text-sm">
         {% for slot in ['gst_certificate', 'pan_card', 'bank_proof', 'udyam_certificate'] %}
-        <div class="flex items-center gap-4 rounded-lg border px-3 py-2.5" {{ 'data-msme' if slot == 'udyam_certificate' }}>
-          <div class="w-56">
-            <div class="font-medium">{{ SLOT_LABEL[slot] }}</div>
-          </div>
-          <input type="file" name="{{ slot }}" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/*" class="text-xs flex-1">
-          <div class="text-xs text-slate-500 w-56 text-right truncate">
-            {% if demo_files.get(slot) %}demo: <span class="mono">{{ demo_files[slot] }}</span>
-            {% elif prev_docs.get(slot) %}keeps: <span class="mono">{{ prev_docs[slot].filename }}</span>{% endif %}
+        <div class="grid gap-2 sm:grid-cols-[11rem_1fr] lg:grid-cols-[12rem_1fr_12rem] sm:items-center sm:gap-4 rounded-lg border px-3 py-3 sm:py-2.5" {{ 'data-msme' if slot == 'udyam_certificate' }}>
+          <div class="font-medium">{{ SLOT_LABEL[slot] }}</div>
+          <input type="file" name="{{ slot }}" aria-label="{{ SLOT_LABEL[slot] }}" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/*" class="text-xs min-w-0 max-w-full">
+          <div class="text-xs text-slate-500 sm:col-span-2 lg:col-span-1 lg:text-right truncate empty:hidden">
+            {%- if demo_files.get(slot) %}demo: <span class="mono">{{ demo_files[slot] }}</span>
+            {%- elif prev_docs.get(slot) %}keeps: <span class="mono">{{ prev_docs[slot].filename }}</span>{% endif -%}
           </div>
         </div>
         {% endfor %}
@@ -99,9 +97,9 @@
       {% if prev %}<p class="text-xs text-slate-500 mt-2">Leave a slot empty to keep the file you sent before.</p>{% endif %}
     </section>
 
-    <div class="flex items-center justify-between">
+    <div class="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-4">
       <p class="text-xs text-slate-500 max-w-md">By submitting you confirm these details are correct. We check them against your documents and official sources; you'll hear back on this page.</p>
-      <button type="submit" class="rounded-md bg-indigo-600 text-white font-medium px-6 py-3 hover:bg-indigo-700 shadow-[3px_3px_0_rgba(28,27,24,.18)]">{{ 'Resubmit' if prev else 'Submit for verification' }}</button>
+      <button type="submit" class="w-full sm:w-auto shrink-0 rounded-md bg-indigo-600 text-white font-medium px-6 py-3 hover:bg-indigo-700 shadow-[3px_3px_0_rgba(28,27,24,.18)]">{{ 'Resubmit' if prev else 'Submit for verification' }}</button>
     </div>
   </form>
 </div>

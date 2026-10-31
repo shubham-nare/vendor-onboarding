@@ -6,13 +6,13 @@
 <div class="flex flex-wrap items-end justify-between gap-4">
   <div>
     <div class="kicker">Internal console</div>
-    <h1 class="text-[42px] leading-[1.05] mt-1">The onboarding <em class="text-indigo-600">register</em></h1>
+    <h1 class="text-[34px] sm:text-[42px] leading-[1.05] mt-1">The onboarding <em class="text-indigo-600">register</em></h1>
     <p class="text-slate-600 text-[15px] mt-2 max-w-2xl">Every vendor a sponsor invited, checked document by document. <span class="text-slate-900">Rules decide; the AI only reads; people activate and confirm rejections.</span></p>
   </div>
-  <a href="/invites" class="inline-flex items-center gap-2 rounded-md bg-indigo-600 text-white text-sm font-medium px-4 py-2.5 hover:bg-indigo-700 shadow-[3px_3px_0_rgba(28,27,24,.18)]">{{ icon('plus') }} Invite a vendor</a>
+  <a href="/invites" class="w-full sm:w-auto justify-center inline-flex items-center gap-2 rounded-md bg-indigo-600 text-white text-sm font-medium px-4 py-2.5 hover:bg-indigo-700 shadow-[3px_3px_0_rgba(28,27,24,.18)]">{{ icon('plus') }} Invite a vendor</a>
 </div>
 
-<div class="mt-8 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 border border-slate-200 bg-white divide-x divide-y lg:divide-y-0 divide-slate-200 rounded-xl overflow-hidden">
+<div class="mt-6 sm:mt-8 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-px bg-slate-200 border border-slate-200 rounded-xl overflow-hidden">
   {% for label, value, cls in [
       ('Applications', stats.applications, 'text-slate-900'),
       ('Active / approved', counts.ACTIVE + counts.APPROVED, 'text-emerald-700'),
@@ -20,36 +20,56 @@
       ('Internal review', counts.PENDING_REVIEW, 'text-violet-600'),
       ('Rejected', counts.REJECTED, 'text-rose-600'),
       ('Fraud-class flags', stats.fraud, 'text-indigo-600')] %}
-  <div class="px-5 py-4">
-    <div class="kicker !text-[10px]">{{ label }}</div>
-    <div class="font-display text-[44px] leading-none mt-2 {{ cls }}">{{ value }}</div>
+  <div class="bg-white px-4 sm:px-5 py-3.5 sm:py-4">
+    <div class="kicker !text-[10px] truncate">{{ label }}</div>
+    <div class="font-display text-[34px] sm:text-[44px] leading-none mt-2 {{ cls }}">{{ value }}</div>
   </div>
   {% endfor %}
 </div>
 <p class="mono text-[11px] text-slate-500 mt-3 tracking-wide">{{ stats.runs }} runs · avg {{ stats.avg_seconds if stats.avg_seconds is not none else '–' }} s per run · {{ stats.first_pass }} approved on the first submission</p>
 
-<div class="grid xl:grid-cols-[1fr_340px] gap-6 mt-8">
-  <section class="bg-white rounded-xl border min-w-0">
-    <div class="px-5 py-4 border-b border-slate-200 flex items-baseline justify-between">
+<div class="grid xl:grid-cols-[1fr_340px] 2xl:grid-cols-[1fr_380px] gap-6 mt-6 sm:mt-8">
+  <section class="bg-white rounded-xl border min-w-0 self-start">
+    <div class="px-4 sm:px-5 py-4 border-b border-slate-200 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
       <h2 class="text-xl">Past runs</h2>
-      <span class="kicker !text-[10px]">newest first · open a row for the reasoning</span>
+      <span class="kicker !text-[10px]">newest first · open one for the reasoning</span>
     </div>
     {% if not runs %}
       <p class="p-8 text-sm text-slate-500">No runs yet. Start one from "Try a scenario", or invite a vendor.</p>
     {% else %}
-    <div class="overflow-x-auto">
+    {% set STRIPE = {'APPROVED': 'bg-emerald-500', 'PENDING_VENDOR': 'bg-amber-400', 'PENDING_REVIEW': 'bg-violet-500', 'REJECTED': 'bg-rose-500'} %}
+    <ul class="md:hidden divide-y divide-slate-100">
+    {% for r in runs %}
+      <li><a href="/runs/{{ r.run.id }}" class="relative block pl-5 pr-4 py-3.5 active:bg-slate-50">
+        <span class="absolute left-0 top-3 bottom-3 w-[3px] rounded-r {{ STRIPE.get(r.run.status, 'bg-slate-300') }}"></span>
+        <span class="flex items-center justify-between gap-3 mono text-[11px] text-slate-500">
+          <span class="text-slate-700 text-[12px]">{{ r.app.ref }}{% if r.resubmission %} <span class="text-slate-500">· resubmitted</span>{% endif %}</span>
+          <span class="whitespace-nowrap">{{ r.run.started_at | dt }}</span>
+        </span>
+        <span class="block mt-1 text-[15px] font-medium leading-snug">{{ r.app.legal_name }}{% if r.fraud %} <span class="tag text-indigo-600 !text-[9px] ml-1 align-middle">fraud class</span>{% endif %}</span>
+        <span class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          {% if r.run.state == 'done' %}{{ status_badge(r.run.status) }}{% if r.app.current_status != r.run.status %}<span class="text-[11px] text-slate-500">now {{ STATUS_LABEL.get(r.app.current_status, r.app.current_status) | lower }}</span>{% endif %}
+          {% elif r.run.state in ('failed', 'interrupted') %}<span class="tag text-rose-600">{{ r.run.state }}</span>
+          {% else %}<span class="inline-flex items-center gap-2 text-xs text-indigo-700"><span class="ink-dot !h-2 !w-2"></span>running</span>{% endif %}
+          {{ tier_chip(r.run.risk_tier) }}
+          {% if r.sponsor %}<span class="text-xs text-slate-500">{{ r.sponsor }}</span>{% endif %}
+        </span>
+      </a></li>
+    {% endfor %}
+    </ul>
+    <div class="hidden md:block overflow-x-auto">
     <table class="w-full text-sm">
       <thead class="text-left text-slate-500 bg-slate-50 border-b border-slate-200">
-        <tr><th class="pl-5 pr-2 py-2.5 font-medium">Ref</th><th class="px-2 font-medium">Vendor</th><th class="px-2 font-medium">Decision</th><th class="px-2 font-medium">Risk</th><th class="px-2 font-medium">Sponsor</th><th class="pr-5 pl-2 font-medium text-right">When · time</th></tr>
+        <tr><th class="pl-5 pr-2 py-2.5 font-medium">Ref</th><th class="px-2 font-medium">Vendor</th><th class="px-2 font-medium">Decision</th><th class="px-2 font-medium">Risk</th><th class="px-2 font-medium hidden lg:table-cell">Sponsor</th><th class="pr-5 pl-2 font-medium text-right">When · time</th></tr>
       </thead>
       <tbody class="divide-y divide-slate-100">
       {% for r in runs %}
-        {% set stripe = {'APPROVED': 'bg-emerald-500', 'PENDING_VENDOR': 'bg-amber-400', 'PENDING_REVIEW': 'bg-violet-500', 'REJECTED': 'bg-rose-500'}.get(r.run.status, 'bg-slate-300') %}
+        {% set stripe = STRIPE.get(r.run.status, 'bg-slate-300') %}
         <tr class="group hover:bg-slate-50 cursor-pointer" onclick="location.href='/runs/{{ r.run.id }}'">
           <td class="pl-5 pr-2 py-3 relative whitespace-nowrap"><span class="absolute left-0 top-2 bottom-2 w-[3px] rounded-r {{ stripe }}"></span>
             <a href="/runs/{{ r.run.id }}" class="mono text-[12.5px] text-slate-800 group-hover:text-indigo-700">{{ r.app.ref }}</a>
             {% if r.resubmission %}<div class="mono text-[10px] text-slate-500">resubmitted</div>{% endif %}</td>
-          <td class="px-2 py-3 min-w-[13rem]"><span class="font-medium">{{ r.app.legal_name }}</span>
+          <td class="px-2 py-3 min-w-[11rem] lg:min-w-[13rem]"><span class="font-medium">{{ r.app.legal_name }}</span>
             {% if r.fraud %}<span class="tag text-indigo-600 !text-[9px] ml-1.5">fraud class</span>{% endif %}</td>
           <td class="px-2 py-3">
             {% if r.run.state == 'done' %}{{ status_badge(r.run.status) }}
@@ -57,7 +77,7 @@
             {% elif r.run.state in ('failed', 'interrupted') %}<span class="tag text-rose-600">{{ r.run.state }}</span>
             {% else %}<span class="inline-flex items-center gap-2 text-xs text-indigo-700"><span class="ink-dot !h-2 !w-2"></span>running</span>{% endif %}</td>
           <td class="px-2 py-3">{{ tier_chip(r.run.risk_tier) }}</td>
-          <td class="px-2 py-3 text-[13px] text-slate-600 whitespace-nowrap">{{ r.sponsor or '—' }}</td>
+          <td class="px-2 py-3 text-[13px] text-slate-600 whitespace-nowrap hidden lg:table-cell">{{ r.sponsor or '—' }}</td>
           <td class="pr-5 pl-2 py-3 mono text-[11px] text-slate-500 text-right whitespace-nowrap">{{ r.run.started_at | dt }}<div class="text-slate-400">{{ '%.1f s' % r.seconds if r.seconds is not none else '' }}{% if r.reads == 'saved' %} · <span class="text-amber-700">saved reading</span>{% endif %}</div></td>
         </tr>
       {% endfor %}
@@ -68,14 +88,14 @@
   </section>
 
   <section class="bg-white rounded-xl border self-start">
-    <div class="px-5 py-4 border-b border-slate-200">
+    <div class="px-4 sm:px-5 py-4 border-b border-slate-200">
       <h2 class="text-xl">Try a scenario</h2>
       <p class="text-[13px] text-slate-500 mt-1">Opens the vendor form through a fresh sponsor invite, pre-filled. Swap in your own files before submitting.</p>
     </div>
-    <ol class="divide-y divide-slate-100">
+    <ol class="grid md:grid-cols-2 xl:grid-cols-1">
       {% for key, sc in catalog.items() if not sc.resubmission_of %}
-      <li>
-        <a href="/demo/{{ key }}" class="group flex items-start gap-3 px-5 py-3.5 hover:bg-slate-50">
+      <li class="border-b border-slate-100 md:[&:nth-child(odd)]:border-r xl:[&:nth-child(odd)]:border-r-0">
+        <a href="/demo/{{ key }}" class="group flex items-start gap-3 px-4 sm:px-5 py-3.5 h-full hover:bg-slate-50 active:bg-slate-50">
           <span class="mono text-[11px] text-slate-400 pt-0.5 w-5">{{ '%02d' % loop.index }}</span>
           <span class="flex-1">
             <span class="block text-[14px] leading-snug group-hover:text-indigo-700">{{ sc.title }}</span>
@@ -87,7 +107,7 @@
       </li>
       {% endfor %}
     </ol>
-    <p class="px-5 py-3 text-xs text-slate-500 border-t border-slate-200">Tejas's fix-and-resubmit happens from the vendor's own link after the first run asks for changes.</p>
+    <p class="px-4 sm:px-5 py-3 text-xs text-slate-500">Tejas's fix-and-resubmit happens from the vendor's own link after the first run asks for changes.</p>
   </section>
 </div>
 </div>

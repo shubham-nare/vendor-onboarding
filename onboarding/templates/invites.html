@@ -4,22 +4,22 @@
 {% block content %}
 <div class="reveal">
 <div class="kicker">Sponsors</div>
-<h1 class="text-[38px] leading-tight mt-1">Invites</h1>
+<h1 class="text-[30px] sm:text-[38px] leading-tight mt-1">Invites</h1>
 <p class="text-slate-500 text-sm mt-1">Onboarding is invite-only. An employee who needs a vendor (the <b>sponsor</b>) sends a link with the business reason. The sponsor can't approve the vendor: someone else does.</p>
 
 {% if created %}
 <div class="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
   <div class="text-sm font-medium text-emerald-900">Invite created. In production this link is emailed to the vendor's contact.</div>
-  <div class="mt-2 flex items-center gap-2">
-    <input id="link" readonly class="flex-1 mono text-xs rounded-md border px-2 py-1.5 bg-white" value="{{ request.base_url }}apply/{{ created }}">
-    <button onclick="navigator.clipboard.writeText(document.getElementById('link').value); this.textContent='Copied'" class="text-xs rounded-md border bg-white px-3 py-1.5">Copy</button>
-    <a href="/apply/{{ created }}" class="text-xs rounded-md bg-emerald-700 text-white px-3 py-1.5">Open as the vendor →</a>
+  <div class="mt-2 flex flex-wrap items-center gap-2">
+    <input id="link" readonly class="w-full sm:w-auto sm:flex-1 min-w-0 mono text-xs rounded-md border px-2 py-1.5 bg-white" value="{{ request.base_url }}apply/{{ created }}">
+    <button onclick="navigator.clipboard.writeText(document.getElementById('link').value); this.textContent='Copied'" class="text-xs rounded-md border bg-white px-3 py-2 sm:py-1.5">Copy</button>
+    <a href="/apply/{{ created }}" class="text-xs rounded-md bg-emerald-700 text-white px-3 py-2 sm:py-1.5">Open as the vendor →</a>
   </div>
 </div>
 {% endif %}
 
 <div class="grid lg:grid-cols-3 gap-6 mt-6">
-  <section class="bg-white rounded-xl border p-5">
+  <section class="bg-white rounded-xl border p-4 sm:p-5 self-start">
     <h2 class="text-xl">Invite a vendor</h2>
     {% if actor and actor.role != 'sponsor' %}
       <p class="mt-2 text-sm rounded-md bg-amber-50 border border-amber-200 p-3 text-amber-900">You're acting as <b>{{ actor.name }}</b> ({{ ROLE_LABEL[actor.role] }}). Only a sponsor sends invites: switch "Acting as" to Priya Nair or Rahul Desai.</p>
@@ -36,27 +36,29 @@
           </select></label>
       </div>
       <p class="text-xs text-slate-500">₹50 lakh a year or more puts the vendor in the high-risk tier: the Finance controller must activate it.</p>
-      <button class="w-full rounded-md bg-indigo-600 text-white py-2 hover:bg-indigo-700 disabled:opacity-50" {{ 'disabled' if actor and actor.role != 'sponsor' }}>Create invite link</button>
+      <button class="w-full rounded-md bg-indigo-600 text-white py-2.5 hover:bg-indigo-700 disabled:opacity-50" {{ 'disabled' if actor and actor.role != 'sponsor' }}>Create invite link</button>
     </form>
   </section>
 
-  <section class="lg:col-span-2 bg-white rounded-xl border">
-    <div class="px-4 py-3 border-b font-semibold">Recent invites</div>
-    <table class="w-full text-sm">
+  <section class="lg:col-span-2 bg-white rounded-xl border min-w-0">
+    <h2 class="px-4 py-3 border-b text-xl">Recent invites</h2>
+    <div class="overflow-x-auto">
+    <table class="rtable w-full text-sm">
       <thead class="text-left text-xs text-slate-500 bg-slate-50"><tr><th class="px-4 py-2">Vendor</th><th class="px-2 py-2">Sponsor &amp; reason</th><th class="px-2 py-2">Spend</th><th class="px-2 py-2">Status</th><th class="px-2 py-2"></th></tr></thead>
       <tbody class="divide-y">
       {% for i in invites %}
         {% set a = apps.get(i.id) %}
         <tr>
-          <td class="px-4 py-2">{{ i.company_name }}<div class="text-xs text-slate-400">{{ i.contact_email }}</div></td>
-          <td class="px-2 py-2 text-xs"><b>{{ emps[i.sponsor_id].name }}</b><div class="text-slate-500 line-clamp-2">{{ i.business_reason }}</div></td>
-          <td class="px-2 py-2 text-xs whitespace-nowrap">{{ i.spend_band }}{% if i.high_spend %}<div class="text-rose-700">high</div>{% endif %}</td>
-          <td class="px-2 py-2">{% if a %}{{ status_badge(a.current_status) }}{% else %}<span class="text-xs text-slate-500">{{ i.status }}{% if i.scenario_key %} · demo template{% endif %}</span>{% endif %}</td>
-          <td class="px-2 py-2 text-right pr-4 whitespace-nowrap">{% if a %}<a class="text-xs text-indigo-700 underline" href="/status/{{ i.token }}">vendor view</a>{% elif not i.scenario_key %}<a class="text-xs text-indigo-700 underline" href="/apply/{{ i.token }}">open link</a>{% endif %}</td>
+          <td class="px-4 py-2 font-medium sm:font-normal">{{ i.company_name }}<div class="text-xs text-slate-400">{{ i.contact_email }}</div></td>
+          <td class="px-2 py-2 text-xs" data-label="Sponsor &amp; reason"><b>{{ emps[i.sponsor_id].name }}</b><div class="text-slate-500 line-clamp-2">{{ i.business_reason }}</div></td>
+          <td class="inline-sm px-2 py-2 text-xs whitespace-nowrap">{{ i.spend_band }}{% if i.high_spend %}<span class="block text-rose-700">high</span>{% endif %}</td>
+          <td class="inline-sm px-2 py-2">{% if a %}{{ status_badge(a.current_status) }}{% else %}<span class="text-xs text-slate-500">{{ i.status }}{% if i.scenario_key %} · demo template{% endif %}</span>{% endif %}</td>
+          <td class="inline-sm px-2 py-2 text-right pr-4 whitespace-nowrap">{% if a %}<a class="text-xs text-indigo-700 underline" href="/status/{{ i.token }}">vendor view</a>{% elif not i.scenario_key %}<a class="text-xs text-indigo-700 underline" href="/apply/{{ i.token }}">open link</a>{% endif %}</td>
         </tr>
       {% endfor %}
       </tbody>
     </table>
+    </div>
   </section>
 </div>
 </div>

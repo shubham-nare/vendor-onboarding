@@ -5,7 +5,7 @@
 <div class="reveal">
 <div class="max-w-4xl">
 <div class="kicker">Honesty page</div>
-<h1 class="text-[38px] leading-tight mt-1">What is verified, and what <em class="text-indigo-600">isn't</em></h1>
+<h1 class="text-[30px] sm:text-[38px] leading-tight mt-1">What is verified, and what <em class="text-indigo-600">isn't</em></h1>
 <p class="text-slate-500 text-sm mt-1">A buyer should know exactly how much each "approved" is worth. This page says what this build really checks, what it simulates, and what it assumes.</p>
 
 <section id="levels" class="mt-8">
@@ -18,7 +18,7 @@
       ('A2', 'A document shows it and the document looks genuine: no editing traces, a real photo or scan, nothing obscured.', 'A clear phone photo of a real PAN card'),
       ('A3', 'The document carries a valid digital signature from the issuer, checked cryptographically.', 'A GST certificate downloaded from the portal, signed by GSTN, unchanged'),
       ('A4', 'The issuing authority confirmed it directly.', 'Bank branch via the live IFSC directory; in production also GSTN, NSDL PAN and a penny-drop')] %}
-    <div class="p-4 flex gap-4"><div class="w-52 shrink-0">{{ level_chip(lv) }}</div><div><div>{{ what }}</div><div class="text-xs text-slate-500 mt-0.5">e.g. {{ example }}</div></div></div>
+    <div class="p-4 flex flex-col sm:flex-row gap-1.5 sm:gap-4"><div class="sm:w-52 shrink-0">{{ level_chip(lv) }}</div><div><div>{{ what }}</div><div class="text-xs text-slate-500 mt-0.5">e.g. {{ example }}</div></div></div>
     {% endfor %}
   </div>
 </section>
@@ -26,7 +26,7 @@
 <section class="mt-8">
   <h2 class="text-xl">Real vs simulated in this build</h2>
   <div class="mt-3 bg-white rounded-xl border overflow-hidden">
-  <table class="w-full text-sm">
+  <table class="rtable w-full text-sm">
     <thead class="bg-slate-50 text-left text-xs text-slate-500"><tr><th class="px-4 py-2">Check</th><th class="px-2 py-2">In this build</th><th class="px-4 py-2">In production</th></tr></thead>
     <tbody class="divide-y">
       {% for c, now, prod, real in [
@@ -40,7 +40,7 @@
         ('PAN status and name', 'SIMULATED registry', 'NSDL/Protean PAN verification via a provider', False),
         ('Bank account holder name (penny-drop)', 'SIMULATED registry', '₹1 penny-drop via a bank or provider', False),
         ('Company (CIN) and MSME (Udyam) status', 'SIMULATED registry', 'MCA master data, Udyam verification', False)] %}
-      <tr><td class="px-4 py-2">{{ c }}</td><td class="px-2 py-2 {{ 'text-emerald-700' if real else 'text-amber-700 font-medium' }}">{{ now }}</td><td class="px-4 py-2 text-slate-600">{{ prod }}</td></tr>
+      <tr><td class="px-4 py-2 font-medium sm:font-normal">{{ c }}</td><td data-label="In this build" class="px-2 py-2 {{ 'text-emerald-700' if real else 'text-amber-700 font-medium' }}">{{ now }}</td><td data-label="In production" class="px-4 py-2 text-slate-600">{{ prod }}</td></tr>
       {% endfor %}
     </tbody>
   </table>
