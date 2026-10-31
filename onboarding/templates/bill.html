@@ -7,6 +7,7 @@
                'rejected': ('Rejected', 'text-rose-600'), 'failed': ('Check failed', 'text-rose-600')} %}
 {% set failing = b.rules | selectattr('result', 'in', ['FAIL', 'ERROR']) | list %}
 <div class="reveal">
+  {% if not full %}<div class="mb-5 rounded-lg border border-amber-200 bg-amber-50/70 px-4 py-2.5 text-[13px] text-amber-900 flex items-start gap-2">{{ icon('lock', 'h-4 w-4 shrink-0 mt-0.5') }}<span><b>Requester view.</b> You see the bill, its status and your part in it. The vendor's tax and bank details, the invoice file and the checks are for Procurement and Finance.</span></div>{% endif %}
   <div class="kicker"><a href="/bills" class="hover:text-slate-900">Bills</a> / <span class="text-slate-800">{{ b.ref }}</span></div>
   <h1 class="text-[28px] sm:text-[36px] leading-tight mt-1 break-words">{{ vm.legal_name }}</h1>
   <div class="text-[14px] text-slate-600 mt-1">Invoice <span class="mono">{{ b.invoice_number }}</span>{% if b.invoice_date %} · {{ b.invoice_date }}{% endif %} · <b class="text-slate-900">{{ inr(money(b.amount)) }}</b>
@@ -19,13 +20,15 @@
         <div class="px-4 sm:px-5 py-3.5 border-b border-slate-200 flex items-center justify-between"><h2 class="text-lg">Vendor</h2><span class="tag text-emerald-700">{{ vm.status }}</span></div>
         <dl class="p-4 sm:p-5 text-[13px] grid grid-cols-[6.5rem_1fr] gap-x-2 gap-y-1.5">
           <dt class="text-slate-500">Vendor ID</dt><dd class="mono">{{ vm.vendor_id }}</dd>
+          {% if full %}
           <dt class="text-slate-500">GSTIN</dt><dd class="mono break-all">{{ vm.gstin }}</dd>
           <dt class="text-slate-500">PAN</dt><dd class="mono">{{ mask_pan(vm.pan) }}</dd>
-          <dt class="text-slate-500">Pays into</dt><dd class="mono">{{ mask_account(vm.account) }} · {{ vm.ifsc }}</dd>
+          <dt class="text-slate-500">Pays into</dt><dd class="mono">{{ vm.account if full_bank else mask_account(vm.account) }} · {{ vm.ifsc }}{% if full_bank %} <span class="tag text-emerald-700 !text-[9px] ml-1 align-middle">full · Finance only</span>{% endif %}</dd>
           <dt class="text-slate-500">Account</dt><dd class="break-all">{{ acct.contact_name }} · {{ acct.email }}</dd>
-          <dt class="text-slate-500">Onboarded</dt><dd>{% if reg_run %}<a class="text-indigo-700 underline" href="/runs/{{ reg_run.id }}">{{ app.ref }}</a> · {{ reg_run.finished_at | dt }}{% else %}{{ app.ref }}{% endif %}</dd>
+          {% endif %}
+          <dt class="text-slate-500">Onboarded</dt><dd>{% if reg_run and full %}<a class="text-indigo-700 underline" href="/runs/{{ reg_run.id }}">{{ app.ref }}</a> · {{ reg_run.finished_at | dt }}{% else %}{{ app.ref }}{% endif %}</dd>
         </dl>
-        {% if facts %}
+        {% if facts and full %}
         <div class="px-4 sm:px-5 pb-4">
           <div class="kicker !text-[10px] mb-1.5">How well it was proven</div>
           <ul class="space-y-1.5 text-[12.5px]">{% for f in facts %}<li class="flex items-center justify-between gap-2"><span class="text-slate-600">{{ f.name }}</span>{{ level_chip(f.level) }}</li>{% endfor %}</ul>
@@ -55,12 +58,16 @@
           <div class="flex-1 min-w-[12rem]">
             <div class="kicker">Bill status</div>
             <div class="font-display text-[22px] sm:text-[26px] leading-tight">{{ B.STATUS_TEXT.get(b.status, b.status) }}</div>
-            <div class="mt-1.5 flex flex-wrap items-center gap-3">{{ tier_chip(b.risk_tier) }}{% if b.fraud %}<span class="tag text-white bg-rose-600 !border-rose-600">fraud-class signal</span>{% endif %}
+            <div class="mt-1.5 flex flex-wrap items-center gap-3">{% if full %}{{ tier_chip(b.risk_tier) }}{% endif %}{% if b.fraud and full %}<span class="tag text-white bg-rose-600 !border-rose-600">fraud-class signal</span>{% endif %}
               {% if b.submissions > 1 %}<span class="text-xs text-slate-500">submission {{ b.submissions }}</span>{% endif %}</div>
           </div>
         </div>
         <div class="p-4 sm:p-6">
-          {% if failing %}
+          {% if not full %}
+            <p class="text-[15px] text-slate-700">{{ {'awaiting_confirmation': 'Waiting for the person who asked for the work to confirm it.' ~ (' That\'s you: please confirm below.' if engaged and actor and engaged.id == actor.id else ''),
+                 'ready_for_approval': 'Confirmed. Someone other than you approves it for payment.', 'for_review': 'Procurement or Finance is taking a closer look. Nothing for you to do.',
+                 'vendor_fix': 'The vendor has been asked to correct it.', 'approved': 'Approved for payment.', 'rejected': 'Not being paid.'}.get(b.status, '') }}</p>
+          {% elif failing %}
             <div class="kicker mb-3">Why</div>
             <ol class="space-y-3">
             {% for r in failing %}
@@ -124,6 +131,7 @@
         </ol>
       </section>
 
+      {% if full %}
       <!-- the document -->
       {% set r = b.read or {} %}{% set au = b.authenticity or {} %}
       <section class="relative bg-white rounded-xl border pt-5 px-4 sm:px-5 pb-4 mt-3">
@@ -162,6 +170,7 @@
           </table>
         </details>
       </section>
+      {% endif %}
       {% endif %}
     </div>
   </div>

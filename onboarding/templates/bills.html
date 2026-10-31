@@ -6,7 +6,7 @@
                'awaiting_confirmation': 'text-amber-700', 'ready_for_approval': 'text-emerald-700', 'checking': 'text-slate-500', 'failed': 'text-rose-600'} %}
 <div class="reveal">
   <div class="kicker">Accounts payable</div>
-  <h1 class="text-[30px] sm:text-[38px] leading-tight mt-1">Bills</h1>
+  <h1 class="text-[30px] sm:text-[38px] leading-tight mt-1">{{ 'Bills' if full else 'Bills that name you' }}</h1>
   <p class="text-slate-500 text-sm mt-1 max-w-3xl">Every bill a vendor sent. Each is checked (issued by the vendor, addressed to us, amount, GST type, duplicates, and the bank account we verified), confirmed by the employee who asked for the work, then approved by someone else. Nothing is paid from here: payment follows PO and goods-receipt matching.</p>
 
   <section class="mt-6 bg-white rounded-xl border">
@@ -19,7 +19,7 @@
       {% for b, vm in rows %}
         <tr class="hover:bg-slate-50 cursor-pointer" onclick="location.href='/bills/{{ b.id }}'">
           <td class="pl-5 pr-2 py-3 whitespace-nowrap"><a href="/bills/{{ b.id }}" class="mono text-[12.5px] hover:text-indigo-700">{{ b.ref }}</a></td>
-          <td class="px-2 py-3 font-medium" data-label="Vendor">{{ vm.legal_name }} <span class="mono text-[11px] text-slate-500 font-normal">{{ vm.vendor_id }}</span>{% if b.fraud %} <span class="tag text-indigo-600 !text-[9px]">fraud class</span>{% endif %}</td>
+          <td class="px-2 py-3 font-medium" data-label="Vendor">{{ vm.legal_name }} <span class="mono text-[11px] text-slate-500 font-normal">{{ vm.vendor_id }}</span>{% if b.fraud and full %} <span class="tag text-indigo-600 !text-[9px]">fraud class</span>{% endif %}</td>
           <td class="px-2 py-3 mono text-[12px]" data-label="Invoice">{{ b.invoice_number }}</td>
           <td class="px-2 py-3 text-right whitespace-nowrap" data-label="Amount">{{ inr(money(b.amount)) }}</td>
           <td class="inline-sm px-2 py-3"><span class="tag {{ TONE.get(b.status, '') }}">{{ B.STATUS_TEXT.get(b.status, b.status) }}</span></td>

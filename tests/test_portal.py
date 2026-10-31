@@ -122,6 +122,20 @@ def flows(tmp_path_factory):
             staff.cookies.set("actor", "4")
             out["newbank_checker"] = (await staff.post(f"/bills/{bid2}/action", data={"action": "reject_bill", "comment": "Bank change not confirmed by phone."})).status_code
 
+            # who sees what: Priya (1) is named on the bills, Rahul (2) isn't, Arjun (3) reviews, Kavita (4) is Finance
+            sha = re.search(r'href="/files/([0-9a-f]+)"', out["newbank_page"]).group(1)
+            seen = {}
+            for who in (1, 2, 3, 4):
+                staff.cookies.set("actor", str(who))
+                seen[who] = dict(bills=(await staff.get("/bills")).text, bill=await staff.get(f"/bills/{bid2}"), run=await staff.get(f"/runs/{run_id}"),
+                                 events=(await staff.get(f"/runs/{run_id}/events")).status_code, file=(await staff.get(f"/files/{sha}")).status_code,
+                                 outbox=(await staff.get("/outbox")).status_code, console=(await staff.get("/console")).text,
+                                 vendors=(await staff.get("/vendors")).text)
+            out["seen"] = seen
+            staff.cookies.set("actor", "2")
+            out["rahul_action"] = (await staff.post(f"/bills/{bid2}/action", data={"action": "confirm_engagement"})).status_code
+            staff.cookies.set("actor", "3")
+
             await other.post("/vendor/register", data={"company_name": "Someone Else", "contact_name": "A B", "email": "a@else.example.com", "password": PW})
             out["other_bill"] = (await other.get(f"/vendor/bills/{bid}")).status_code
             out["bills_list"] = (await staff.get("/bills")).text
@@ -206,3 +220,30 @@ def test_company_lists_and_login_again(flows):
     assert "BILL-0001" in flows["bills_list"] and "BILL-0002" in flows["bills_list"]
     assert "Kesari Facility Services" in flows["vendors_list"] and "V-1001" in flows["vendors_list"]
     assert "match" in flows["badlogin"] and flows["login"] == 303 and "V-1001" in flows["home_again"]
+
+
+def test_requester_sees_only_their_own_and_no_evidence(flows):
+    from onboarding.demo_data import KESARI
+    priya, rahul = flows["seen"][1], flows["seen"][2]
+    # Priya is named on the bills: she sees them, without the checks, documents, ID numbers or fraud flag
+    assert "BILL-0002" in priya["bills"] and priya["bill"].status_code == 200 and priya["run"].status_code == 200
+    page = priya["bill"].text
+    assert "Requester view" in page and "R-BILL-10" not in page and "fraud-class" not in page and "/files/" not in page
+    assert KESARI["pan"] not in page and "Pays into" not in page
+    run = priya["run"].text
+    assert "Every rule that ran" not in run and "Internal note" not in run and "How well each fact is proven" not in run
+    assert priya["file"] == 403 and priya["outbox"] == 403 and 'href="/outbox"' not in priya["console"]
+    # Rahul has nothing to do with Kesari: he can't open it at all
+    assert rahul["bill"].status_code == 403 and rahul["run"].status_code == 403 and rahul["events"] == 403
+    assert "BILL-0002" not in rahul["bills"] and "Kesari" not in rahul["console"] and flows["rahul_action"] == 403
+    assert "accounts@kesarifacility" not in rahul["vendors"] and f'/bills/' not in rahul["vendors"]
+
+
+def test_reviewers_see_everything_and_only_finance_sees_the_full_account(flows):
+    from onboarding.demo_data import KESARI
+    arjun, kavita = flows["seen"][3], flows["seen"][4]
+    acct = KESARI["bank"]["account"]
+    for who in (arjun, kavita):
+        assert who["bill"].status_code == 200 and "R-BILL-10" in who["bill"].text and who["file"] == 200 and who["outbox"] == 200
+        assert "Every rule that ran" in who["run"].text
+    assert acct not in arjun["bill"].text and acct in kavita["bill"].text and "Finance only" in kavita["bill"].text

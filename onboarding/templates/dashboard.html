@@ -8,6 +8,7 @@
     <div class="kicker">Internal console</div>
     <h1 class="text-[34px] sm:text-[42px] leading-[1.05] mt-1">The onboarding <em class="text-indigo-600">register</em></h1>
     <p class="text-slate-600 text-[15px] mt-2 max-w-2xl">Every vendor an employee asked for, checked document by document. <span class="text-slate-900">Rules decide; the AI only reads; people activate and confirm rejections.</span></p>
+    {% if not full %}<p class="mt-2 inline-flex items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1 text-[12.5px] text-amber-900">{{ icon('lock', 'h-3.5 w-3.5') }} Requester view: only the vendors you asked for, and bills that name you.</p>{% endif %}
   </div>
   <a href="/invites" class="w-full sm:w-auto justify-center inline-flex items-center gap-2 rounded-md bg-indigo-600 text-white text-sm font-medium px-4 py-2.5 hover:bg-indigo-700 shadow-[3px_3px_0_rgba(28,27,24,.18)]">{{ icon('plus') }} Invite a vendor</a>
 </div>
@@ -19,7 +20,7 @@
       ('Waiting on vendor', counts.PENDING_VENDOR, 'text-amber-600'),
       ('Internal review', counts.PENDING_REVIEW, 'text-violet-600'),
       ('Rejected', counts.REJECTED, 'text-rose-600'),
-      ('Fraud-class flags', stats.fraud, 'text-indigo-600')] %}
+      ('Fraud-class flags', stats.fraud, 'text-indigo-600') if full else ('Waiting for your OK', to_confirm, 'text-amber-600')] %}
   <div class="bg-white px-4 sm:px-5 py-3.5 sm:py-4">
     <div class="kicker !text-[10px] truncate">{{ label }}</div>
     <div class="font-display text-[34px] sm:text-[44px] leading-none mt-2 {{ cls }}">{{ value }}</div>
@@ -46,7 +47,7 @@
           <span class="text-slate-700 text-[12px]">{{ r.app.ref }}{% if r.resubmission %} <span class="text-slate-500">· resubmitted</span>{% endif %}</span>
           <span class="whitespace-nowrap">{{ r.run.started_at | dt }}</span>
         </span>
-        <span class="block mt-1 text-[15px] font-medium leading-snug">{{ r.app.legal_name }}{% if r.fraud %} <span class="tag text-indigo-600 !text-[9px] ml-1 align-middle">fraud class</span>{% endif %}</span>
+        <span class="block mt-1 text-[15px] font-medium leading-snug">{{ r.app.legal_name }}{% if r.fraud and full %} <span class="tag text-indigo-600 !text-[9px] ml-1 align-middle">fraud class</span>{% endif %}</span>
         <span class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
           {% if r.run.state == 'done' %}{{ status_badge(r.run.status) }}{% if r.app.current_status != r.run.status %}<span class="text-[11px] text-slate-500">now {{ STATUS_LABEL.get(r.app.current_status, r.app.current_status) | lower }}</span>{% endif %}
           {% elif r.run.state in ('failed', 'interrupted') %}<span class="tag text-rose-600">{{ r.run.state }}</span>
@@ -70,7 +71,7 @@
             <a href="/runs/{{ r.run.id }}" class="mono text-[12.5px] text-slate-800 group-hover:text-indigo-700">{{ r.app.ref }}</a>
             {% if r.resubmission %}<div class="mono text-[10px] text-slate-500">resubmitted</div>{% endif %}</td>
           <td class="px-2 py-3 min-w-[11rem] lg:min-w-[13rem]"><span class="font-medium">{{ r.app.legal_name }}</span>
-            {% if r.fraud %}<span class="tag text-indigo-600 !text-[9px] ml-1.5">fraud class</span>{% endif %}</td>
+            {% if r.fraud and full %}<span class="tag text-indigo-600 !text-[9px] ml-1.5">fraud class</span>{% endif %}</td>
           <td class="px-2 py-3">
             {% if r.run.state == 'done' %}{{ status_badge(r.run.status) }}
               {% if r.app.current_status != r.run.status %}<div class="mt-1 text-[11px] text-slate-500">now {{ STATUS_LABEL.get(r.app.current_status, r.app.current_status) | lower }}</div>{% endif %}

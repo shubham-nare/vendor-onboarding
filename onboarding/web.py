@@ -22,13 +22,13 @@ from sqlalchemy import func, select
 
 from urllib.parse import quote
 
-from onboarding import auth, runner
+from onboarding import access, auth, runner
 from onboarding import validators as V
 from onboarding.authenticity.assess import assess
 from onboarding.config import get_settings
 from onboarding.demo_data import BUYER, SCENARIOS
 from onboarding.models import (Application, Bill, Document, Employee, Fact, HumanAction, Invite, Message, Run, RunEvent, RuleResult, StoredFile,
-                               VendorAccount, VendorLink, VendorMaster, now)
+                               VendorAccount, VendorBill, VendorLink, VendorMaster, now)
 from onboarding.pipeline import STAGES, create_run, sessions, stages_for
 from onboarding.rules import BILL_HIGH_RISK, SLOT_LABEL, SLOT_TITLE, inr, money
 
@@ -47,9 +47,9 @@ HIGH_SPEND = {"50 lakh - 1 crore", "Over 1 crore"}
 # Internal role codes stay sponsor | maker | checker (stored in the database); people see these labels.
 ROLE_LABEL = {"sponsor": "Requester", "maker": "Procurement reviewer", "checker": "Finance controller"}
 ROLE_HINT = {
-    "sponsor": "Needs a new vendor. Sends the invite with the business reason. Can't approve a vendor they asked for.",
-    "maker": "Checks applications. Activates normal-risk vendors and asks vendors to fix things.",
-    "checker": "Senior sign-off. Approves high-risk or fraud-flagged vendors; the only one who can reject after review.",
+    "sponsor": "Needs a new vendor and sends the invite. Sees only their own requests, without documents or ID numbers. Can't approve a vendor they asked for.",
+    "maker": "Checks applications: sees every document and check (PAN and bank masked). Activates normal-risk vendors, asks vendors to fix things.",
+    "checker": "Senior sign-off on high-risk and fraud-flagged cases. Sees everything, including the full bank account of active vendors for payment.",
 }
 
 router = APIRouter()
@@ -209,6 +209,8 @@ async def dashboard(request: Request):
         for run_id, read in docs:
             origin.setdefault(run_id, []).append((read or {}).get("origin", ""))
         bills = {b.application_id: b for b in (await s.execute(select(Bill))).scalars()}
+        actor = await _actor(request, s)
+        full = access.full_view(actor)
         runs = []
         for run, app in rows:
             inv = sponsors.get(app.invite_id)
@@ -217,15 +219,23 @@ async def dashboard(request: Request):
             o = origin.get(run.id, [])
             who = (emps[inv.sponsor_id].name if inv and inv.sponsor_id in emps else
                    ((emps[b.engaged_employee_id].name if b.engaged_employee_id in emps else "unknown") + " · bill" if b else ""))
-            runs.append(dict(run=run, app=app, sponsor=who, bill=b,
+            runs.append(dict(run=run, app=app, sponsor=who, bill=b, owned=access.owns_application(actor, inv, b),
                              seconds=secs, fraud=(run.summary or {}).get("fraud"), resubmission=bool(run.parent_run_id),
                              reads="live" if o and all(x == "live" for x in o) else ("saved" if o else "")))
+        if not full:  # a requester sees only what they asked for
+            runs = [r for r in runs if r["owned"]]
         apps = {r["app"].id: r["app"] for r in runs}
         counts = {k: sum(1 for a in apps.values() if a.current_status == k) for k in ("ACTIVE", "APPROVED", "PENDING_VENDOR", "PENDING_REVIEW", "REJECTED")}
         done = [r for r in runs if r["seconds"] is not None]
         stats = dict(applications=len(apps), runs=len(runs), avg_seconds=round(sum(r["seconds"] for r in done) / len(done), 1) if done else None,
                      fraud=sum(1 for r in runs if r["fraud"]), first_pass=sum(1 for r in runs if not r["resubmission"] and r["run"].status == "APPROVED"))
-        return await render(request, s, "dashboard.html", runs=runs, counts=counts, stats=stats, catalog=demo_catalog())
+        to_confirm = 0
+        if actor and not full:
+            to_confirm = sum(1 for r in runs if r["bill"] and r["bill"].engaged_employee_id == actor.id and r["bill"].confirmation == "awaiting"
+                             and r["app"].current_status not in ("REJECTED", "ACTIVE"))
+            to_confirm += len((await s.execute(select(VendorBill).where(VendorBill.engaged_employee_id == actor.id,
+                                                                         VendorBill.status == "awaiting_confirmation"))).scalars().all())
+        return await render(request, s, "dashboard.html", runs=runs, counts=counts, stats=stats, catalog=demo_catalog(), full=full, to_confirm=to_confirm)
 
 
 @router.post("/act-as")
@@ -241,6 +251,9 @@ async def act_as(request: Request, employee_id: int = Form(...)):
 async def invites(request: Request, created: str = ""):
     async with sessions()() as s:
         rows = (await s.execute(select(Invite).order_by(Invite.id.desc()).limit(100))).scalars().all()
+        actor = await _actor(request, s)
+        if not access.full_view(actor):
+            rows = [i for i in rows if actor and i.sponsor_id == actor.id]
         emps = {e.id: e for e in await _employees(s)}
         apps = {a.invite_id: a for a in (await s.execute(select(Application).where(Application.invite_id.is_not(None)))).scalars()}
         return await render(request, s, "invites.html", invites=rows, emps=emps, apps=apps, created=created, bands=SPEND_BANDS, high=HIGH_SPEND)
@@ -511,10 +524,13 @@ async def vendor_status(request: Request, token: str):
 
 
 # --- run view ------------------------------------------------------------------------------------
-def _event_dict(e: RunEvent) -> dict:
+def _event_dict(e: RunEvent, full: bool = True) -> dict:
     """What the browser gets: rule titles and results only. Raw evidence (which can hold a PAN or an
-    account number) stays server-side and is shown masked on the decision page."""
+    account number) stays server-side and is shown masked on the decision page. A requester gets the
+    stages and their one-line summaries, not the individual checks."""
     ev = dict(e.evidence or {})
+    if not full:
+        ev.pop("rules", None)
     if "rules" in ev:
         ev["rules"] = [{k: r.get(k) for k in ("rule_id", "result", "title")} for r in ev["rules"]]
     ev = {k: v for k, v in ev.items() if k in ("rules", "slot", "origin", "form", "status")}
@@ -545,24 +561,47 @@ async def run_view(request: Request, run_id: int):
         latest = history[-1].id == run.id
         vendor = (await s.execute(select(VendorMaster).where(VendorMaster.source_run_id.in_([r.id for r in history])))).scalars().first()
         actor = await _actor(request, s)
-        return await render(request, s, "run.html", run=run, app=app, invite=inv, sponsor=sponsor, bill=bill, bill_emp=bill_emp,
+        if not access.can_open_application(actor, inv, bill):
+            raise access.forbid("This application")
+        full = access.full_view(actor)
+        if not full:
+            events = [_event_dict(e, full=False) for e in (await s.execute(select(RunEvent).where(RunEvent.run_id == run_id).order_by(RunEvent.seq))).scalars()]
+        return await render(request, s, "run.html", run=run, app=app, invite=inv, sponsor=sponsor, bill=bill, bill_emp=bill_emp, full=full,
                             vendor_token=inv.token if inv else (bill.token if bill else ""), events=events, stages=stages_for(run.form), docs=docs,
                             rules=rules, facts=facts, vendor_msg=msgs.get("vendor"), all_vendor_msgs=extra_msgs, internal=msgs.get("internal"),
                             actions=actions, history=history, latest=latest, vendor=vendor, allowed=_allowed_actions(run, app, inv, actor, bill, bill_emp),
                             from_vendor=request.query_params.get("from") == "vendor")
 
 
+async def _guard_run(request: Request, s, run_id: int) -> bool:
+    """Can the person acting open this run? (used by the live-view feeds)"""
+    run = await s.get(Run, run_id)
+    if not run:
+        return True
+    app = await s.get(Application, run.application_id)
+    inv = await s.get(Invite, app.invite_id) if app.invite_id else None
+    bill = (await s.execute(select(Bill).where(Bill.application_id == app.id))).scalar_one_or_none()
+    actor = await _actor(request, s)
+    if not access.can_open_application(actor, inv, bill):
+        raise access.forbid("This application")
+    return access.full_view(actor)
+
+
 @router.get("/runs/{run_id}/events")
-async def run_events(run_id: int, after: int = 0):
+async def run_events(request: Request, run_id: int, after: int = 0):
     async with sessions()() as s:
+        full = await _guard_run(request, s, run_id)
         evs = (await s.execute(select(RunEvent).where(RunEvent.run_id == run_id, RunEvent.seq > after).order_by(RunEvent.seq))).scalars().all()
         run = await s.get(Run, run_id)
-        return JSONResponse({"events": [_event_dict(e) for e in evs], "state": run.state if run else "missing"})
+        return JSONResponse({"events": [_event_dict(e, full) for e in evs], "state": run.state if run else "missing"})
 
 
 @router.get("/runs/{run_id}/stream")
-async def run_stream(run_id: int, after: int = 0):
+async def run_stream(request: Request, run_id: int, after: int = 0):
     """Server-sent events, tailing run_events in the database (so a refresh or a second viewer sees the same thing)."""
+    async with sessions()() as s:
+        full = await _guard_run(request, s, run_id)
+
     async def gen():
         last, started, quiet = after, time.monotonic(), 0
         while time.monotonic() - started < 300:
@@ -572,7 +611,7 @@ async def run_stream(run_id: int, after: int = 0):
             finished = False
             for e in evs:
                 last = e.seq
-                yield f"id: {e.seq}\ndata: {json.dumps(_event_dict(e))}\n\n"
+                yield f"id: {e.seq}\ndata: {json.dumps(_event_dict(e, full))}\n\n"
                 finished = finished or (e.stage == "decision" and e.state in ("done", "failed"))
             if finished or run is None or (run.state == "interrupted" and not evs):
                 yield "event: end\ndata: {}\n\n"
@@ -586,8 +625,9 @@ async def run_stream(run_id: int, after: int = 0):
 
 
 @router.get("/files/{sha}")
-async def file_view(sha: str):
+async def file_view(request: Request, sha: str):
     async with sessions()() as s:
+        access.require_full(await _actor(request, s), "Vendors' documents")
         sf = await s.get(StoredFile, sha)
         if not sf:
             raise HTTPException(404, "No such file")
@@ -674,6 +714,8 @@ async def run_action(request: Request, run_id: int, action: str = Form(...), com
         actor = await _actor(request, s)
         comment = comment.strip()
         bill =(await s.execute(select(Bill).where(Bill.application_id == app.id))).scalar_one_or_none()
+        if not access.can_open_application(actor, inv, bill):
+            raise access.forbid("This application")
         bill_emp = await s.get(Employee, bill.engaged_employee_id) if bill and bill.engaged_employee_id else None
         allowed = _allowed_actions(run, app, inv, actor, bill, bill_emp)
         if action not in allowed:
@@ -721,6 +763,7 @@ async def run_action(request: Request, run_id: int, action: str = Form(...), com
 @router.get("/outbox", response_class=HTMLResponse)
 async def outbox(request: Request):
     async with sessions()() as s:
+        access.require_full(await _actor(request, s), "The outbox")
         rows = (await s.execute(select(Message, Run, Application).join(Run, Run.id == Message.run_id).join(Application, Application.id == Run.application_id)
                                 .where(Message.audience == "vendor").order_by(Message.id.desc()).limit(100))).all()
         return await render(request, s, "outbox.html", rows=rows)
@@ -729,6 +772,7 @@ async def outbox(request: Request):
 @router.get("/check", response_class=HTMLResponse)
 async def doc_check(request: Request, sample: str = ""):
     async with sessions()() as s:
+        access.require_full(await _actor(request, s), "The document check")
         results = []
         if sample == "genuine" and PUBLIC_SAMPLE.exists():
             results.append(_check_one(PUBLIC_SAMPLE.name, PUBLIC_SAMPLE.read_bytes()))
@@ -745,6 +789,8 @@ def _check_one(filename: str, raw: bytes, label: str = "") -> dict:
 
 @router.post("/check", response_class=HTMLResponse)
 async def doc_check_post(request: Request, file_a: UploadFile = File(None), file_b: UploadFile = File(None), with_sample: str = Form("")):
+    async with sessions()() as s:
+        access.require_full(await _actor(request, s), "The document check")
     results = []
     if with_sample and PUBLIC_SAMPLE.exists():
         results.append(_check_one(PUBLIC_SAMPLE.name, PUBLIC_SAMPLE.read_bytes(), "genuine sample"))
@@ -761,7 +807,7 @@ async def doc_check_post(request: Request, file_a: UploadFile = File(None), file
 @router.get("/assumptions", response_class=HTMLResponse)
 async def assumptions(request: Request):
     async with sessions()() as s:
-        return await render(request, s, "assumptions.html")
+        return await render(request, s, "assumptions.html", access_matrix=access.MATRIX)
 
 
 @router.get("/system", response_class=HTMLResponse)
@@ -770,6 +816,7 @@ async def system(request: Request, done: str = ""):
     checks = []
     t = time.monotonic()
     async with sessions()() as s:
+        access.require_full(await _actor(request, s), "The system page")
         try:
             counts = {m.__tablename__: (await s.execute(select(func.count()).select_from(m))).scalar() for m in (Employee, Invite, Application, Run, VendorMaster)}
             checks.append(("Database (Neon Postgres)", True, f"connected in {round((time.monotonic() - t) * 1000)} ms; " + ", ".join(f"{k}: {v}" for k, v in counts.items())))
@@ -785,7 +832,9 @@ async def system(request: Request, done: str = ""):
 
 
 @router.post("/system/reset")
-async def reset(passcode: str = Form(...)):
+async def reset(request: Request, passcode: str = Form(...)):
+    async with sessions()() as s:
+        access.require_full(await _actor(request, s), "Resetting the demo")
     if not secrets.compare_digest(passcode, get_settings().admin_passcode):
         raise HTTPException(403, "Wrong passcode")
     if runner.busy():

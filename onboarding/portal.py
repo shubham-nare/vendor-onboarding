@@ -19,7 +19,7 @@ from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 
-from onboarding import auth
+from onboarding import access, auth
 from onboarding import bills as B
 from onboarding.demo_data import KESARI, SCENARIOS
 from onboarding.models import (Application, Bill, Employee, Fact, Invite, Message, Run, StaffLogin, StoredFile, VendorAccount, VendorBill,
@@ -335,11 +335,17 @@ async def bills_list(request: Request):
                                 .order_by(VendorBill.id.desc()))).all()
         emps = {e.id: e for e in await _employees(s)}
         reg_bills = (await s.execute(select(Bill, Application).join(Application, Application.id == Bill.application_id).order_by(Bill.id.desc()))).all()
+        actor = await _actor(request, s)
+        full = access.full_view(actor)
         regs = []
         for bill, app in reg_bills:
+            if not full and not access.owns_application(actor, None, bill):
+                continue
             run = await _latest_run(s, app.id)
             regs.append(dict(bill=bill, app=app, run=run, emp=emps.get(bill.engaged_employee_id)))
-        return await render(request, s, "bills.html", rows=rows, emps=emps, regs=regs, B=B)
+        if not full:  # a requester sees the bills that name them
+            rows = [(b, vm) for b, vm in rows if access.can_open_bill(actor, b)]
+        return await render(request, s, "bills.html", rows=rows, emps=emps, regs=regs, B=B, full=full)
 
 
 @router.get("/bills/{bill_id}", response_class=HTMLResponse)
@@ -348,6 +354,9 @@ async def bill_page(request: Request, bill_id: int):
         b = await s.get(VendorBill, bill_id)
         if not b:
             raise HTTPException(404, "No such bill")
+        actor = await _actor(request, s)
+        if not access.can_open_bill(actor, b):
+            raise access.forbid("This bill")
         vm = (await s.execute(select(VendorMaster).where(VendorMaster.vendor_id == b.vendor_id))).scalar_one()
         app = await s.get(Application, b.application_id)
         acct = await s.get(VendorAccount, b.account_id)
@@ -355,8 +364,9 @@ async def bill_page(request: Request, bill_id: int):
         reg_run = await s.get(Run, vm.source_run_id) if vm.source_run_id else None
         facts = (await s.execute(select(Fact).where(Fact.run_id == vm.source_run_id).order_by(Fact.id))).scalars().all() if reg_run else []
         other = (await s.execute(select(VendorBill).where(VendorBill.vendor_id == b.vendor_id, VendorBill.id != b.id).order_by(VendorBill.id.desc()))).scalars().all()
-        actor = await _actor(request, s)
+        other = [o for o in other if access.can_open_bill(actor, o)]
         return await render(request, s, "bill.html", b=b, vm=vm, app=app, acct=acct, engaged=engaged, reg_run=reg_run, facts=facts, other=other,
+                            full=access.full_view(actor), full_bank=access.sees_full_bank(actor),
                             allowed=B.allowed_bill_actions(b, actor, engaged), labels=B.BILL_ACTION_LABEL, B=B)
 
 
@@ -367,6 +377,8 @@ async def bill_action(request: Request, bill_id: int, action: str = Form(...), c
         if not b:
             raise HTTPException(404, "No such bill")
         actor = await _actor(request, s)
+        if not access.can_open_bill(actor, b):
+            raise access.forbid("This bill")
         engaged = await s.get(Employee, b.engaged_employee_id) if b.engaged_employee_id else None
         allowed = B.allowed_bill_actions(b, actor, engaged)
         if action not in allowed:
@@ -401,4 +413,5 @@ async def vendors_list(request: Request):
         for a in accts:
             pf = await _portfolio(s, a)
             rows.append(dict(acct=a, **pf))
-        return await render(request, s, "vendors.html", rows=rows, B=B)
+        actor = await _actor(request, s)
+        return await render(request, s, "vendors.html", rows=rows, B=B, full=access.full_view(actor))

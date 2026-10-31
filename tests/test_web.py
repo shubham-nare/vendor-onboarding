@@ -130,6 +130,7 @@ def flows(tmp_path_factory):
 
             # bill-first: a vendor who already did work registers with its bill (no invite)
             async def submit_bill(key):
+                await as_("maker")  # the reviewer watches the run (a requester sees only their own)
                 r = await c.get(f"/demo/{key}")
                 assert r.status_code == 303 and r.headers["location"].startswith("/bill")
                 assert (await c.get(r.headers["location"])).status_code == 200

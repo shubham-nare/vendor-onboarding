@@ -61,12 +61,15 @@ async def company_login_required(request: Request, call_next):
 async def friendly_errors(request: Request, exc: HTTPException):
     if request.url.path.startswith(("/runs/", "/healthz", "/readyz")) and "text/html" not in request.headers.get("accept", ""):
         return JSONResponse({"error": exc.detail}, status_code=exc.status_code)
+    area = request.url.path.strip("/").split("/", 1)[0]
+    home = ('<a class="text-indigo-700 underline" href="/console">Go to the dashboard</a>' if area in COMPANY_AREAS else
+            '<a class="text-indigo-700 underline" href="/">Home</a>')
     body = f"""<!doctype html><html><head><meta charset="utf-8"><title>Can't do that</title>
 <script src="https://cdn.tailwindcss.com"></script></head><body class="bg-slate-50 font-sans">
 <div class="max-w-xl mx-auto mt-24 bg-white border rounded-xl p-8 shadow-sm">
 <p class="text-xs uppercase tracking-wide text-slate-500">Error {exc.status_code}</p>
 <p class="mt-2 text-lg text-slate-800">{html.escape(str(exc.detail))}</p>
-<a class="inline-block mt-6 text-indigo-700 underline" href="javascript:history.back()">Go back</a></div></body></html>"""
+<div class="mt-6 flex gap-5 text-sm"><a class="text-indigo-700 underline" href="javascript:history.back()">Go back</a>{home}</div></div></body></html>"""
     return HTMLResponse(body, status_code=exc.status_code)
 
 

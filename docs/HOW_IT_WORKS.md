@@ -542,6 +542,28 @@ The rules behind this table:
 - Actions need a written reason where it matters, and every action goes on the **audit trail** (who, role, when, what, why).
 - Actions only apply to the **latest** submission.
 
+### Who sees what (need to know)
+
+Each person sees only what their job needs, not just different buttons. The rules live in one file, `onboarding/access.py`, and are enforced on the server: a hidden link doesn't help, because the page itself refuses.
+
+| Information | Requester (Priya, Rahul) | Procurement reviewer (Arjun) | Finance controller (Kavita) |
+|---|---|---|---|
+| Applications and bills listed | Only their own (invites they sent; registrations and bills that name them) | All | All |
+| Status and what the vendor was told | Their own | Yes | Yes |
+| Documents and what the AI read | No | Yes | Yes |
+| Every check, reasons, internal note | No | Yes | Yes |
+| Fraud flags | No | Yes | Yes |
+| PAN, GSTIN, bank account | No | Masked | Masked PAN; full bank account of active vendors |
+| Vendor directory | Names, vendor IDs, status | With contacts | With contacts |
+| Outbox, document check, system | No | Yes | Yes |
+
+Why this way:
+- **A requester may be the person a fraud check is about.** If Priya colluded with a vendor, seeing "the bank account on this bill isn't the verified one" would tell her exactly what was caught. So a requester sees a plain status ("Procurement or Finance is taking a closer look"), never the flags or the evidence.
+- **Requesters don't need ID numbers or documents** to do their part, which is to confirm whether they asked for the work. Fewer people seeing PANs and bank details means fewer places they can leak from.
+- **Only Finance sees the full bank account**, because Finance releases the payment. Everyone else sees the last four digits.
+- **Another requester's request doesn't exist for you:** Rahul opening Kesari's page (Priya's vendor) gets "visible to Procurement and Finance only". The live-view feeds and the document files are guarded the same way.
+- The "Acting as" menu switches person in the demo, so you can watch the same page change: Priya sees her requests in plain words, Rahul can't open them, Arjun sees all the evidence, and Kavita also sees the account number.
+
 **Machine decision vs lifecycle.** The run keeps the machine's decision forever, for example "Approved." The application separately tracks where it is now: Active, Rejected, Pending vendor… The dashboard shows both, as in "Approved, now active."
 
 ---
