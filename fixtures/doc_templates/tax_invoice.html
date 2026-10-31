@@ -1,0 +1,28 @@
+{% extends "_base.html" %}
+{% block style %}
+  .title { text-align: center; font-size: 14pt; font-weight: 700; margin: 4px 0 8px; }
+  .two td { width: 50%; }
+  .num { text-align: right; }
+{% endblock %}
+{% block body %}
+<div class="title">TAX INVOICE</div>
+<table class="two">
+  <tr><td><b>{{ d.seller }}</b><br>{{ d.seller_address }}<br>GSTIN: <b>{{ d.seller_gstin }}</b></td>
+      <td>Invoice No.: <b>{{ d.invoice_no }}</b><br>Invoice Date: {{ d.date }}<br>Place of Supply: Telangana (36)<br>Reverse Charge: No</td></tr>
+  <tr><td colspan="2"><b>Bill To:</b> {{ d.buyer }}<br>{{ d.buyer_address }}<br>GSTIN: {{ d.buyer_gstin }}</td></tr>
+</table>
+<table style="margin-top:10px">
+  <tr><th>#</th><th>Description of Goods</th><th>HSN</th><th class="num">Qty</th><th class="num">Rate (&#8377;)</th><th class="num">Amount (&#8377;)</th></tr>
+  {% set ns = namespace(total=0) %}
+  {% for l in d.lines %}{% set amt = l.qty * l.rate %}{% set ns.total = ns.total + amt %}
+  <tr><td>{{ loop.index }}</td><td>{{ l.desc }}</td><td>{{ l.hsn }}</td><td class="num">{{ l.qty }}</td>
+      <td class="num">{{ "{:,.2f}".format(l.rate) }}</td><td class="num">{{ "{:,.2f}".format(amt) }}</td></tr>
+  {% endfor %}
+  {% set cgst = ns.total * d.cgst / 100 %}{% set sgst = ns.total * d.sgst / 100 %}
+  <tr><td colspan="5" class="num">Taxable Value</td><td class="num">{{ "{:,.2f}".format(ns.total) }}</td></tr>
+  <tr><td colspan="5" class="num">CGST @ {{ d.cgst }}%</td><td class="num">{{ "{:,.2f}".format(cgst) }}</td></tr>
+  <tr><td colspan="5" class="num">SGST @ {{ d.sgst }}%</td><td class="num">{{ "{:,.2f}".format(sgst) }}</td></tr>
+  <tr><th colspan="5" class="num">Invoice Total</th><th class="num">{{ "{:,.2f}".format(ns.total + cgst + sgst) }}</th></tr>
+</table>
+<p style="margin-top:14px">For <b>{{ d.seller }}</b><br><br>Authorised Signatory</p>
+{% endblock %}

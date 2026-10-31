@@ -1,0 +1,34 @@
+{
+  "ok": true,
+  "read": {
+    "doc_type": "TAX_INVOICE",
+    "doc_type_evidence": "TAX INVOICE",
+    "document_form": "ORIGINAL_DIGITAL",
+    "document_form_evidence": "Crisp vector text and layout generated as a PDF.",
+    "garbled_or_misspelled_text": [],
+    "visible_watermarks_or_logos": [],
+    "obscured_regions": [],
+    "integrity_notes": [
+      "Carries a specimen/fictional test data banner at the top and bottom."
+    ],
+    "expected_elements_missing": [],
+    "fields": [
+      {
+        "name": "invoice_number",
+        "value": "TIS/2026-27/0418",
+        "evidence": "Invoice No.: TIS/2026-27/0418",
+        "legibility": "clear"
+      },
+      {
+        "name": "seller_gstin",
+        "value": "36AAJCT9052D1Z7",
+        "evidence": "GSTIN: 36AAJCT9052D1Z7",
+        "legibility": "clear"
+      }
+    ]
+  },
+  "model": "gemini-3.5-flash-lite",
+  "seconds": 18.1,
+  "error": null,
+  "attempts": 1
+}

@@ -1,0 +1,20 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 14mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Arial, sans-serif; color: #111; font-size: 11.5pt; margin: 0; }
+  .specimen { border: 1.5px dashed #c0392b; color: #c0392b; font-weight: 700; letter-spacing: .5px;
+              text-align: center; font-size: 8.5pt; padding: 3px 6px; margin-bottom: 10px; }
+  .foot { margin-top: 18px; font-size: 7.5pt; color: #c0392b; text-align: center; }
+  table { border-collapse: collapse; width: 100%; }
+  td, th { border: 1px solid #555; padding: 6px 8px; vertical-align: top; }
+  th { background: #f0f0f0; text-align: left; }
+  .muted { color: #555; }
+  {% block style %}{% endblock %}
+</style></head>
+<body>
+<div class="specimen">SPECIMEN · FICTIONAL TEST DATA FOR A SOFTWARE DEMO · NOT A REAL DOCUMENT</div>
+{% block body %}{% endblock %}
+<div class="foot">Generated for the vendor onboarding demo (Zamp case study). All names and numbers are invented.</div>
+</body></html>

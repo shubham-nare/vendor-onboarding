@@ -1,0 +1,58 @@
+{
+  "ok": true,
+  "read": {
+    "doc_type": "GST_CERTIFICATE",
+    "doc_type_evidence": "Government of India Form GST REG-06 Registration Certificate",
+    "document_form": "SCREENSHOT",
+    "document_form_evidence": "The file is a clean digital rendering shown as an image with a red software demo banner at the top and bottom text.",
+    "garbled_or_misspelled_text": [],
+    "visible_watermarks_or_logos": [],
+    "obscured_regions": [],
+    "integrity_notes": [
+      "Contains specimen and fictional test data disclaimers."
+    ],
+    "expected_elements_missing": [],
+    "fields": [
+      {
+        "name": "gstin",
+        "value": "29AAHCN4821K1Z4",
+        "evidence": "Registration Number : 29AAHCN4821K1Z4",
+        "legibility": "clear"
+      },
+      {
+        "name": "legal_name",
+        "value": "NILGIRI PACKAGING SOLUTIONS PRIVATE LIMITED",
+        "evidence": "Legal Name NILGIRI PACKAGING SOLUTIONS PRIVATE LIMITED",
+        "legibility": "clear"
+      },
+      {
+        "name": "constitution",
+        "value": "Private Limited Company",
+        "evidence": "Constitution of Business Private Limited Company",
+        "legibility": "clear"
+      },
+      {
+        "name": "principal_address",
+        "value": "Plot 47, 2nd Phase, Peenya Industrial Area, Bengaluru, Karnataka, 560058",
+        "evidence": "Address of Principal Place of\nBusiness Plot 47, 2nd Phase, Peenya Industrial Area, Bengaluru,\nKarnataka, 560058",
+        "legibility": "clear"
+      },
+      {
+        "name": "state",
+        "value": "Karnataka",
+        "evidence": "Karnataka, 560058",
+        "legibility": "clear"
+      },
+      {
+        "name": "issue_date",
+        "value": "21/07/2017",
+        "evidence": "Date of issue of Certificate 21/07/2017",
+        "legibility": "clear"
+      }
+    ]
+  },
+  "model": "gemini-3.5-flash-lite",
+  "seconds": 10.8,
+  "error": null,
+  "attempts": 1
+}

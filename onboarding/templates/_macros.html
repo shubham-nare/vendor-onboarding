@@ -1,0 +1,29 @@
+{% macro status_badge(status, size='sm') -%}
+  {% set c = {'APPROVED': 'bg-emerald-100 text-emerald-800 ring-emerald-200', 'ACTIVE': 'bg-emerald-600 text-white ring-emerald-700',
+              'PENDING_VENDOR': 'bg-amber-100 text-amber-800 ring-amber-200', 'PENDING_REVIEW': 'bg-violet-100 text-violet-800 ring-violet-200',
+              'REJECTED': 'bg-rose-100 text-rose-800 ring-rose-200'}.get(status, 'bg-slate-100 text-slate-600 ring-slate-200') %}
+  <span class="inline-flex items-center rounded-full ring-1 {{ c }} {{ 'px-3 py-1 text-sm' if size == 'lg' else 'px-2 py-0.5 text-xs' }} font-medium whitespace-nowrap">{{ STATUS_LABEL.get(status, status) }}</span>
+{%- endmacro %}
+
+{% macro level_chip(level) -%}
+  {% set c = {'A0': 'bg-slate-100 text-slate-600 ring-slate-300', 'A1': 'bg-sky-50 text-sky-800 ring-sky-200', 'A2': 'bg-blue-100 text-blue-800 ring-blue-300',
+              'A3': 'bg-indigo-600 text-white ring-indigo-700', 'A4': 'bg-emerald-600 text-white ring-emerald-700'}.get(level, 'bg-slate-100') %}
+  <span class="inline-flex items-center gap-1 whitespace-nowrap rounded-md ring-1 px-1.5 py-0.5 text-xs font-semibold {{ c }}" title="{{ LEVEL_NAMES.get(level, '') }}">{{ level }} <span class="font-normal">{{ LEVEL_NAMES.get(level, '') }}</span></span>
+{%- endmacro %}
+
+{% macro result_chip(result) -%}
+  {% set c = {'PASS': 'text-emerald-700 bg-emerald-50', 'FAIL': 'text-rose-700 bg-rose-50', 'WARN': 'text-amber-700 bg-amber-50',
+              'SKIPPED': 'text-slate-500 bg-slate-100', 'ERROR': 'text-violet-700 bg-violet-50'}.get(result, '') %}
+  <span class="inline-block w-14 text-center rounded px-1 py-0.5 text-[11px] font-semibold {{ c }}">{{ result }}</span>
+{%- endmacro %}
+
+{% macro severity_chip(sev) -%}
+  {% set c = {'info': 'bg-slate-100 text-slate-600', 'warn': 'bg-amber-100 text-amber-800', 'vendor': 'bg-orange-100 text-orange-800',
+              'review': 'bg-violet-100 text-violet-800', 'fraud': 'bg-rose-600 text-white'}.get(sev, 'bg-slate-100') %}
+  <span class="inline-block shrink-0 self-start rounded px-1.5 py-0.5 text-[11px] font-semibold uppercase {{ c }}">{{ sev }}</span>
+{%- endmacro %}
+
+{% macro tier_chip(tier) -%}
+  {% set c = {'low': 'text-emerald-700 bg-emerald-50 ring-emerald-200', 'medium': 'text-amber-700 bg-amber-50 ring-amber-200', 'high': 'text-rose-700 bg-rose-50 ring-rose-200'}.get(tier, 'text-slate-500 bg-slate-50 ring-slate-200') %}
+  {% if tier %}<span class="inline-block whitespace-nowrap rounded-full ring-1 px-2 py-0.5 text-xs {{ c }}">{{ tier }} risk</span>{% endif %}
+{%- endmacro %}

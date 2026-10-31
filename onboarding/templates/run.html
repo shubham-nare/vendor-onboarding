@@ -1,0 +1,331 @@
+{% extends "base.html" %}
+{% from "_macros.html" import status_badge, level_chip, result_chip, severity_chip, tier_chip %}
+{% block title %}{{ app.ref }} · {{ app.legal_name }}{% endblock %}
+{% block content %}
+{% set done = run.state == 'done' %}
+{% set summary = run.summary or {} %}
+
+{% if from_vendor %}
+<div class="mb-4 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm text-indigo-900 flex items-center justify-between">
+  <span>The vendor just submitted. This is the <b>internal</b> live view. The vendor only sees their status page and the messages we send.</span>
+  {% if invite %}<a class="underline text-xs" href="/status/{{ invite.token }}">open the vendor's view →</a>{% endif %}
+</div>
+{% endif %}
+
+<div class="flex flex-wrap items-start justify-between gap-4">
+  <div>
+    <div class="text-xs text-slate-500"><a href="/" class="hover:underline">Dashboard</a> / <span class="mono">{{ app.ref }}</span> / run #{{ run.id }}</div>
+    <h1 class="text-2xl font-semibold tracking-tight mt-1">{{ app.legal_name }}</h1>
+    <div class="text-sm text-slate-500 mt-1">
+      {% if invite %}Invited by <b class="text-slate-700">{{ sponsor.name }}</b> ({{ sponsor.department }}): {{ invite.business_reason }} · spend {{ invite.spend_band }}
+      {% else %}<span class="text-rose-700">No sponsor invite (unsolicited application)</span>{% endif %}
+    </div>
+  </div>
+  {% if history | length > 1 %}
+  <div class="flex items-center gap-1 text-xs">
+    {% for h in history %}
+      <a href="/runs/{{ h.id }}" class="rounded-md border px-2 py-1 {{ 'bg-slate-900 text-white' if h.id == run.id else 'bg-white hover:bg-slate-50' }}">Submission {{ loop.index }}{% if h.status %} · {{ STATUS_LABEL.get(h.status, h.status) }}{% endif %}</a>
+      {% if not loop.last %}<span class="text-slate-400">→</span>{% endif %}
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+<div class="grid lg:grid-cols-3 gap-6 mt-6">
+  <!-- live stages -->
+  <section class="bg-white rounded-xl border self-start lg:sticky lg:top-4">
+    <div class="px-4 py-3 border-b flex items-center justify-between">
+      <h2 class="font-semibold">Live run</h2>
+      <span id="runstate" class="text-xs {{ 'text-emerald-700' if done else 'text-indigo-600' }}">{{ 'finished' if done else run.state }}</span>
+    </div>
+    <ol id="stages" class="divide-y">
+      {% for key, label in stages %}
+      <li data-stage="{{ key }}" class="px-4 py-2.5">
+        <details>
+          <summary class="flex items-start gap-3">
+            <span class="icon mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-300 text-[11px] text-slate-400">{{ loop.index }}</span>
+            <span class="flex-1 min-w-0">
+              <span class="block text-sm font-medium">{{ label }}</span>
+              <span class="summary block text-xs text-slate-500"></span>
+              <span class="log block"></span>
+            </span>
+          </summary>
+          <div class="rules mt-2 ml-8 space-y-1"></div>
+        </details>
+      </li>
+      {% endfor %}
+    </ol>
+    <p class="px-4 py-2 border-t text-[11px] text-slate-400">Click a stage to see every rule it ran. Updates stream from the database, so refreshing is safe.</p>
+  </section>
+
+  <!-- result -->
+  <div class="lg:col-span-2 space-y-6">
+  {% if not done %}
+    <section id="waiting" class="bg-white rounded-xl border p-10 text-center">
+      {% if run.state in ('failed', 'interrupted') %}
+        <div class="text-rose-700 font-medium">This run {{ run.state == 'failed' and 'stopped with an error' or 'was interrupted by a server restart' }}.</div>
+        <p class="text-sm text-slate-500 mt-1">Nothing was decided. The vendor can resubmit from the same link, or a reviewer can check the documents manually.</p>
+      {% else %}
+        <svg class="spin mx-auto h-8 w-8 text-indigo-500" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-opacity=".2" stroke-width="3"/><path d="M22 12a10 10 0 0 0-10-10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+        <p class="mt-3 text-sm text-slate-600">Checking the application. The decision appears here when every stage has finished.</p>
+        <p class="text-xs text-slate-400 mt-1">Reading each document with Gemini takes a few seconds; the rules after that are instant.</p>
+      {% endif %}
+    </section>
+  {% else %}
+    <!-- decision -->
+    <section class="bg-white rounded-xl border overflow-hidden">
+      {% set band = {'APPROVED': 'bg-emerald-600', 'PENDING_VENDOR': 'bg-amber-500', 'PENDING_REVIEW': 'bg-violet-600', 'REJECTED': 'bg-rose-600'}.get(run.status, 'bg-slate-500') %}
+      <div class="{{ band }} text-white px-5 py-4 flex flex-wrap items-center gap-3">
+        <div class="text-xl font-semibold">{{ STATUS_LABEL.get(run.status, run.status) }}</div>
+        <span class="rounded-full bg-white/20 px-2 py-0.5 text-xs">{{ run.risk_tier }} risk</span>
+        {% if summary.fraud %}<span class="rounded-full bg-white text-rose-700 px-2 py-0.5 text-xs font-semibold">FRAUD-CLASS SIGNAL</span>{% endif %}
+        {% if app.current_status != run.status and latest %}<span class="ml-auto text-sm">Now: <b>{{ STATUS_LABEL.get(app.current_status, app.current_status) }}</b></span>{% endif %}
+      </div>
+      <div class="p-5">
+        {% if summary.cards %}
+          <h3 class="text-sm font-semibold text-slate-700">Why</h3>
+          <div class="mt-3 space-y-3">
+          {% for c in summary.cards %}
+            <div class="rounded-lg border {{ 'border-rose-300 bg-rose-50/50' if c.fraud else '' }} p-3">
+              <div class="flex items-start gap-2">
+                <span class="mono text-[11px] text-slate-500 mt-0.5">{{ c.rule }}</span>
+                <div class="flex-1">
+                  <div class="text-sm font-medium">{{ c.title }}</div>
+                  {% if c.detail %}<div class="text-sm text-slate-600 mt-0.5">{{ c.detail }}</div>{% endif %}
+                  <div class="text-xs text-slate-500 mt-1">Next: {{ c.next }}</div>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+          </div>
+        {% else %}
+          <p class="text-sm text-slate-700">Every required check passed. {{ 'A person activates the vendor; approval is not payment: invoices still go through PO and goods-receipt matching.' if run.status == 'APPROVED' }}</p>
+        {% endif %}
+        {% if summary.diff %}
+          <div class="mt-4 rounded-lg bg-slate-50 border p-3 text-sm">
+            <div class="font-medium">Compared with the previous submission</div>
+            <div class="mt-1 grid sm:grid-cols-3 gap-2 text-xs">
+              <div><span class="text-emerald-700 font-semibold">Resolved</span><div class="mono">{{ summary.diff.resolved | join(', ') or '—' }}</div></div>
+              <div><span class="text-amber-700 font-semibold">Still open</span><div class="mono">{{ summary.diff.still_open | join(', ') or '—' }}</div></div>
+              <div><span class="text-rose-700 font-semibold">New</span><div class="mono">{{ summary.diff.new | join(', ') or '—' }}</div></div>
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    </section>
+
+    <!-- human actions -->
+    <section id="actions" class="bg-white rounded-xl border p-5">
+      <div class="flex items-center justify-between">
+        <h3 class="font-semibold">Decision by a person</h3>
+        {% if actor %}<span class="text-xs text-slate-500">acting as {{ actor.name }} · {{ ROLE_LABEL[actor.role] }}</span>{% endif %}
+      </div>
+      {% if not latest %}
+        <p class="mt-2 text-sm text-slate-500">A newer submission exists. <a class="underline" href="/runs/{{ history[-1].id }}">Open it</a>.</p>
+      {% elif vendor %}
+        <p class="mt-2 text-sm text-emerald-800">Active vendor <b class="mono">{{ vendor.vendor_id }}</b> added to the vendor master.</p>
+      {% elif app.current_status == 'PENDING_VENDOR' %}
+        <p class="mt-2 text-sm text-slate-600">Waiting for the vendor to fix and resubmit through their link. Nothing to do here.</p>
+      {% elif app.current_status == 'REJECTED' %}
+        <p class="mt-2 text-sm text-slate-600">Rejection confirmed; the vendor was told.</p>
+      {% elif allowed %}
+        <div class="mt-3 grid gap-3">
+        {% for key, a in allowed.items() %}
+          <form method="post" action="/runs/{{ run.id }}/action" class="rounded-lg border p-3 {{ 'opacity-70' if a.blocked }}">
+            <input type="hidden" name="action" value="{{ key }}">
+            <div class="flex items-center gap-3">
+              {% if a.needs_comment %}<input name="comment" class="flex-1 rounded-md border px-3 py-1.5 text-sm" placeholder="{{ 'Message to the vendor' if key == 'ask_vendor' else 'Reason (goes on the audit trail)' }}" {{ 'disabled' if a.blocked }}>{% else %}<div class="flex-1 text-sm text-slate-600">{{ 'Adds the vendor to the vendor master as active and sends the vendor their ID.' if key == 'activate' else 'Sends the held message to the vendor and closes the application.' }}</div>{% endif %}
+              <button class="rounded-md px-4 py-1.5 text-sm text-white {{ 'bg-rose-600' if 'reject' in key and key != 'override_reject' else ('bg-slate-600' if key in ('override_reject', 'ask_vendor') else 'bg-emerald-600') }} disabled:bg-slate-300" {{ 'disabled' if a.blocked }}>{{ a.label }}</button>
+            </div>
+            {% if a.blocked %}<div class="mt-2 text-xs text-rose-700">🔒 {{ a.blocked }}</div>{% endif %}
+          </form>
+        {% endfor %}
+        </div>
+      {% endif %}
+      {% if actions %}
+        <h4 class="mt-4 text-xs uppercase tracking-wide text-slate-500">Audit trail</h4>
+        <ul class="mt-1 text-sm space-y-1">
+          {% for a, e in actions %}<li><span class="text-xs text-slate-500">{{ a.at | dt }}</span> · <b>{{ e.name }}</b> ({{ ROLE_LABEL[e.role] }}): {{ a.action.replace('_', ' ') }}{% if a.comment %}: "{{ a.comment }}"{% endif %}</li>{% endfor %}
+        </ul>
+      {% endif %}
+    </section>
+
+    <!-- assurance -->
+    <section class="bg-white rounded-xl border">
+      <div class="px-5 py-3 border-b flex items-center justify-between">
+        <h3 class="font-semibold">How well each fact is proven</h3>
+        <a href="/assumptions#levels" class="text-xs text-indigo-700 underline">what the levels mean</a>
+      </div>
+      <table class="w-full text-sm">
+        <tbody class="divide-y">
+        {% for f in facts %}
+          <tr>
+            <td class="px-5 py-2.5 w-36 text-slate-500">{{ f.name }}</td>
+            <td class="px-2 py-2.5 mono text-xs">{{ f.value }}</td>
+            <td class="px-2 py-2.5">{{ level_chip(f.level) }}</td>
+            <td class="px-5 py-2.5 text-xs text-slate-500">{{ f.source }}{% if f.live %} <span class="text-emerald-700 font-semibold">LIVE</span>{% endif %}
+              {% for sf in summary.facts or [] %}{% if sf.name == f.name and sf.note %}<div class="text-amber-700">{{ sf.note }}</div>{% endif %}{% endfor %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <!-- documents -->
+    <section>
+      <h3 class="font-semibold">Documents</h3>
+      <div class="mt-3 grid md:grid-cols-2 gap-4">
+      {% for d in docs %}
+        {% set r = d.read or {} %}
+        {% set au = d.authenticity or {} %}
+        <div class="bg-white rounded-xl border p-4">
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <div class="font-medium text-sm">{{ SLOT_TITLE.get(d.slot, d.slot) }}</div>
+              <a href="/files/{{ d.sha256 }}" target="_blank" class="text-xs text-indigo-700 underline mono break-all">{{ d.filename }}</a>
+            </div>
+            {% if au.level %}<div class="text-right"><div class="text-[10px] text-slate-400 mb-0.5">the file itself</div>{{ level_chip(au.level) }}</div>{% endif %}
+          </div>
+          <dl class="mt-3 text-xs grid grid-cols-3 gap-y-1">
+            <dt class="text-slate-500">AI read it as</dt><dd class="col-span-2">{{ (r.doc_type or 'unreadable') | replace('_', ' ') | lower }}</dd>
+            <dt class="text-slate-500">How it was made</dt><dd class="col-span-2">{{ (r.document_form or '—') | replace('_', ' ') | lower }}</dd>
+            <dt class="text-slate-500">Reading</dt><dd class="col-span-2">{% if r.origin == 'live' %}live · {{ r.model }} · {{ r.seconds }}s{% elif r.origin %}<span class="text-amber-700">{{ 'saved reading (AI unavailable)' if r.origin == 'cache-fallback' else ('saved reading' if r.origin == 'cache' else 'AI unavailable') }}</span>{% endif %}</dd>
+          </dl>
+          {% if r.document_form_evidence %}<p class="mt-2 text-xs text-slate-500 italic">"{{ r.document_form_evidence }}"</p>{% endif %}
+          {% set sigs = au.signals or [] %}
+          {% if sigs %}
+          <ul class="mt-3 space-y-1.5">
+            {% for s in sigs %}
+            <li class="text-xs flex gap-2">{{ severity_chip(s.severity) }}<span><b class="mono text-[10px] text-slate-400">{{ s.code }}</b> {{ s.title }}{% if s.detail %}<span class="block text-slate-500">{{ s.detail }}</span>{% endif %}</span></li>
+            {% endfor %}
+          </ul>
+          {% else %}<p class="mt-3 text-xs text-emerald-700">No authenticity concerns found.</p>{% endif %}
+          {% if au.signature and au.signature.present %}
+            <div class="mt-3 rounded-md bg-slate-50 border p-2 text-xs">
+              <b>Digital signature:</b> {{ 'intact and valid' if au.signature.intact and au.signature.valid else ('BROKEN: file changed after signing' if au.signature.intact == false else 'present, not verified') }}
+              {% if au.signature.signer %}<div class="text-slate-500">signer: {{ au.signature.signer }}{% if au.signature.signed_at %} · {{ au.signature.signed_at | sigdate }}{% endif %}</div>{% endif %}
+            </div>
+          {% endif %}
+          {% if r.fields %}
+          <details class="mt-3">
+            <summary class="text-xs text-indigo-700">What the AI read ({{ r.fields | length }} fields)</summary>
+            <table class="mt-2 w-full text-xs">
+              {% for fld in r.fields %}<tr class="border-t"><td class="py-1 pr-2 text-slate-500">{{ fld.name }}</td><td class="py-1 mono">{{ fld.value | mask(fld.name) }}</td><td class="py-1 text-right {{ 'text-amber-700' if fld.legibility != 'clear' }}">{{ fld.legibility }}</td></tr>{% endfor %}
+            </table>
+          </details>
+          {% endif %}
+        </div>
+      {% endfor %}
+      </div>
+    </section>
+
+    <!-- messages -->
+    <section class="grid md:grid-cols-2 gap-4">
+      <div class="bg-white rounded-xl border p-4">
+        <div class="flex items-center justify-between"><h3 class="font-semibold text-sm">Message to the vendor</h3>
+          {% if vendor_msg %}{% set ms = vendor_msg.state %}<span class="text-[11px] rounded px-1.5 py-0.5 {{ 'bg-emerald-50 text-emerald-700' if ms == 'sent' else 'bg-amber-50 text-amber-800' }}">{{ {'sent': 'sent', 'held': 'held until a person confirms', 'draft': 'not sent'}[ms] }}</span>{% endif %}</div>
+        {% if vendor_msg %}
+          <div class="mt-2 text-xs text-slate-500">{{ vendor_msg.subject }}</div>
+          <pre class="mt-2 whitespace-pre-wrap text-sm font-sans text-slate-700">{{ vendor_msg.body }}</pre>
+        {% endif %}
+        {% if all_vendor_msgs | length > 1 %}<p class="mt-2 text-xs text-slate-500">+ {{ all_vendor_msgs | length - 1 }} later message(s) in the <a class="underline" href="/outbox">outbox</a>.</p>{% endif %}
+      </div>
+      <div class="bg-white rounded-xl border p-4">
+        <h3 class="font-semibold text-sm">Internal note for the reviewer</h3>
+        {% if internal %}<pre class="mt-2 whitespace-pre-wrap text-xs mono text-slate-700">{{ internal.body }}</pre>{% endif %}
+      </div>
+    </section>
+
+    <!-- all rules -->
+    <section class="bg-white rounded-xl border">
+      <details>
+        <summary class="px-5 py-3 flex items-center justify-between"><h3 class="font-semibold">Every rule that ran ({{ rules | length }})</h3><span class="text-xs text-indigo-700">show</span></summary>
+        <table class="w-full text-xs border-t">
+          <thead class="bg-slate-50 text-slate-500 text-left"><tr><th class="px-5 py-1.5">Rule</th><th class="px-2">Result</th><th class="px-2">Check</th><th class="px-2">If it fails</th></tr></thead>
+          <tbody class="divide-y">
+          {% for r in rules %}
+            <tr class="{{ 'bg-rose-50/40' if r.result == 'FAIL' else '' }}">
+              <td class="px-5 py-1.5 mono text-slate-500 whitespace-nowrap">{{ r.rule_id }}</td>
+              <td class="px-2">{{ result_chip(r.result) }}</td>
+              <td class="px-2 py-1.5">{{ r.title }}{% if r.evidence and r.evidence.internal %}<div class="text-slate-500">{{ r.evidence.internal }}</div>{% endif %}</td>
+              <td class="px-2 text-slate-500">{{ r.outcome_if_fail | lower }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </details>
+    </section>
+  {% endif %}
+  </div>
+</div>
+
+<script>
+const RUN_ID = {{ run.id }};
+const ORDER = {{ stages | map('first') | list | tojson }};
+const INITIAL = {{ events | tojson }};
+const FINISHED = {{ 'true' if run.state in ('done', 'failed', 'interrupted') else 'false' }};
+let last = 0;
+
+const ICON = {
+  running: '<svg class="spin h-4 w-4 text-indigo-500" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-opacity=".25" stroke-width="3"/><path d="M22 12a10 10 0 0 0-10-10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>',
+  done: '<span class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white text-[11px]">✓</span>',
+  failed: '<span class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-white text-[11px]">!</span>',
+  warn: '<span class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-400 text-white text-[11px]">✓</span>',
+};
+const RES = {PASS: 'text-emerald-700 bg-emerald-50', FAIL: 'text-rose-700 bg-rose-50', WARN: 'text-amber-700 bg-amber-50', SKIPPED: 'text-slate-500 bg-slate-100', ERROR: 'text-violet-700 bg-violet-50'};
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+
+function apply(ev) {
+  last = Math.max(last, ev.seq);
+  const li = document.querySelector(`[data-stage="${ev.stage}"]`);
+  if (!li) return;
+  const rules = (ev.evidence && ev.evidence.rules) || [];
+  const hasWarn = rules.some(r => r.result === 'WARN');
+  const icon = li.querySelector('.icon');
+  icon.outerHTML = `<span class="icon mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center">${ev.state === 'done' && hasWarn ? ICON.warn : (ICON[ev.state] || ICON.running)}</span>`;
+  if (ev.summary) {
+    if (ev.stage === 'read' && ev.state === 'running' && ev.evidence && ev.evidence.slot) {
+      li.querySelector('.log').insertAdjacentHTML('beforeend', `<span class="fade-in block text-xs text-slate-600">• ${esc(ev.summary)}</span>`);
+    } else {
+      const s = li.querySelector('.summary');
+      s.textContent = ev.summary;
+      s.className = 'summary block text-xs fade-in ' + (ev.state === 'failed' ? 'text-rose-700' : 'text-slate-500');
+    }
+  }
+  if (rules.length) {
+    li.querySelector('.rules').innerHTML = rules.map(r =>
+      `<div class="text-xs flex gap-2"><span class="inline-block w-12 shrink-0 text-center rounded text-[10px] font-semibold ${RES[r.result] || ''}">${esc(r.result)}</span><span><span class="mono text-[10px] text-slate-400">${esc(r.rule_id)}</span> ${esc(r.title)}</span></div>`).join('');
+  }
+  if (ev.stage === 'decision' && (ev.state === 'done' || ev.state === 'failed')) finish();
+}
+
+let finishing = false;
+function finish() {
+  if (finishing || FINISHED) return;
+  finishing = true;
+  document.getElementById('runstate').textContent = 'finished';
+  setTimeout(() => location.reload(), 900);
+}
+
+INITIAL.forEach(apply);
+if (!FINISHED) {
+  let es;
+  try {
+    es = new EventSource(`/runs/${RUN_ID}/stream?after=${last}`);
+    es.onmessage = m => apply(JSON.parse(m.data));
+    es.addEventListener('end', () => { es.close(); finish(); });
+    es.onerror = () => { es.close(); poll(); };
+  } catch (e) { poll(); }
+}
+async function poll() {  // fallback when server-sent events are blocked
+  if (finishing) return;
+  try {
+    const r = await fetch(`/runs/${RUN_ID}/events?after=${last}`);
+    const j = await r.json();
+    j.events.forEach(apply);
+    if (['done', 'failed', 'interrupted'].includes(j.state) && j.events.length === 0) return finish();
+  } catch (e) {}
+  setTimeout(poll, 1200);
+}
+</script>
+{% endblock %}

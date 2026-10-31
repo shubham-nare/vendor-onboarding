@@ -1,0 +1,45 @@
+{% extends "_base.html" %}
+{% block style %}
+  .hdr { text-align: center; margin-bottom: 8px; }
+  .hdr .t1 { font-size: 13pt; font-weight: 700; }
+  .hdr .t2 { font-size: 11pt; }
+  .regno { font-size: 12pt; margin: 10px 0; }
+  td.n { width: 6%; text-align: center; } td.k { width: 38%; }
+  h3 { font-size: 11pt; margin: 18px 0 6px; }
+{% endblock %}
+{% block body %}
+<div class="hdr">
+  <div class="t1">Government of India</div>
+  <div class="t2">Form GST REG-06</div>
+  <div class="muted">[See Rule 10(1)]</div>
+  <div class="t1" style="margin-top:6px">Registration Certificate</div>
+</div>
+<div class="regno"><b>Registration Number :</b> {{ d.gstin }}</div>
+<table>
+  <tr><td class="n">1.</td><td class="k">Legal Name</td><td>{{ d.legal_name }}</td></tr>
+  <tr><td class="n">2.</td><td class="k">Trade Name, if any</td><td>{{ d.trade_name or "" }}</td></tr>
+  <tr><td class="n">3.</td><td class="k">Additional trade names, if any</td><td>Not Applicable</td></tr>
+  <tr><td class="n">4.</td><td class="k">Constitution of Business</td><td>{{ d.constitution }}</td></tr>
+  <tr><td class="n">5.</td><td class="k">Address of Principal Place of Business</td><td>{{ d.address }}</td></tr>
+  <tr><td class="n">6.</td><td class="k">Date of Liability</td><td>{{ d.liability_date }}</td></tr>
+  <tr><td class="n">7.</td><td class="k">Date of Validity</td><td>From {{ d.liability_date }} &nbsp; To Not Applicable</td></tr>
+  <tr><td class="n">8.</td><td class="k">Type of Registration</td><td>Regular</td></tr>
+  <tr><td class="n">9.</td><td class="k">Particulars of Approving Authority</td>
+      <td>Signature: Digitally signed (specimen)<br>Name: Approving Officer (specimen)<br>Designation: Superintendent<br>Jurisdictional Office: {{ d.state }} Range Office</td></tr>
+  <tr><td class="n">10.</td><td class="k">Date of issue of Certificate</td><td>{{ d.issue_date }}</td></tr>
+</table>
+<p class="muted" style="font-size:9pt;margin-top:10px">Note: The registration certificate is required to be prominently displayed at all places of business in the State.</p>
+
+<h3>Annexure A: Details of Additional Places of Business</h3>
+<table><tr><td>Total Number of Additional Places of Business in the State: 0</td></tr></table>
+
+<h3>Annexure B: Details of {{ "Proprietor" if d.proprietor else "Managing / Authorised Partners / Directors" }}</h3>
+<table>
+  <tr><th style="width:6%">Sl.</th><th>Name</th><th>Designation/Status</th><th>Resident of State</th></tr>
+  {% if d.proprietor %}
+  <tr><td>1</td><td>{{ d.proprietor }}</td><td>Proprietor</td><td>{{ d.state }}</td></tr>
+  {% else %}
+  <tr><td>1</td><td>(specimen) Director / Partner 1</td><td>Authorised Signatory</td><td>{{ d.state }}</td></tr>
+  {% endif %}
+</table>
+{% endblock %}

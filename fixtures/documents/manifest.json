@@ -1,0 +1,108 @@
+{
+  "happy_nilgiri": {
+    "expected": "APPROVED",
+    "files": {
+      "gst_certificate": {
+        "file": "happy_nilgiri/gst_certificate.pdf",
+        "actual_kind": "gst_certificate"
+      },
+      "pan_card": {
+        "file": "happy_nilgiri/pan_card.pdf",
+        "actual_kind": "pan_card"
+      },
+      "bank_proof": {
+        "file": "happy_nilgiri/bank_proof.pdf",
+        "actual_kind": "cancelled_cheque"
+      }
+    }
+  },
+  "wrongdoc_tejas": {
+    "expected": "PENDING_VENDOR",
+    "files": {
+      "gst_certificate": {
+        "file": "wrongdoc_tejas/gst_certificate.pdf",
+        "actual_kind": "tax_invoice"
+      },
+      "pan_card": {
+        "file": "wrongdoc_tejas/pan_card.pdf",
+        "actual_kind": "pan_card"
+      },
+      "bank_proof": {
+        "file": "wrongdoc_tejas/bank_proof.pdf",
+        "actual_kind": "cancelled_cheque"
+      }
+    }
+  },
+  "wrongdoc_tejas_resubmit": {
+    "expected": "APPROVED",
+    "files": {
+      "gst_certificate": {
+        "file": "wrongdoc_tejas_resubmit/gst_certificate.pdf",
+        "actual_kind": "gst_certificate"
+      },
+      "pan_card": {
+        "file": "wrongdoc_tejas_resubmit/pan_card.pdf",
+        "actual_kind": "pan_card"
+      },
+      "bank_proof": {
+        "file": "wrongdoc_tejas_resubmit/bank_proof.pdf",
+        "actual_kind": "cancelled_cheque"
+      },
+      "udyam_certificate": {
+        "file": "wrongdoc_tejas_resubmit/udyam_certificate.pdf",
+        "actual_kind": "udyam_certificate"
+      }
+    }
+  },
+  "borrowed_gstin_kaveri": {
+    "expected": "REJECTED",
+    "files": {
+      "gst_certificate": {
+        "file": "borrowed_gstin_kaveri/gst_certificate.pdf",
+        "actual_kind": "gst_certificate"
+      },
+      "pan_card": {
+        "file": "borrowed_gstin_kaveri/pan_card.pdf",
+        "actual_kind": "pan_card"
+      },
+      "bank_proof": {
+        "file": "borrowed_gstin_kaveri/bank_proof.pdf",
+        "actual_kind": "cancelled_cheque"
+      }
+    }
+  },
+  "shared_bank_rangoli": {
+    "expected": "PENDING_REVIEW",
+    "files": {
+      "gst_certificate": {
+        "file": "shared_bank_rangoli/gst_certificate.pdf",
+        "actual_kind": "gst_certificate"
+      },
+      "pan_card": {
+        "file": "shared_bank_rangoli/pan_card.pdf",
+        "actual_kind": "pan_card"
+      },
+      "bank_proof": {
+        "file": "shared_bank_rangoli/bank_proof.png",
+        "actual_kind": "cancelled_cheque"
+      }
+    }
+  },
+  "proprietor_shinde": {
+    "expected": "APPROVED",
+    "files": {
+      "gst_certificate": {
+        "file": "proprietor_shinde/gst_certificate.pdf",
+        "actual_kind": "gst_certificate"
+      },
+      "pan_card": {
+        "file": "proprietor_shinde/pan_card.png",
+        "actual_kind": "pan_card"
+      },
+      "bank_proof": {
+        "file": "proprietor_shinde/bank_proof.pdf",
+        "actual_kind": "cancelled_cheque"
+      }
+    }
+  }
+}

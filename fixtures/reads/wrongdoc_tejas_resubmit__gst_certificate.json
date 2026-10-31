@@ -1,0 +1,58 @@
+{
+  "ok": true,
+  "read": {
+    "doc_type": "GST_CERTIFICATE",
+    "doc_type_evidence": "Government of India Form GST REG-06 Registration Certificate",
+    "document_form": "SCREENSHOT",
+    "document_form_evidence": "The file is an image of a GST certificate with crisp vector-like text and layout, typical of a downloaded PDF viewed or rendered as a screenshot.",
+    "garbled_or_misspelled_text": [],
+    "visible_watermarks_or_logos": [],
+    "obscured_regions": [],
+    "integrity_notes": [
+      "Contains a specimen banner indicating fictional test data for software demo."
+    ],
+    "expected_elements_missing": [],
+    "fields": [
+      {
+        "name": "gstin",
+        "value": "36AAJCT9052D1Z7",
+        "evidence": "Registration Number : 36AAJCT9052D1Z7",
+        "legibility": "clear"
+      },
+      {
+        "name": "legal_name",
+        "value": "TEJAS INDUSTRIAL SUPPLIES PRIVATE LIMITED",
+        "evidence": "TEJAS INDUSTRIAL SUPPLIES PRIVATE LIMITED",
+        "legibility": "clear"
+      },
+      {
+        "name": "constitution",
+        "value": "Private Limited Company",
+        "evidence": "Private Limited Company",
+        "legibility": "clear"
+      },
+      {
+        "name": "principal_address",
+        "value": "8-2-293/A, Road No. 12, Banjara Hills, Hyderabad, Telangana, 500034",
+        "evidence": "8-2-293/A, Road No. 12, Banjara Hills, Hyderabad, Telangana, 500034",
+        "legibility": "clear"
+      },
+      {
+        "name": "state",
+        "value": "Telangana",
+        "evidence": "Jurisdictional Office: Telangana Range Office",
+        "legibility": "clear"
+      },
+      {
+        "name": "issue_date",
+        "value": "18/07/2017",
+        "evidence": "18/07/2017",
+        "legibility": "clear"
+      }
+    ]
+  },
+  "model": "gemini-3.5-flash-lite",
+  "seconds": 28.3,
+  "error": null,
+  "attempts": 1
+}

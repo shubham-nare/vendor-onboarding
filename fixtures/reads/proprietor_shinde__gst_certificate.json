@@ -1,0 +1,62 @@
+{
+  "ok": true,
+  "read": {
+    "doc_type": "GST_CERTIFICATE",
+    "doc_type_evidence": "Government of India Form GST REG-06 Registration Certificate",
+    "document_form": "SCREENSHOT",
+    "document_form_evidence": "Digital layout of a GST certificate rendered with UI-like presentation and clean text, matching a software demo document.",
+    "garbled_or_misspelled_text": [],
+    "visible_watermarks_or_logos": [],
+    "obscured_regions": [],
+    "integrity_notes": [],
+    "expected_elements_missing": [],
+    "fields": [
+      {
+        "name": "gstin",
+        "value": "27BVKPS5274R1ZE",
+        "evidence": "Registration Number : 27BVKPS5274R1ZE",
+        "legibility": "clear"
+      },
+      {
+        "name": "legal_name",
+        "value": "RAMESH VITTHAL SHINDE",
+        "evidence": "1. Legal Name RAMESH VITTHAL SHINDE",
+        "legibility": "clear"
+      },
+      {
+        "name": "trade_name",
+        "value": "SHINDE ELECTRICALS",
+        "evidence": "2. Trade Name, if any SHINDE ELECTRICALS",
+        "legibility": "clear"
+      },
+      {
+        "name": "constitution",
+        "value": "Proprietorship",
+        "evidence": "4. Constitution of Business Proprietorship",
+        "legibility": "clear"
+      },
+      {
+        "name": "principal_address",
+        "value": "Shop 3, Laxmi Road, Sadashiv Peth, Pune, Maharashtra, 411030",
+        "evidence": "Shop 3, Laxmi Road, Sadashiv Peth, Pune,\nMaharashtra, 411030",
+        "legibility": "clear"
+      },
+      {
+        "name": "state",
+        "value": "Maharashtra",
+        "evidence": "Jurisdictional Office: Maharashtra Range Office",
+        "legibility": "clear"
+      },
+      {
+        "name": "issue_date",
+        "value": "30/07/2017",
+        "evidence": "10. Date of issue of Certificate 30/07/2017",
+        "legibility": "clear"
+      }
+    ]
+  },
+  "model": "gemini-3.5-flash-lite",
+  "seconds": 66.6,
+  "error": null,
+  "attempts": 2
+}

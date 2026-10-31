@@ -1,0 +1,49 @@
+{
+  "ok": true,
+  "read": {
+    "doc_type": "PAN_CARD",
+    "doc_type_evidence": "INCOME TAX DEPARTMENT GOVT. OF INDIA Permanent Account Number Card",
+    "document_form": "SCREENSHOT",
+    "document_form_evidence": "Clean digital image of a corporate PAN card with a software-generated demo watermark banner at the top and bottom.",
+    "garbled_or_misspelled_text": [],
+    "visible_watermarks_or_logos": [
+      "SPECIMEN · FICTIONAL TEST DATA FOR A SOFTWARE DEMO · NOT A REAL DOCUMENT",
+      "Generated for the vendor onboarding demo (Zamp case study). All names and numbers are invented."
+    ],
+    "obscured_regions": [],
+    "integrity_notes": [
+      "This is a company PAN card layout showing Date of Incorporation instead of Date of Birth, but it lacks standard physical card features such as the Indian National Emblem, photograph, QR code, and signature.",
+      "Contains specimen banner indicating test data."
+    ],
+    "expected_elements_missing": [
+      "National emblem",
+      "QR code",
+      "Photograph",
+      "Card signature or hologram"
+    ],
+    "fields": [
+      {
+        "name": "pan",
+        "value": "AAJCT9052D",
+        "evidence": "AAJCT9052D",
+        "legibility": "clear"
+      },
+      {
+        "name": "name_on_card",
+        "value": "TEJAS INDUSTRIAL SUPPLIES PRIVATE LIMITED",
+        "evidence": "TEJAS INDUSTRIAL SUPPLIES PRIVATE LIMITED",
+        "legibility": "clear"
+      },
+      {
+        "name": "date_on_card",
+        "value": "02/09/2014",
+        "evidence": "02/09/2014",
+        "legibility": "clear"
+      }
+    ]
+  },
+  "model": "gemini-3.5-flash-lite",
+  "seconds": 30.5,
+  "error": null,
+  "attempts": 1
+}

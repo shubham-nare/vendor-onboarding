@@ -1,0 +1,465 @@
+"""The rule engine: every check is deterministic code; every result carries its evidence.
+
+Outcome codes if a rule fails (docs/PRODUCT.md §10):
+  REJECT  - cannot be fixed in place (identity conflict, blocklist); a human confirms
+  REVIEW  - a person must judge (fraud signals, borderline names, possible duplicates, errors)
+  VENDOR  - the vendor can fix it; tell them exactly what to send
+  WARN    - shown to the reviewer; no effect on status
+"""
+
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
+
+from onboarding import matching as M
+from onboarding import validators as V
+from onboarding.ai.read import DocRead, FieldReading
+from onboarding.authenticity.assess import Authenticity
+from onboarding.sources import SourceResult
+
+PASS, FAIL, WARN, SKIPPED, ERROR = "PASS", "FAIL", "WARN", "SKIPPED", "ERROR"
+SLOT_TYPES = {
+    "gst_certificate": {"GST_CERTIFICATE"},
+    "pan_card": {"PAN_CARD"},
+    "bank_proof": {"CANCELLED_CHEQUE", "BANK_LETTER"},
+    "udyam_certificate": {"UDYAM_CERTIFICATE"},
+}
+SLOT_LABEL = {"gst_certificate": "GST registration certificate", "pan_card": "PAN card",
+              "bank_proof": "cancelled cheque or bank letter", "udyam_certificate": "Udyam (MSME) certificate"}
+SLOT_TITLE = {"gst_certificate": "GST certificate", "pan_card": "PAN card", "bank_proof": "Bank proof", "udyam_certificate": "Udyam certificate"}
+DOC_LABEL = {"GST_CERTIFICATE": "GST certificate", "PAN_CARD": "PAN card", "CANCELLED_CHEQUE": "cancelled cheque",
+             "BANK_LETTER": "bank letter", "UDYAM_CERTIFICATE": "Udyam certificate", "TAX_INVOICE": "tax invoice",
+             "AADHAAR": "Aadhaar card", "OTHER": "different document"}
+FIELD_LABEL = {"legal_name": "Legal name", "gstin": "GSTIN", "pan": "PAN", "address": "Address", "city": "City",
+               "state": "State", "contact_name": "Contact name", "contact_email": "Contact email",
+               "bank_holder": "Account holder name", "bank_account": "Bank account number", "ifsc": "IFSC",
+               "business_type": "Business type", "cin": "CIN", "llpin": "LLPIN", "proprietor_name": "Proprietor's name",
+               "udyam_no": "Udyam number"}
+
+
+@dataclass
+class R:
+    rule_id: str
+    layer: str
+    result: str
+    title: str
+    outcome: str = ""            # if FAIL
+    evidence: dict = field(default_factory=dict)
+    vendor_text: str = ""        # what to tell the vendor (VENDOR outcome)
+    internal: str = ""           # what the reviewer should know
+    fraud: bool = False          # fraud class -> neutral vendor message
+
+    def __post_init__(self):
+        # R(id, layer, PASS, title, {evidence}) is a natural way to write a passing rule.
+        if isinstance(self.outcome, dict):
+            self.evidence, self.outcome = {**self.outcome, **self.evidence}, ""
+
+    def as_dict(self) -> dict:
+        return asdict(self)
+
+
+@dataclass
+class DocInfo:
+    slot: str
+    filename: str
+    sha256: str
+    mime: str
+    read: DocRead | None
+    read_origin: str              # live | cache | cache-fallback | failed
+    auth: Authenticity | None
+
+
+@dataclass
+class Context:
+    form: dict
+    docs: dict[str, DocInfo]
+    invite: dict | None = None            # {status, company_name, expires_at, application_id, sponsor}
+    application_id: int | None = None
+    sources: dict[str, SourceResult] = field(default_factory=dict)
+    master: list[dict] = field(default_factory=list)       # vendor-master rows sharing PAN/GSTIN/account
+    blocklist: list[dict] = field(default_factory=list)    # matching blocklist rows
+    reused_files: list[dict] = field(default_factory=list)  # same file in another vendor's application
+
+
+# --- helpers ----------------------------------------------------------------------------
+def fld(d: DocInfo | None, name: str) -> FieldReading | None:
+    if not d or not d.read:
+        return None
+    return next((f for f in d.read.fields if f.name == name and (f.value or f.legibility != "not_present")), None)
+
+
+def val(d: DocInfo | None, name: str) -> tuple[str | None, str]:
+    f = fld(d, name)
+    return (f.value, f.legibility) if f else (None, "not_present")
+
+
+def usable(d: DocInfo | None, slot: str) -> bool:
+    return bool(d and d.read and d.read.doc_type in SLOT_TYPES[slot])
+
+
+def constitution_type(text: str) -> str | None:
+    t = (text or "").lower()
+    if "private limited" in t:
+        return "PVT_LTD"
+    if "public limited" in t:
+        return "PUBLIC_LTD"
+    if "limited liability partnership" in t or t.strip() == "llp":
+        return "LLP"
+    if "partnership" in t:
+        return "PARTNERSHIP"
+    if "proprietor" in t:
+        return "PROPRIETORSHIP"
+    return None
+
+
+def required_fields(form: dict) -> list[str]:
+    req = ["legal_name", "gstin", "pan", "address", "city", "state", "contact_name", "contact_email",
+           "bank_holder", "bank_account", "ifsc", "business_type"]
+    bt = form.get("business_type")
+    if bt in ("PVT_LTD", "PUBLIC_LTD"):
+        req.append("cin")
+    if bt == "LLP":
+        req.append("llpin")
+    if bt == "PROPRIETORSHIP":
+        req.append("proprietor_name")
+    if form.get("msme"):
+        req.append("udyam_no")
+    return req
+
+
+def required_docs(form: dict) -> list[str]:
+    return ["gst_certificate", "pan_card", "bank_proof"] + (["udyam_certificate"] if form.get("msme") else [])
+
+
+def reupload(slot: str, what: str) -> str:
+    return f"We couldn't clearly read the {what} on your {SLOT_LABEL[slot]}. Please upload a clearer, complete copy (whole page, nothing cropped or covered)."
+
+
+# --- the rules ------------------------------------------------------------------------------
+def evaluate(ctx: Context) -> list[R]:
+    f, docs, out = ctx.form, ctx.docs, []
+    add = out.append
+    bt = f.get("business_type", "")
+    pan, gstin = V.normalise_id(f.get("pan", "")), V.normalise_id(f.get("gstin", ""))
+    individual = V.pan_code(pan) == "P"
+
+    # Layer 0: invite ------------------------------------------------------------------
+    inv = ctx.invite
+    if not inv:
+        add(R("R-INV-01", "invite", FAIL, "Application did not come through a sponsor's invite", "REVIEW",
+              internal="Unsolicited application: no valid invite token. Never auto-approved.", fraud=True))
+    else:
+        expired = inv.get("expires_at") and inv["expires_at"] < datetime.now(timezone.utc)
+        other_app = inv.get("application_id") and ctx.application_id and inv["application_id"] != ctx.application_id
+        if inv.get("status") in ("revoked",) or expired or other_app:
+            why = "expired" if expired else ("already used by another application" if other_app else inv.get("status"))
+            add(R("R-INV-01", "invite", FAIL, f"Invite link is {why}", "REVIEW", {"invite_status": why},
+                  internal="The invite can't vouch for this application.", fraud=bool(other_app)))
+        else:
+            add(R("R-INV-01", "invite", PASS, f"Invited by {inv.get('sponsor', 'a sponsor')}: {inv.get('reason', '')}"))
+        nm = M.compare_name(inv.get("company_name", ""), f.get("legal_name", ""), individual=False)
+        if nm.status == M.MATCH or (bt == "PROPRIETORSHIP" and M.compare_name(inv.get("company_name", ""), f.get("proprietor_name", ""), individual=True).status == M.MATCH):
+            add(R("R-INV-02", "invite", PASS, "The business that applied is the one that was invited", {"invited": inv.get("company_name"), "applied": f.get("legal_name"), "score": nm.score}))
+        else:
+            add(R("R-INV-02", "invite", FAIL, "The business that applied is not the one that was invited", "REVIEW",
+                  {"invited": inv.get("company_name"), "applied": f.get("legal_name"), "score": nm.score},
+                  internal="Invite link may have been forwarded or reached the wrong company.", fraud=True))
+
+    # Layer 1: scope gate ------------------------------------------------------------------
+    if (f.get("country") or "India").strip().lower() != "india":
+        country = f.get("country", "")
+        add(R("R-SCOPE-01", "scope", FAIL, f"Vendor registered outside India ({country})", "REVIEW",
+              vendor_text="Vendors registered outside India are onboarded by our team directly; we'll contact you within 3 business days. No action is needed now."))
+        return out
+    if not f.get("gst_registered", True):
+        add(R("R-SCOPE-02", "scope", FAIL, "Vendor is not GST-registered", "REVIEW",
+              vendor_text="Vendors without a GST registration are onboarded by our team directly; we'll contact you within 3 business days."))
+        return out
+    add(R("R-SCOPE-01", "scope", PASS, "India-based, GST-registered vendor (automated path)"))
+
+    # Layer 2: completeness ---------------------------------------------------------------
+    missing = [k for k in required_fields(f) if not str(f.get(k) or "").strip()]
+    add(R("R-COMP-01", "completeness", FAIL if missing else PASS,
+          "Required details missing" if missing else "All required details provided", "VENDOR",
+          {"missing": missing}, vendor_text=f"Please fill in: {', '.join(FIELD_LABEL.get(m, m) for m in missing)}." if missing else ""))
+    missing_docs = [s for s in required_docs(f) if s not in docs]
+    udyam_note = (f" You told us you're MSME-registered ({f.get('udyam_no')}); please attach the Udyam certificate, or change your answer if you're not MSME-registered."
+                  if "udyam_certificate" in missing_docs else "")
+    add(R("R-COMP-02", "completeness", FAIL if missing_docs else PASS,
+          "Required documents missing" if missing_docs else "All required documents uploaded", "VENDOR",
+          {"missing": missing_docs},
+          vendor_text=(f"Please upload: {', '.join(SLOT_LABEL[s] for s in missing_docs)}.{udyam_note}") if missing_docs else ""))
+
+    # Layer 3: document reading + authenticity -----------------------------------------------
+    for slot, d in docs.items():
+        if not d.read:
+            add(R("R-DOC-00", "documents", ERROR, f"Automatic reading failed for the {SLOT_LABEL.get(slot, slot)}", "REVIEW",
+                  {"file": d.filename}, internal="AI reading unavailable; review the document manually."))
+            continue
+        if d.read.doc_type not in SLOT_TYPES.get(slot, set()):
+            got = DOC_LABEL.get(d.read.doc_type, d.read.doc_type)
+            add(R("R-DOC-01", "documents", FAIL, f"Wrong document in the {SLOT_LABEL[slot]} slot: it's a {got}", "VENDOR",
+                  {"file": d.filename, "detected": d.read.doc_type, "evidence": d.read.doc_type_evidence},
+                  vendor_text=f"The file you uploaded as your {SLOT_LABEL[slot]} ({d.filename}) appears to be a {got}. Please upload your {SLOT_LABEL[slot]}"
+                              + (" (Form GST REG-06, downloadable from the GST portal)." if slot == "gst_certificate" else ".")))
+        else:
+            add(R("R-DOC-01", "documents", PASS, f"{SLOT_TITLE[slot]} recognised", {"file": d.filename, "read_from": d.read_origin}))
+        if d.auth:
+            for s in d.auth.signals:
+                if s.severity in ("info",):
+                    continue
+                outcome = {"vendor": "VENDOR", "review": "REVIEW", "fraud": "REVIEW", "warn": "WARN"}[s.severity]
+                add(R(f"R-{s.code}", "authenticity", WARN if outcome == "WARN" else FAIL, f"{SLOT_TITLE.get(slot, slot)}: {s.title}",
+                      outcome, {"file": d.filename, "detail": s.detail}, vendor_text=s.vendor_text, internal=s.detail, fraud=s.severity == "fraud"))
+
+    gst_doc = docs.get("gst_certificate") if usable(docs.get("gst_certificate"), "gst_certificate") else None
+    pan_doc = docs.get("pan_card") if usable(docs.get("pan_card"), "pan_card") else None
+    bank_doc = docs.get("bank_proof") if usable(docs.get("bank_proof"), "bank_proof") else None
+    udyam_doc = docs.get("udyam_certificate") if usable(docs.get("udyam_certificate"), "udyam_certificate") else None
+
+    # Layer 4: identifiers typed in the form ------------------------------------------------
+    if gstin:
+        ok_fmt, ok_chk = V.gstin_format_ok(gstin), V.gstin_checksum_ok(gstin)
+        add(R("R-ID-01", "identifiers", PASS if ok_fmt else FAIL, "GSTIN format" + ("" if ok_fmt else " is not standard"), "VENDOR", {"gstin": gstin},
+              vendor_text="" if ok_fmt else f"The GSTIN '{gstin}' isn't in the standard 15-character format (e.g. 29ABCDE1234F1Z5). Please re-enter it exactly as shown on your GST certificate."))
+        if ok_fmt:
+            add(R("R-ID-02", "identifiers", PASS if ok_chk else FAIL, "GSTIN check digit " + ("valid" if ok_chk else "fails: likely a typing error"), "VENDOR", {"gstin": gstin},
+                  vendor_text="" if ok_chk else f"The GSTIN '{gstin}' fails the official check-digit test, which usually means a typing error. Please copy it exactly from your GST certificate."))
+        emb = V.gstin_embedded_pan(gstin)
+        add(R("R-ID-04", "identifiers", PASS if emb == pan else FAIL,
+              "PAN inside the GSTIN matches the PAN entered" if emb == pan else f"PAN inside the GSTIN ({emb}) differs from the PAN entered ({pan})", "VENDOR",
+              {"gstin_pan": emb, "pan": pan},
+              vendor_text="" if emb == pan else f"Your GSTIN contains the PAN {emb}, but the PAN you entered is {pan}. A GSTIN is always issued on the holder's own PAN, so please check both numbers."))
+        code, sname = V.gstin_state(gstin)
+        declared = V.state_code_for_name(f.get("state", ""))
+        okst = declared == code
+        add(R("R-ID-05", "identifiers", PASS if okst else FAIL, f"GSTIN state ({sname}) " + ("matches" if okst else "differs from") + f" the declared state ({f.get('state')})", "VENDOR",
+              {"gstin_state": sname, "declared": f.get("state")},
+              vendor_text="" if okst else f"Your GSTIN is registered in {sname} (code {code}), but you gave a principal place of business in {f.get('state')}. Please provide the GSTIN for the state you'll invoice us from, with that state's address."))
+    if pan:
+        okp = V.validate_pan(pan)
+        add(R("R-ID-03", "identifiers", PASS if okp else FAIL, "PAN format" + ("" if okp else " is not standard"), "VENDOR", {"pan": pan},
+              vendor_text="" if okp else f"The PAN '{pan}' isn't in the standard format (5 letters, 4 digits, 1 letter). Please check it."))
+        exp = V.EXPECTED_PAN_CODE.get(bt)
+        got = V.pan_code(pan)
+        if exp:
+            okt = got == exp
+            add(R("R-ID-06", "identifiers", PASS if okt else FAIL,
+                  f"PAN holder type ({V.PAN_HOLDER_TYPES.get(got, got)}) " + ("fits" if okt else "doesn't fit") + f" the business type ({V.BUSINESS_TYPES.get(bt, bt)})",
+                  "VENDOR", {"pan_type": got, "expected": exp},
+                  vendor_text="" if okt else f"You selected '{V.BUSINESS_TYPES.get(bt, bt)}', but PAN {pan} is issued to a {V.PAN_HOLDER_TYPES.get(got, 'different holder type')}. Please correct the business type, or give the PAN of the business."))
+    if bt in ("PVT_LTD", "PUBLIC_LTD") and f.get("cin"):
+        okc = V.cin_ok(f["cin"], bt)
+        add(R("R-ID-07", "identifiers", PASS if okc else FAIL, "CIN format fits the business type" if okc else "CIN doesn't look right for this business type", "VENDOR",
+              {"cin": f["cin"]}, vendor_text="" if okc else f"Your CIN '{f['cin']}' doesn't look right for a {V.BUSINESS_TYPES[bt]}. Please copy it from your certificate of incorporation."))
+    if f.get("ifsc"):
+        oki = V.validate_ifsc(f["ifsc"])
+        add(R("R-ID-08", "identifiers", PASS if oki else FAIL, "IFSC format" + ("" if oki else " is invalid"), "VENDOR", {"ifsc": f["ifsc"]},
+              vendor_text="" if oki else f"The IFSC '{f['ifsc']}' isn't valid (11 characters, 5th character is zero). It's printed on your cheque book."))
+    if f.get("bank_account"):
+        oka = V.account_number_ok(f["bank_account"])
+        add(R("R-ID-09", "identifiers", PASS if oka else FAIL, "Account number format" + ("" if oka else " is invalid"), "VENDOR",
+              vendor_text="" if oka else "Please check your bank account number; it should contain 9 to 18 digits."))
+
+    # Layer 5a: bank branch (live) ------------------------------------------------------------
+    ifsc_src = ctx.sources.get("ifsc")
+    if ifsc_src:
+        if ifsc_src.status == "FOUND":
+            add(R("R-BANK-01", "bank", PASS, f"IFSC belongs to {ifsc_src.data.get('BANK')}, {ifsc_src.data.get('BRANCH')}", evidence={"source": ifsc_src.source, **ifsc_src.data}))
+        elif ifsc_src.status == "NOT_FOUND":
+            add(R("R-BANK-01", "bank", FAIL, "IFSC doesn't match any bank branch", "VENDOR", {"source": ifsc_src.source},
+                  vendor_text=f"IFSC {f.get('ifsc')} doesn't match any bank branch we can find (banks that merged issue new IFSCs). Please check the IFSC printed on your cheque."))
+        else:
+            add(R("R-BANK-01", "bank", ERROR, "Bank branch lookup unavailable", "REVIEW", {"note": ifsc_src.note}, internal="Re-run the check later."))
+
+    # Layer 5b: cross-document consistency ----------------------------------------------------
+    if gst_doc:
+        v, leg = val(gst_doc, "gstin")
+        m = M.compare_id("gstin", gstin, v, leg)
+        _xd(add, "R-XD-01", "GSTIN on the form vs the GST certificate", m, "gst_certificate", "GSTIN",
+            f"The GSTIN on your form ({gstin}) is different from the one on your GST certificate ({m.doc_value}). Please correct whichever is wrong.")
+    else:
+        add(R("R-XD-01", "consistency", SKIPPED, "No GST certificate to compare against"))
+    if pan_doc:
+        v, leg = val(pan_doc, "pan")
+        m = M.compare_id("pan", pan, v, leg)
+        _xd(add, "R-XD-02", "PAN on the form vs the PAN card", m, "pan_card", "PAN",
+            f"The PAN on your form ({pan}) is different from the one on the PAN card you uploaded ({m.doc_value}). Please correct whichever is wrong.")
+    else:
+        add(R("R-XD-02", "consistency", SKIPPED, "No PAN card to compare against"))
+
+    # Identity conflict: the certificate's (check-digit-valid) GSTIN embeds a PAN that differs from
+    # the PAN card, while the PAN card agrees with the form -> two different legal entities.
+    if gst_doc and pan_doc:
+        cv, cleg = val(gst_doc, "gstin")
+        pv, pleg = val(pan_doc, "pan")
+        cert_gstin = V.normalise_id(cv or "")
+        if cleg == "clear" and V.gstin_checksum_ok(cert_gstin) and pleg == "clear":
+            card_pan = M.correct(pv or "", M.PAN_CLASSES)[0]
+            cert_pan = V.gstin_embedded_pan(cert_gstin)
+            if card_pan == pan and cert_pan != pan:
+                gst_name = val(gst_doc, "legal_name")[0] or "another entity"
+                add(R("R-XD-03", "consistency", FAIL, f"GST registration belongs to a different legal entity ({gst_name})", "REJECT",
+                      {"certificate_gstin": cert_gstin, "pan_in_gstin": cert_pan, "pan_card": card_pan, "gst_legal_name": gst_name},
+                      vendor_text=(f"The GST registration you provided ({cert_gstin}) belongs to {gst_name.title()}, a different legal entity from the applicant "
+                                   f"({f.get('legal_name')}, PAN {pan}). We can only onboard a business using its own GST registration. If {f.get('legal_name')} has its own GSTIN, "
+                                   f"please start a new application with it."),
+                      internal="Check-digit-valid GSTIN on the certificate; PAN card and form agree on a different PAN. Two independent sources: a misread is very unlikely."))
+            else:
+                add(R("R-XD-03", "consistency", PASS, "GST certificate and PAN card describe the same legal entity"))
+    if bank_doc:
+        v, leg = val(bank_doc, "account_number")
+        m = M.compare_account(f.get("bank_account", ""), v, leg)
+        _xd(add, "R-XD-04", "Account number on the form vs the bank proof", m, "bank_proof", "account number",
+            "The account number on your form doesn't match your cancelled cheque. Please correct it, or upload the bank proof for the account you want paid into.")
+        v, leg = val(bank_doc, "ifsc")
+        if v:
+            m = M.compare_id("ifsc", f.get("ifsc", ""), v, leg)
+            _xd(add, "R-XD-04b", "IFSC on the form vs the bank proof", m, "bank_proof", "IFSC",
+                f"The IFSC on your form ({f.get('ifsc')}) doesn't match your cancelled cheque ({m.doc_value}). Please correct it.")
+    if gst_doc and (ct := constitution_type(val(gst_doc, "constitution")[0] or "")):
+        okk = ct == bt
+        add(R("R-XD-05", "consistency", PASS if okk else FAIL, "Constitution on the GST certificate " + ("matches" if okk else "differs from") + " the business type",
+              "VENDOR", {"certificate": val(gst_doc, "constitution")[0], "declared": bt},
+              vendor_text="" if okk else f"Your GST certificate lists your business as '{val(gst_doc, 'constitution')[0]}', but you selected '{V.BUSINESS_TYPES.get(bt, bt)}'. Please correct the business type or upload the right certificate."))
+
+    # Layer 5c: names ----------------------------------------------------------------------------
+    legal = f.get("legal_name", "")
+    prop = f.get("proprietor_name", "")
+    if gst_doc:
+        gl, gleg = val(gst_doc, "legal_name")
+        tn, _ = val(gst_doc, "trade_name")
+        best = max((M.compare_name(legal, c, individual=False, legibility=gleg) for c in (gl, tn) if c), key=lambda r: r.score, default=None)
+        _name(add, "R-NAME-01", "Business name vs the GST certificate", best, "VENDOR", "gst_certificate",
+              f"The business name you entered ('{legal}') doesn't match the name on your GST certificate ('{gl}'). Please enter your name exactly as registered for GST.")
+    name02_ok = False
+    if pan_doc:
+        pn, pleg = val(pan_doc, "name_on_card")
+        expected = prop if bt == "PROPRIETORSHIP" else legal
+        r2 = M.compare_name(expected, pn, individual=individual, legibility=pleg) if pn or pleg != "not_present" else None
+        name02_ok = bool(r2 and r2.status == M.MATCH)
+        _name(add, "R-NAME-02", f"Name on the PAN card vs the {'proprietor' if bt == 'PROPRIETORSHIP' else 'legal'} name", r2, "VENDOR", "pan_card",
+              f"The name on the PAN card ('{pn}') doesn't match {'the proprietor' if bt == 'PROPRIETORSHIP' else 'the business'} ('{expected}'). Please check that you uploaded the right PAN card.")
+    if bank_doc:
+        holder, hleg = val(bank_doc, "account_holder_name")
+        if not holder and hleg == "not_present":
+            add(R("R-DOC-03", "documents", FAIL, "Bank proof doesn't show the account holder's name", "VENDOR",
+                  vendor_text="Your cancelled cheque doesn't show the account holder's name. Please upload a cheque with the name printed, or a letter from your bank confirming the holder name, account number and IFSC."))
+            holder, hleg = f.get("bank_holder", ""), "clear"
+        cands = [("legal name", legal)]
+        branch = bt == "PROPRIETORSHIP" and individual and name02_ok
+        if branch:
+            cands += [("proprietor's name", prop), ("GST legal name", val(gst_doc, "legal_name")[0] if gst_doc else "")]
+        scored = [(lbl, M.compare_name(c, holder, individual=individual and lbl != "legal name", legibility=hleg)) for lbl, c in cands if c]
+        lbl, best = max(scored, key=lambda x: x[1].score)
+        note = f"matched the {lbl}" + (" (proprietorship: the owner and the business are one legal person)" if branch and lbl != "legal name" else "")
+        if best.status == M.MATCH:
+            add(R("R-NAME-03", "names", PASS, f"Account holder '{holder}' {note}", evidence={"holder": holder, "score": best.score, "candidate": lbl}))
+        elif best.status == M.PARTIAL:
+            add(R("R-NAME-03", "names", FAIL, f"Account holder '{holder}' only partly matches ({best.score})", "REVIEW",
+                  {"holder": holder, "score": best.score}, internal="Borderline holder name: verify the account belongs to the vendor."))
+        elif best.status == M.UNREADABLE:
+            add(R("R-NAME-03", "names", FAIL, "Account holder name couldn't be read", "VENDOR", vendor_text=reupload("bank_proof", "account holder name")))
+        else:
+            add(R("R-NAME-03", "names", FAIL, f"Account holder '{holder}' doesn't match the business ({best.score})", "VENDOR",
+                  {"holder": holder, "score": best.score},
+                  vendor_text=f"Payments can only go to an account held in your business's name. The account holder on your bank proof is '{holder}', which doesn't match '{legal}'. Please give an account in the business's name, with a cancelled cheque or bank letter showing it."))
+
+    # Layer 6: sources (simulated in this build; labelled) --------------------------------------------
+    names_ok = [legal] + ([prop] if bt == "PROPRIETORSHIP" else [])
+    g = ctx.sources.get("gst")
+    if g:
+        if g.status != "FOUND":
+            add(R("R-SRC-GST", "sources", FAIL, "GSTIN not found in the GST registry", "REVIEW", {"source": g.source}, internal="Possible fake or mistyped GSTIN."))
+        elif g.data.get("status") != "Active":
+            add(R("R-SRC-GST", "sources", FAIL, f"GSTIN status is {g.data.get('status')}", "REVIEW", {"source": g.source, **g.data}))
+        else:
+            reg_names = [g.data.get("legal_name"), g.data.get("trade_name")]
+            ok = any(M.compare_name(n, rn, individual=individual).status == M.MATCH for n in names_ok for rn in reg_names if rn and n)
+            add(R("R-SRC-GST", "sources", PASS if ok else FAIL, "GST registry: active, name " + ("matches" if ok else f"is '{g.data.get('legal_name')}'"),
+                  "REVIEW", {"source": g.source, **g.data}, internal="" if ok else "Registry name differs from the applicant."))
+    p = ctx.sources.get("pan")
+    if p:
+        if p.status != "FOUND":
+            add(R("R-SRC-PAN", "sources", FAIL, "PAN not found in the PAN registry", "REVIEW", {"source": p.source}))
+        else:
+            ok = any(M.compare_name(n, p.data.get("name", ""), individual=individual).status == M.MATCH for n in names_ok if n)
+            add(R("R-SRC-PAN", "sources", PASS if ok else FAIL, "PAN registry: valid, name " + ("matches" if ok else f"is '{p.data.get('name')}'"), "REVIEW", {"source": p.source, **p.data}))
+            if p.data.get("aadhaar_linked") is False:
+                add(R("R-SRC-PAN2", "sources", WARN, "PAN is inoperative (not linked to Aadhaar): TDS applies at the higher rate (20%)", "WARN", {"source": p.source}))
+    b = ctx.sources.get("bank")
+    if b:
+        if b.status != "FOUND":
+            add(R("R-SRC-BANK", "sources", WARN, "Account could not be confirmed at source (penny-drop)", "WARN", {"source": b.source}))
+        else:
+            holder = b.data.get("holder_name", "")
+            cands = names_ok + ([val(gst_doc, "legal_name")[0]] if (gst_doc and bt == "PROPRIETORSHIP") else [])
+            ok = any(M.compare_name(n, holder, individual=individual).status == M.MATCH for n in cands if n)
+            add(R("R-SRC-BANK", "sources", PASS if ok else FAIL, f"Bank confirms the account holder is '{holder}'" + ("" if ok else ", not the applicant"),
+                  "REVIEW", {"source": b.source, "holder": holder}, internal="" if ok else "The bank says this account belongs to someone else.", fraud=not ok))
+    c = ctx.sources.get("cin")
+    if c:
+        add(R("R-SRC-CIN", "sources", PASS if c.status == "FOUND" else WARN,
+              "Company registry: " + (f"{c.data.get('status')}, {c.data.get('name')}" if c.status == "FOUND" else "CIN not found"), "WARN", {"source": c.source, **c.data}))
+
+    # Layer 7: risk (vendor master, blocklist, reused files) ------------------------------------------
+    if ctx.blocklist:
+        add(R("R-RISK-01", "risk", FAIL, "PAN, GSTIN or bank account is on the blocklist", "REJECT", {"hits": ctx.blocklist},
+              vendor_text="After review, we're unable to proceed with your registration. If you believe this is a mistake, please contact procurement@buyer.example.com.",
+              internal=f"Blocklist reason: {ctx.blocklist[0].get('reason')}", fraud=True))
+    else:
+        add(R("R-RISK-01", "risk", PASS, "Not on the blocklist"))
+    acct = f.get("bank_account", "")
+    shared = [m for m in ctx.master if m["account"] == acct and m["ifsc"].upper() == f.get("ifsc", "").upper() and m["pan"] != pan]
+    if shared:
+        o = shared[0]
+        add(R("R-RISK-02", "risk", FAIL, f"Bank account already on file for another vendor: {o['vendor_id']} {o['legal_name']}", "REVIEW",
+              {"other_vendor": o["vendor_id"], "other_name": o["legal_name"], "other_pan": V.mask_pan(o["pan"]), "status": o["status"]},
+              internal=(f"Account {V.mask_account(acct)} is already linked to {o['vendor_id']} {o['legal_name']} ({o['status']}). Possible causes: shared or third-party "
+                        "account, doctored cheque, collusion, or a data error. Verify with the bank before deciding."), fraud=True))
+    else:
+        add(R("R-RISK-02", "risk", PASS, "Bank account not used by any other vendor"))
+    dup = [m for m in ctx.master if m["pan"] == pan or m["gstin"] == gstin]
+    if dup:
+        add(R("R-RISK-03", "risk", FAIL, f"Already registered: {dup[0]['vendor_id']} {dup[0]['legal_name']}", "REVIEW", {"vendor": dup[0]["vendor_id"]},
+              vendor_text="", internal="Possible duplicate vendor record (risk of double payment)."))
+    if ctx.reused_files:
+        add(R("R-RISK-04", "risk", FAIL, "A document was already submitted by a different applicant", "REVIEW", {"reused": ctx.reused_files},
+              internal="Same file (SHA-256) in another vendor's application: possible template fraud.", fraud=True))
+
+    # Layer 8: MSME ------------------------------------------------------------------------------------
+    if f.get("msme") and udyam_doc:
+        un, leg = val(udyam_doc, "udyam_number")
+        okn = V.normalise_id(un or "") == V.normalise_id(f.get("udyam_no", ""))
+        etype = (val(udyam_doc, "enterprise_type")[0] or "").upper()
+        add(R("R-MSME-01", "msme", PASS if okn else FAIL, "Udyam number matches the certificate" if okn else "Udyam number differs from the certificate", "VENDOR",
+              {"form": f.get("udyam_no"), "certificate": un, "type": etype},
+              vendor_text="" if okn else f"The Udyam certificate you uploaded shows {un}, which doesn't match the number you entered ({f.get('udyam_no')}). Please check it."))
+        if any(t in etype for t in ("MICRO", "SMALL")):
+            add(R("R-MSME-02", "msme", WARN, f"{etype.title()} enterprise: pay within 15 days, or up to 45 days with a written agreement (MSMED Act s.15)", "WARN"))
+    return out
+
+
+def _xd(add, rule_id: str, title: str, m: M.IdMatch, slot: str, what: str, mismatch_text: str) -> None:
+    if m.status == M.MATCH:
+        add(R(rule_id, "consistency", PASS, f"{title}: match", evidence={"form": m.form_value, "document": m.doc_value}))
+    elif m.status == M.MATCH_CORRECTED:
+        add(R(rule_id, "consistency", PASS, f"{title}: match after correcting a misread", evidence={"form": m.form_value, "document": m.doc_value, "correction": m.detail}))
+    elif m.status in (M.UNREADABLE, M.MISSING):
+        add(R(rule_id, "consistency", FAIL, f"{title}: couldn't be read on the document", "VENDOR", {"detail": m.detail}, vendor_text=reupload(slot, what)))
+    else:
+        add(R(rule_id, "consistency", FAIL, f"{title}: different", "VENDOR", {"form": m.form_value, "document": m.doc_value}, vendor_text=mismatch_text))
+
+
+def _name(add, rule_id: str, title: str, r: M.NameResult | None, mismatch_outcome: str, slot: str, mismatch_text: str) -> None:
+    if not r:
+        add(R(rule_id, "names", SKIPPED, f"{title}: no name on the document"))
+    elif r.status == M.MATCH:
+        add(R(rule_id, "names", PASS, f"{title}: match ({r.score}{'; ' + r.note if r.note else ''})", evidence={"form": r.form_value, "document": r.doc_value, "score": r.score}))
+    elif r.status == M.PARTIAL:
+        add(R(rule_id, "names", WARN, f"{title}: partial match ({r.score})", "WARN", {"form": r.form_value, "document": r.doc_value, "score": r.score}))
+    elif r.status in (M.UNREADABLE, M.MISSING):
+        add(R(rule_id, "names", FAIL, f"{title}: couldn't be read", "VENDOR", vendor_text=reupload(slot, "name")))
+    else:
+        add(R(rule_id, "names", FAIL, f"{title}: different ({r.score})", mismatch_outcome, {"form": r.form_value, "document": r.doc_value, "score": r.score}, vendor_text=mismatch_text))

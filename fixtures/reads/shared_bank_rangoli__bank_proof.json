@@ -1,0 +1,50 @@
+{
+  "ok": true,
+  "read": {
+    "doc_type": "CANCELLED_CHEQUE",
+    "doc_type_evidence": "Axis Bank cheque bearing CANCELLED stamp and MICR line",
+    "document_form": "ORIGINAL_DIGITAL",
+    "document_form_evidence": "Crisp vector-like text, clean digital lines, no physical texture or camera traces",
+    "garbled_or_misspelled_text": [],
+    "visible_watermarks_or_logos": [],
+    "obscured_regions": [],
+    "integrity_notes": [],
+    "expected_elements_missing": [],
+    "fields": [
+      {
+        "name": "account_number",
+        "value": "918020045615678",
+        "evidence": "Current A/c No. 918020045615678",
+        "legibility": "clear"
+      },
+      {
+        "name": "ifsc",
+        "value": "UTIB0000008",
+        "evidence": "IFSC: UTIB0000008",
+        "legibility": "clear"
+      },
+      {
+        "name": "bank_name",
+        "value": "Axis Bank",
+        "evidence": "Axis Bank",
+        "legibility": "clear"
+      },
+      {
+        "name": "branch",
+        "value": "Hyderabad",
+        "evidence": "Branch: Hyderabad",
+        "legibility": "clear"
+      },
+      {
+        "name": "account_holder_name",
+        "value": "RANGOLI PRINT HOUSE PVT LTD",
+        "evidence": "RANGOLI PRINT HOUSE PVT LTD",
+        "legibility": "clear"
+      }
+    ]
+  },
+  "model": "gemini-3.5-flash-lite",
+  "seconds": 56.3,
+  "error": null,
+  "attempts": 1
+}

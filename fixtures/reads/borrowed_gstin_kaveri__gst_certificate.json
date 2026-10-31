@@ -1,0 +1,64 @@
+{
+  "ok": true,
+  "read": {
+    "doc_type": "GST_CERTIFICATE",
+    "doc_type_evidence": "Government of India Form GST REG-06 Registration Certificate",
+    "document_form": "SCREENSHOT",
+    "document_form_evidence": "The file is a digital screenshot of a PDF GST certificate, showing UI borders at the top and bottom with test specimen notices.",
+    "garbled_or_misspelled_text": [],
+    "visible_watermarks_or_logos": [],
+    "obscured_regions": [],
+    "integrity_notes": [
+      "Contains specimen and fictional test data notices at the top and bottom."
+    ],
+    "expected_elements_missing": [],
+    "fields": [
+      {
+        "name": "gstin",
+        "value": "27AAHCK5590L1ZX",
+        "evidence": "Registration Number : 27AAHCK5590L1ZX",
+        "legibility": "clear"
+      },
+      {
+        "name": "legal_name",
+        "value": "KAVERI AGRO FOODS PRIVATE LIMITED",
+        "evidence": "KAVERI AGRO FOODS PRIVATE LIMITED",
+        "legibility": "clear"
+      },
+      {
+        "name": "trade_name",
+        "value": null,
+        "evidence": null,
+        "legibility": "not_present"
+      },
+      {
+        "name": "constitution",
+        "value": "Private Limited Company",
+        "evidence": "Private Limited Company",
+        "legibility": "clear"
+      },
+      {
+        "name": "principal_address",
+        "value": "Gat No. 212, Chakan MIDC Phase II, Pune,\nMaharashtra, 410501",
+        "evidence": "Gat No. 212, Chakan MIDC Phase II, Pune,\nMaharashtra, 410501",
+        "legibility": "clear"
+      },
+      {
+        "name": "state",
+        "value": "Maharashtra",
+        "evidence": "Maharashtra, 410501",
+        "legibility": "clear"
+      },
+      {
+        "name": "issue_date",
+        "value": "25/07/2017",
+        "evidence": "25/07/2017",
+        "legibility": "clear"
+      }
+    ]
+  },
+  "model": "gemini-3.5-flash-lite",
+  "seconds": 38.1,
+  "error": null,
+  "attempts": 1
+}

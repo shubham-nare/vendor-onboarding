@@ -1,0 +1,35 @@
+{% extends "_base.html" %}
+{% block style %}
+  @page { size: 204mm 105mm; margin: 5mm; }
+  body { font-size: 9.5pt; }
+  .specimen { font-size: 6.5pt; padding: 1px 4px; margin-bottom: 4px; }
+  .foot { font-size: 6pt; margin-top: 3px; }
+  .chq { border: 1px solid #6b7f99; border-radius: 4px; height: 76mm; padding: 8px 12px; position: relative;
+         background: repeating-linear-gradient(45deg, #f4f8fc, #f4f8fc 6px, #eef3f9 6px, #eef3f9 12px); overflow: hidden; }
+  .bank { font-size: 13pt; font-weight: 700; color: #123d73; }
+  .br { font-size: 8pt; color: #333; }
+  .row { display: flex; justify-content: space-between; margin-top: 6px; }
+  .line { border-bottom: 1px solid #555; flex: 1; margin-left: 6px; height: 14px; }
+  .ac { margin-top: 10px; font-size: 10pt; }
+  .acbox { display: inline-block; border: 1px solid #555; padding: 2px 8px; letter-spacing: 1.5px; font-weight: 700; background: #fff; }
+  .sign { position: absolute; right: 16px; bottom: 30px; text-align: center; font-size: 8pt; }
+  .sign .who { font-weight: 700; font-size: 8.5pt; }
+  .micr { position: absolute; left: 0; right: 0; bottom: 6px; text-align: center; font-family: "Courier New", monospace;
+          font-size: 11pt; letter-spacing: 3px; }
+  .cancel { position: absolute; left: 8%; right: 30%; top: 40%; transform: rotate(-10deg); text-align: center;
+            border-top: 3px solid #b00; border-bottom: 3px solid #b00; color: #b00; font-size: 24pt; font-weight: 800; letter-spacing: 8px; opacity: .8; }
+{% endblock %}
+{% block body %}
+<div class="chq">
+  <div class="row" style="margin-top:0">
+    <div><div class="bank">{{ d.bank }}</div><div class="br">Branch: {{ d.branch }}</div></div>
+    <div style="text-align:right"><div class="br">IFSC: <b>{{ d.ifsc }}</b></div><div class="br">Date &nbsp;&nbsp; __ __ / __ __ / __ __ __ __</div></div>
+  </div>
+  <div class="row"><span>Pay</span><div class="line"></div><span style="margin-left:6px">or Bearer</span></div>
+  <div class="row"><span>Rupees</span><div class="line"></div><span style="margin-left:6px;border:1px solid #555;padding:0 30px">&#8377;</span></div>
+  <div class="ac">{{ d.type }} A/c No. <span class="acbox">{{ d.account }}</span></div>
+  <div class="sign"><div class="who">{{ d.holder }}</div><div>{{ "Authorised Signatory" if d.type == "Current" else "" }}</div></div>
+  <div class="cancel">CANCELLED</div>
+  <div class="micr">C004218C 5000{{ d.ifsc[-3:] }}0{{ d.account[-2:] }}A 000417C 10</div>
+</div>
+{% endblock %}

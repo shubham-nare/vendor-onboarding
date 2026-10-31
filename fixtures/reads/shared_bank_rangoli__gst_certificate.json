@@ -1,0 +1,64 @@
+{
+  "ok": true,
+  "read": {
+    "doc_type": "GST_CERTIFICATE",
+    "doc_type_evidence": "Government of India Form GST REG-06 Registration Certificate",
+    "document_form": "SCREENSHOT",
+    "document_form_evidence": "The file is an image of a digitally generated document without camera artifacts, presented with a clean software crop and red speculative banner typical of screenshots.",
+    "garbled_or_misspelled_text": [],
+    "visible_watermarks_or_logos": [],
+    "obscured_regions": [],
+    "integrity_notes": [
+      "Contains specifier text indicating fictional test data."
+    ],
+    "expected_elements_missing": [],
+    "fields": [
+      {
+        "name": "gstin",
+        "value": "36AAQCR6188B1ZZ",
+        "evidence": "Registration Number : 36AAQCR6188B1ZZ",
+        "legibility": "clear"
+      },
+      {
+        "name": "legal_name",
+        "value": "RANGOLI PRINT HOUSE PRIVATE LIMITED",
+        "evidence": "1. Legal Name RANGOLI PRINT HOUSE PRIVATE LIMITED",
+        "legibility": "clear"
+      },
+      {
+        "name": "trade_name",
+        "value": null,
+        "evidence": "2. Trade Name, if any",
+        "legibility": "not_present"
+      },
+      {
+        "name": "constitution",
+        "value": "Private Limited Company",
+        "evidence": "4. Constitution of Business Private Limited Company",
+        "legibility": "clear"
+      },
+      {
+        "name": "principal_address",
+        "value": "Unit 5, Plot 22, IDA Balanagar, Hyderabad, Telangana, 500037",
+        "evidence": "5. Address of Principal Place of Business Unit 5, Plot 22, IDA Balanagar, Hyderabad, Telangana, 500037",
+        "legibility": "clear"
+      },
+      {
+        "name": "state",
+        "value": "Telangana",
+        "evidence": "Jurisdictional Office: Telangana Range Office",
+        "legibility": "clear"
+      },
+      {
+        "name": "issue_date",
+        "value": "09/02/2018",
+        "evidence": "10. Date of issue of Certificate 09/02/2018",
+        "legibility": "clear"
+      }
+    ]
+  },
+  "model": "gemini-3.5-flash-lite",
+  "seconds": 49.8,
+  "error": null,
+  "attempts": 1
+}

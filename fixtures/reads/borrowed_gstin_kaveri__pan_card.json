@@ -1,0 +1,46 @@
+{
+  "ok": true,
+  "read": {
+    "doc_type": "PAN_CARD",
+    "doc_type_evidence": "Permanent Account Number Card",
+    "document_form": "ORIGINAL_DIGITAL",
+    "document_form_evidence": "Clean digital image generated with vector text and gradient background, no physical card or scanning artifacts.",
+    "garbled_or_misspelled_text": [],
+    "visible_watermarks_or_logos": [],
+    "obscured_regions": [],
+    "integrity_notes": [
+      "Test data disclaimer banner at the top and bottom.",
+      "Lacks photo, signature, QR code, and hologram typically found on physical PAN cards."
+    ],
+    "expected_elements_missing": [
+      "Photograph of the cardholder",
+      "Hologram",
+      "QR code",
+      "Signature"
+    ],
+    "fields": [
+      {
+        "name": "pan",
+        "value": "AAKFK7316M",
+        "evidence": "AAKFK7316M",
+        "legibility": "clear"
+      },
+      {
+        "name": "name_on_card",
+        "value": "KAVERI AGRO TRADERS",
+        "evidence": "KAVERI AGRO TRADERS",
+        "legibility": "clear"
+      },
+      {
+        "name": "date_on_card",
+        "value": "05/06/2012",
+        "evidence": "05/06/2012",
+        "legibility": "clear"
+      }
+    ]
+  },
+  "model": "gemini-3.5-flash-lite",
+  "seconds": 36.8,
+  "error": null,
+  "attempts": 1
+}

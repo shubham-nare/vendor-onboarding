@@ -1,0 +1,58 @@
+{
+  "ok": true,
+  "read": {
+    "doc_type": "CANCELLED_CHEQUE",
+    "doc_type_evidence": "CANCELLED text stamped over the cheque with ICICI Bank and IFSC details",
+    "document_form": "ORIGINAL_DIGITAL",
+    "document_form_evidence": "Crisp vector-like text and clean solid lines typical of a generated digital file.",
+    "garbled_or_misspelled_text": [],
+    "visible_watermarks_or_logos": [],
+    "obscured_regions": [],
+    "integrity_notes": [
+      "Contains specimen banner at the top and bottom."
+    ],
+    "expected_elements_missing": [],
+    "fields": [
+      {
+        "name": "bank_name",
+        "value": "ICICI Bank",
+        "evidence": "ICICI Bank",
+        "legibility": "clear"
+      },
+      {
+        "name": "branch",
+        "value": "Pune Bund Garden",
+        "evidence": "Branch: Pune Bund Garden",
+        "legibility": "clear"
+      },
+      {
+        "name": "ifsc",
+        "value": "ICIC0000005",
+        "evidence": "IFSC: ICIC0000005",
+        "legibility": "clear"
+      },
+      {
+        "name": "account_number",
+        "value": "000405112233",
+        "evidence": "Current A/c No. 000405112233",
+        "legibility": "clear"
+      },
+      {
+        "name": "account_holder_name",
+        "value": "KAVERI AGRO TRADERS",
+        "evidence": "KAVERI AGRO TRADERS",
+        "legibility": "clear"
+      },
+      {
+        "name": "account_type",
+        "value": "Current",
+        "evidence": "Current A/c No.",
+        "legibility": "clear"
+      }
+    ]
+  },
+  "model": "gemini-3.5-flash-lite",
+  "seconds": 45.1,
+  "error": null,
+  "attempts": 1
+}

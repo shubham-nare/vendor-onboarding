@@ -1,0 +1,62 @@
+{
+  "ok": true,
+  "read": {
+    "doc_type": "GST_CERTIFICATE",
+    "doc_type_evidence": "Form GST REG-06 Registration Certificate",
+    "document_form": "ORIGINAL_DIGITAL",
+    "document_form_evidence": "PDF contains native text layer and crisp vector graphics characteristic of digitally generated GST certificates.",
+    "garbled_or_misspelled_text": [],
+    "visible_watermarks_or_logos": [],
+    "obscured_regions": [],
+    "integrity_notes": [],
+    "expected_elements_missing": [],
+    "fields": [
+      {
+        "name": "gstin",
+        "value": "27PNEI00141B1DI",
+        "evidence": "Registration Number : 27PNEI00141B1DI",
+        "legibility": "clear"
+      },
+      {
+        "name": "legal_name",
+        "value": "INSPECTOR GENERAL OF REGISTRATION AND",
+        "evidence": "1. Legal Name INSPECTOR GENERAL OF REGISTRATION AND",
+        "legibility": "clear"
+      },
+      {
+        "name": "trade_name",
+        "value": null,
+        "evidence": null,
+        "legibility": "not_present"
+      },
+      {
+        "name": "constitution",
+        "value": "Government Department",
+        "evidence": "3. Constitution of Business Government Department",
+        "legibility": "clear"
+      },
+      {
+        "name": "principal_address",
+        "value": "GROUND FLOOR, NEW ADMIN BUILDING, OPP. COUNCIL HALL, CAMP ROAD, PUNE, Pune, Maharashtra, 411001",
+        "evidence": "4. Address of Principal Place of Business GROUND FLOOR, NEW ADMIN BUILDING, OPP. COUNCIL HALL, CAMP ROAD, PUNE, Pune, Maharashtra, 411001",
+        "legibility": "clear"
+      },
+      {
+        "name": "state",
+        "value": "Maharashtra",
+        "evidence": "Maharashtra, 411001",
+        "legibility": "clear"
+      },
+      {
+        "name": "issue_date",
+        "value": "04/12/2018",
+        "evidence": "9. Date of issue of Certificate 04/12/2018",
+        "legibility": "clear"
+      }
+    ]
+  },
+  "model": "gemini-3.5-flash-lite",
+  "seconds": 9.7,
+  "error": null,
+  "attempts": 1
+}

@@ -1,0 +1,23 @@
+{% extends "_base.html" %}
+{% block style %}
+  .hdr { text-align: center; } .hdr .t1 { font-size: 13pt; font-weight: 700; } .hdr .t2 { font-size: 11pt; font-weight: 700; margin-top: 8px; }
+  td.k { width: 40%; font-weight: 600; }
+{% endblock %}
+{% block body %}
+<div class="hdr">
+  <div class="t1">Government of India</div>
+  <div>Ministry of Micro, Small and Medium Enterprises</div>
+  <div class="t2">UDYAM REGISTRATION CERTIFICATE</div>
+</div>
+<table style="margin-top:12px">
+  <tr><td class="k">UDYAM REGISTRATION NUMBER</td><td><b>{{ d.number }}</b></td></tr>
+  <tr><td class="k">NAME OF ENTERPRISE</td><td>{{ d.name }}</td></tr>
+  <tr><td class="k">TYPE OF ENTERPRISE</td><td>{{ d.type | upper }} (Classification year 2026-27)</td></tr>
+  <tr><td class="k">MAJOR ACTIVITY</td><td>{{ d.activity | upper }}</td></tr>
+  <tr><td class="k">OFFICIAL ADDRESS OF ENTERPRISE</td><td>{{ d.address }}</td></tr>
+  <tr><td class="k">DATE OF INCORPORATION / REGISTRATION OF ENTERPRISE</td><td>{{ d.incorporated }}</td></tr>
+  <tr><td class="k">DATE OF UDYAM REGISTRATION</td><td>{{ d.registered_on }}</td></tr>
+  <tr><td class="k">NATIONAL INDUSTRY CLASSIFICATION CODE(S)</td><td>{{ d.nic }}</td></tr>
+</table>
+<p class="muted" style="font-size:9pt;margin-top:10px">Disclaimer: This is a computer generated statement, no signature required. (Specimen layout for testing.)</p>
+{% endblock %}

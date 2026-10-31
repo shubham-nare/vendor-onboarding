@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% from "_macros.html" import status_badge, tier_chip %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="flex items-end justify-between">
+  <div>
+    <h1 class="text-2xl font-semibold tracking-tight">Vendor onboarding</h1>
+    <p class="text-slate-500 text-sm mt-1">Every application a sponsor invited, checked document by document. Rules decide; AI only reads; people activate and confirm rejections.</p>
+  </div>
+  <a href="/invites" class="rounded-md bg-indigo-600 text-white text-sm px-4 py-2 hover:bg-indigo-700">+ Invite a vendor</a>
+</div>
+
+<div class="grid grid-cols-2 md:grid-cols-6 gap-3 mt-6">
+  {% for label, value, cls in [
+      ('Applications', stats.applications, 'text-slate-800'),
+      ('Active / approved', counts.ACTIVE + counts.APPROVED, 'text-emerald-700'),
+      ('Waiting on vendor', counts.PENDING_VENDOR, 'text-amber-700'),
+      ('Internal review', counts.PENDING_REVIEW, 'text-violet-700'),
+      ('Rejected', counts.REJECTED, 'text-rose-700'),
+      ('Fraud-class flags', stats.fraud, 'text-rose-700')] %}
+  <div class="bg-white rounded-xl border p-4">
+    <div class="text-xs text-slate-500">{{ label }}</div>
+    <div class="text-2xl font-semibold mt-1 {{ cls }}">{{ value }}</div>
+  </div>
+  {% endfor %}
+</div>
+<p class="text-xs text-slate-500 mt-2">{{ stats.runs }} runs · average time per run {{ stats.avg_seconds if stats.avg_seconds is not none else '–' }} s · {{ stats.first_pass }} approved on the first submission</p>
+
+<div class="grid xl:grid-cols-[1fr_330px] gap-6 mt-6">
+  <section class="bg-white rounded-xl border min-w-0">
+    <div class="px-4 py-3 border-b flex items-center justify-between">
+      <h2 class="font-semibold">Past runs</h2>
+      <span class="text-xs text-slate-500">newest first · click a row for the full reasoning</span>
+    </div>
+    {% if not runs %}
+      <p class="p-6 text-sm text-slate-500">No runs yet. Start one from "Try a scenario" on the right, or invite a vendor.</p>
+    {% else %}
+    <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="text-left text-xs text-slate-500 bg-slate-50">
+        <tr><th class="px-4 py-2">Ref</th><th class="px-2 py-2">Vendor</th><th class="px-2 py-2">Decision</th><th class="px-2 py-2">Now</th><th class="px-2 py-2">Risk</th><th class="px-2 py-2">Sponsor</th><th class="px-2 py-2">When</th><th class="px-2 py-2 text-right pr-4">Time</th></tr>
+      </thead>
+      <tbody class="divide-y">
+      {% for r in runs %}
+        <tr class="hover:bg-slate-50 cursor-pointer" onclick="location.href='/runs/{{ r.run.id }}'">
+          <td class="px-4 py-2 mono text-xs whitespace-nowrap">{{ r.app.ref }}{% if r.resubmission %}<span class="ml-1 text-[10px] text-indigo-600">resubmitted</span>{% endif %}</td>
+          <td class="px-2 py-2 min-w-[15rem]">{{ r.app.legal_name }}{% if r.fraud %} <span class="ml-1 whitespace-nowrap text-[10px] font-semibold text-rose-700 bg-rose-50 px-1 rounded">FRAUD CLASS</span>{% endif %}</td>
+          <td class="px-2 py-2">{% if r.run.state == 'done' %}{{ status_badge(r.run.status) }}{% elif r.run.state in ('failed', 'interrupted') %}<span class="text-xs text-rose-700">{{ r.run.state }}</span>{% else %}<span class="text-xs text-indigo-600">running…</span>{% endif %}</td>
+          <td class="px-2 py-2">{% if r.run.state == 'done' and r.app.current_status != r.run.status %}{{ status_badge(r.app.current_status) }}{% endif %}</td>
+          <td class="px-2 py-2">{{ tier_chip(r.run.risk_tier) }}</td>
+          <td class="px-2 py-2 text-xs text-slate-600 whitespace-nowrap">{{ r.sponsor or '—' }}</td>
+          <td class="px-2 py-2 text-xs text-slate-500 whitespace-nowrap">{{ r.run.started_at | dt }}</td>
+          <td class="px-2 py-2 text-xs text-slate-500 text-right pr-4 whitespace-nowrap">{{ '%.1f s' % r.seconds if r.seconds is not none else '' }}{% if r.reads == 'saved' %}<div class="text-[10px] text-amber-600">saved AI reading</div>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% endif %}
+  </section>
+
+  <section class="bg-white rounded-xl border">
+    <div class="px-4 py-3 border-b">
+      <h2 class="font-semibold">Try a scenario</h2>
+      <p class="text-xs text-slate-500 mt-0.5">Opens the vendor form through a fresh sponsor invite, pre-filled. You can swap in your own files before submitting.</p>
+    </div>
+    <ul class="divide-y">
+      {% for key, sc in catalog.items() if not sc.resubmission_of %}
+      <li class="px-4 py-3 flex items-start gap-3">
+        <div class="flex-1">
+          <div class="text-sm">{{ sc.title }}</div>
+          <div class="mt-1 flex items-center gap-2">{{ status_badge(sc.expected) }}<span class="text-[11px] text-slate-400">expected</span>
+            {% if sc.private %}<span class="whitespace-nowrap text-[10px] text-slate-500 bg-slate-100 rounded px-1">real-world test file</span>{% endif %}</div>
+        </div>
+        <a href="/demo/{{ key }}" class="shrink-0 text-xs rounded-md border px-2.5 py-1.5 hover:bg-slate-50">Open as vendor →</a>
+      </li>
+      {% endfor %}
+    </ul>
+    <p class="px-4 py-3 text-xs text-slate-500 border-t">Tejas's fix-and-resubmit happens from the vendor's own link after the first run asks for changes.</p>
+  </section>
+</div>
+{% endblock %}
