@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Create your vendor account' if mode == 'register' else 'Log in' }}{% endblock %}
+{% block content %}
+<div class="reveal max-w-md mx-auto">
+  <div class="kicker">Supplier portal</div>
+  <h1 class="text-[30px] sm:text-[36px] leading-tight mt-1">{{ 'Create your vendor account' if mode == 'register' else 'Welcome back' }}</h1>
+  {% if invite %}
+    <p class="mt-2 text-sm rounded-md bg-violet-50 border border-violet-200 p-3 text-violet-900"><b>{{ invite.sponsor.name if invite.sponsor else 'Someone' }}</b> at {{ BUYER.legal_name }} invited <b>{{ invite.company_name }}</b> to register. {{ 'Create an account to continue; you\'ll log in with it next time.' if mode == 'register' else 'Log in to continue.' }}</p>
+  {% else %}
+    <p class="text-slate-600 text-sm mt-2">{{ 'One account per supplier. You\'ll use it to register, track your status and send bills.' if mode == 'register' else 'Log in to see your registration and bills.' }}</p>
+  {% endif %}
+
+  {% if error %}<div class="mt-4 rounded-md bg-rose-50 border border-rose-200 p-3 text-sm text-rose-800" role="alert">{{ error }}</div>{% endif %}
+
+  <form method="post" action="/vendor/{{ mode }}" class="mt-5 bg-white rounded-xl border p-5 space-y-4 text-sm">
+    <input type="hidden" name="next" value="{{ next }}">
+    {% if mode == 'register' %}
+    <label class="block">Company name<input name="company_name" required value="{{ values.get('company_name', '') }}" autocomplete="organization" class="mt-1 w-full rounded-md border px-3 py-2.5"></label>
+    <label class="block">Your name<input name="contact_name" required value="{{ values.get('contact_name', '') }}" autocomplete="name" class="mt-1 w-full rounded-md border px-3 py-2.5"></label>
+    {% endif %}
+    <label class="block">Work email<input name="email" type="email" required value="{{ values.get('email', '') }}" autocomplete="email" class="mt-1 w-full rounded-md border px-3 py-2.5"></label>
+    <label class="block">Password<input name="password" type="password" required minlength="{{ 8 if mode == 'register' else 1 }}" autocomplete="{{ 'new-password' if mode == 'register' else 'current-password' }}" class="mt-1 w-full rounded-md border px-3 py-2.5">
+      {% if mode == 'register' %}<span class="block text-xs text-slate-500 mt-1">At least 8 characters. Stored only as a salted hash.</span>{% endif %}</label>
+    <button class="w-full rounded-md bg-indigo-600 text-white font-medium py-3 hover:bg-indigo-700 shadow-[3px_3px_0_rgba(28,27,24,.18)]">{{ 'Create account' if mode == 'register' else 'Log in' }}</button>
+  </form>
+  <p class="mt-4 text-sm text-center text-slate-600">
+    {% if mode == 'register' %}Already have an account? <a class="text-indigo-700 underline" href="/vendor/login?next={{ next | urlencode }}">Log in</a>
+    {% else %}New supplier? <a class="text-indigo-700 underline" href="/vendor/register?next={{ next | urlencode }}">Create an account</a>{% endif %}
+  </p>
+  <p class="mt-6 text-xs text-slate-500 text-center">Demo: no email is sent and there's no password reset; in production both come by email.</p>
+</div>
+{% endblock %}

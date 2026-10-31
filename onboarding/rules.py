@@ -603,6 +603,20 @@ def _bill_rules(add, ctx: Context, inv_doc: DocInfo | None) -> None:
               vendor_text="" if ok else (f"Your bill charges CGST + SGST, but you're in {s_name} and we're in {b_name}, so this is an inter-state supply and must "
                                          f"charge IGST instead. We can't claim the GST credit otherwise. Please send a corrected invoice.")))
 
+    # Payment details printed on the bill must point to the account we verified (bank-change fraud)
+    acct, aleg = val(inv_doc, "account_number")
+    on_file = f.get("bank_account", "")
+    if acct and aleg == "clear" and on_file:
+        am = M.compare_account(on_file, acct, aleg)
+        if am.status == M.MISMATCH:
+            add(R("R-BILL-10", "bill", FAIL, "The bill asks for payment to a different bank account than the one we verified", "REVIEW",
+                  {"on_bill": V.mask_account(acct), "verified": V.mask_account(on_file)},
+                  internal=(f"Bill shows account {V.mask_account(acct)}; the verified account is {V.mask_account(on_file)}. Changing bank details through an "
+                            "invoice is the most common vendor-payment fraud. Pay only the verified account; confirm any change by calling the vendor "
+                            "on a number we already have."), fraud=True))
+        else:
+            add(R("R-BILL-10", "bill", PASS, "Bank account on the bill is the verified one", {"on_bill": V.mask_account(acct)}))
+
     # Date
     dtxt, _ = val(inv_doc, "invoice_date")
     d = _parse_any_date(dtxt) or _parse_any_date(f.get("bill_invoice_date"))

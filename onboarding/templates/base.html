@@ -113,7 +113,7 @@
     /* ---- responsive ---- */
     .no-scrollbar { scrollbar-width: none; } .no-scrollbar::-webkit-scrollbar { display: none; }
     .fade-r { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); }
-    @media (min-width: 1280px) { .fade-r { -webkit-mask-image: none; mask-image: none; } }
+    @media (min-width: 1536px) { .fade-r { -webkit-mask-image: none; mask-image: none; } }
     @media (max-width: 639px) {
       /* iOS zooms into inputs under 16px */
       input:not([type=checkbox]):not([type=file]):not([type=radio]), select, textarea { font-size: 16px !important; }
@@ -134,7 +134,8 @@
   </style>
 </head>
 <body class="min-h-screen">
-  {% set vendor_page = path.startswith('/apply') or path.startswith('/status') or path.startswith('/bill') %}
+  {% set landing = path == '/' %}
+  {% set vendor_page = path.startswith('/apply') or path.startswith('/status') or path == '/bill' or path.startswith('/bill?') or path.startswith('/vendor') %}
   {% macro seal(size=34, light=false) -%}
     <svg width="{{ size }}" height="{{ size }}" viewBox="0 0 40 40" aria-hidden="true">
       <circle cx="20" cy="20" r="18.5" fill="none" stroke="#BD4826" stroke-width="1.5"/>
@@ -143,31 +144,46 @@
       <text x="20" y="24.6" text-anchor="middle" font-family="Newsreader, Georgia, serif" font-style="italic" font-size="13" fill="#FFFDF7">va</text>
     </svg>
   {%- endmacro %}
-  {% if vendor_page %}
+  {% if landing %}
+  <header class="border-b border-slate-200 bg-white/70 backdrop-blur">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 flex items-center gap-3">
+      {{ seal(32) }}
+      <div class="leading-tight"><div class="font-display text-lg">Vendor Assurance</div><div class="kicker !text-[10px]">{{ BUYER.legal_name }}</div></div>
+    </div>
+  </header>
+  {% elif vendor_page %}
   <header class="border-b border-slate-200 bg-white/70 backdrop-blur">
     <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 sm:py-3.5 flex items-center gap-3">
       {{ seal(30) }}
       <div class="leading-tight min-w-0">
         <div class="font-display text-[17px] sm:text-lg">Vendor Assurance</div>
-        <div class="kicker !text-[10px]">Supplier registration</div>
+        <div class="kicker !text-[10px]">Supplier portal</div>
       </div>
-      <a href="/" class="ml-auto shrink-0 py-2 text-xs text-slate-500 hover:text-slate-800 underline decoration-dotted underline-offset-4"><span class="hidden sm:inline">Internal console (demo)</span><span class="sm:hidden">Console</span> →</a>
+      {% if vendor_account %}
+      <div class="ml-auto flex items-center gap-3 min-w-0">
+        <a href="/vendor" class="hidden sm:block text-right leading-tight min-w-0"><span class="block text-[13px] font-medium truncate max-w-[16rem]">{{ vendor_account.company_name }}</span><span class="block text-[11px] text-slate-500 truncate max-w-[16rem]">{{ vendor_account.email }}</span></a>
+        <a href="/vendor" class="sm:hidden text-xs underline">My account</a>
+        <form method="post" action="/vendor/logout"><button class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs hover:border-slate-500">Log out</button></form>
+      </div>
+      {% else %}
+      <a href="/" class="ml-auto shrink-0 py-2 text-xs text-slate-500 hover:text-slate-800 underline decoration-dotted underline-offset-4">← Home</a>
+      {% endif %}
     </div>
   </header>
   {% else %}
   <header class="guilloche text-white">
-    <div class="max-w-7xl 2xl:max-w-[88rem] mx-auto px-4 sm:px-6 lg:px-8 pt-2.5 xl:py-3 flex flex-wrap xl:flex-nowrap items-center gap-x-4 xl:gap-x-8 gap-y-1">
-      <a href="/" class="flex items-center gap-2.5 sm:gap-3 shrink-0">
+    <div class="max-w-7xl 2xl:max-w-[88rem] mx-auto px-4 sm:px-6 lg:px-8 pt-2.5 2xl:py-3 flex flex-wrap 2xl:flex-nowrap items-center gap-x-4 2xl:gap-x-8 gap-y-1">
+      <a href="/console" class="flex items-center gap-2.5 sm:gap-3 shrink-0">
         {{ seal(34) }}
         <span class="leading-tight">
           <span class="block font-display text-[17px] sm:text-[19px] whitespace-nowrap">Vendor Assurance</span>
           <span class="hidden sm:block mono text-[10px] tracking-[.18em] uppercase text-slate-400">Onboarding register</span>
         </span>
       </a>
-      <nav id="mainnav" class="order-last xl:order-none w-full xl:w-auto -mx-4 px-4 sm:mx-0 sm:px-0 flex flex-nowrap overflow-x-auto no-scrollbar fade-r text-[13.5px]" aria-label="Main">
-        {% for href, label in [('/', 'Dashboard'), ('/invites', 'Invites'), ('/outbox', 'Outbox'), ('/check', 'Document check'), ('/assumptions', 'What is verified'), ('/system', 'System')] %}
-          {% set on = path == href %}
-          <a href="{{ href }}" class="shrink-0 whitespace-nowrap px-3 py-3 xl:py-2 border-b-2 {{ 'border-indigo-400 text-white' if on else 'border-transparent text-slate-300 hover:text-white' }}" {{ 'aria-current=page' if on }}>{{ label }}</a>
+      <nav id="mainnav" class="order-last 2xl:order-none w-full 2xl:w-auto -mx-4 px-4 sm:mx-0 sm:px-0 flex flex-nowrap overflow-x-auto no-scrollbar fade-r text-[13.5px]" aria-label="Main">
+        {% for href, label in [('/console', 'Dashboard'), ('/bills', 'Bills'), ('/vendors', 'Vendors'), ('/invites', 'Invites'), ('/outbox', 'Outbox'), ('/check', 'Document check'), ('/assumptions', 'What is verified'), ('/system', 'System')] %}
+          {% set on = path == href or (href != '/console' and path.startswith(href ~ '/')) %}
+          <a href="{{ href }}" class="shrink-0 whitespace-nowrap px-3 py-3 2xl:py-2 border-b-2 {{ 'border-indigo-400 text-white' if on else 'border-transparent text-slate-300 hover:text-white' }}" {{ 'aria-current=page' if on }}>{{ label }}</a>
         {% endfor %}
       </nav>
       {% if actor %}

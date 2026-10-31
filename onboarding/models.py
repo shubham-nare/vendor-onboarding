@@ -203,3 +203,58 @@ class SimRegistry(Base):
     key: Mapped[str] = mapped_column(String(40))
     data: Mapped[dict] = mapped_column(JSON)
     __table_args__ = (UniqueConstraint("kind", "key"),)
+
+
+class VendorAccount(Base):
+    """A vendor's login to the supplier portal. Passwords are stored only as salted scrypt hashes."""
+    __tablename__ = "vendor_accounts"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(200), unique=True, index=True)   # lower-case
+    password_hash: Mapped[str] = mapped_column(String(300))
+    company_name: Mapped[str] = mapped_column(String(200))
+    contact_name: Mapped[str] = mapped_column(String(120), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class VendorLink(Base):
+    """Ties an account to an invite it opened (before submitting) and to the application it created."""
+    __tablename__ = "vendor_links"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    account_id: Mapped[int] = mapped_column(ForeignKey("vendor_accounts.id"), index=True)
+    invite_id: Mapped[int | None] = mapped_column(ForeignKey("invites.id"), nullable=True)
+    application_id: Mapped[int | None] = mapped_column(ForeignKey("applications.id"), nullable=True, unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class VendorBill(Base):
+    """A bill from an ACTIVE vendor (after onboarding). Checked like the registration bill, confirmed by
+    the employee who engaged the vendor, then approved for payment by someone else."""
+    __tablename__ = "vendor_bills"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ref: Mapped[str] = mapped_column(String(20), unique=True, index=True)          # BILL-0001
+    account_id: Mapped[int] = mapped_column(ForeignKey("vendor_accounts.id"), index=True)
+    application_id: Mapped[int] = mapped_column(ForeignKey("applications.id"), index=True)
+    vendor_id: Mapped[str] = mapped_column(String(20), index=True)                 # V-1001
+    invoice_number: Mapped[str] = mapped_column(String(60))
+    invoice_date: Mapped[str] = mapped_column(String(20), default="")
+    amount: Mapped[str] = mapped_column(String(30))
+    description: Mapped[str] = mapped_column(Text, default="")
+    engaged_by_text: Mapped[str] = mapped_column(String(200), default="")
+    engaged_employee_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id"), nullable=True)
+    po_number: Mapped[str] = mapped_column(String(60), default="")
+    filename: Mapped[str] = mapped_column(String(255), default="")
+    sha256: Mapped[str] = mapped_column(ForeignKey("stored_files.sha256"))
+    read: Mapped[dict] = mapped_column(JSON, default=dict)
+    authenticity: Mapped[dict] = mapped_column(JSON, default=dict)
+    rules: Mapped[list] = mapped_column(JSON, default=list)
+    vendor_items: Mapped[list] = mapped_column(JSON, default=list)   # what the vendor must fix
+    fraud: Mapped[bool] = mapped_column(Boolean, default=False)
+    risk_tier: Mapped[str] = mapped_column(String(10), default="")
+    # checking | vendor_fix | for_review | awaiting_confirmation | ready_for_approval | approved | rejected | failed
+    status: Mapped[str] = mapped_column(String(30), default="checking")
+    confirmation: Mapped[str] = mapped_column(String(20), default="awaiting")      # awaiting | confirmed | denied
+    trail: Mapped[list] = mapped_column(JSON, default=list)          # [{at, who, role, action, comment}]
+    submissions: Mapped[int] = mapped_column(Integer, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

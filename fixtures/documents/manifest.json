@@ -146,5 +146,18 @@
         "actual_kind": "tax_invoice"
       }
     }
+  },
+  "extra": {
+    "expected": "",
+    "files": {
+      "kesari_bill_clean": {
+        "file": "extra/kesari_bill_clean.pdf",
+        "actual_kind": "tax_invoice"
+      },
+      "kesari_bill_newbank": {
+        "file": "extra/kesari_bill_newbank.pdf",
+        "actual_kind": "tax_invoice"
+      }
+    }
   }
 }

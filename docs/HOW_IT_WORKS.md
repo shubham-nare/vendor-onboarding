@@ -32,6 +32,26 @@ It also writes the vendor a clear message saying exactly what is needed.
 
 ---
 
+## 1b. Two front doors
+
+The home page (`/`) asks **"Who are you?"**:
+
+- **"I work at Vardhan Engineering"** → the internal console (`/console`): dashboard, runs, bills, vendors, invites. In production this sits behind the company's single sign-on. In the demo it's open, and the "Acting as" menu switches between employees.
+- **"I'm a vendor or supplier"** → the **supplier portal**:
+  - **Accounts:** a vendor **creates an account** (company, name, work email, password) and **logs in** on later visits.
+    - Passwords are stored only as salted **scrypt** hashes.
+    - The session is a signed, http-only cookie, valid for 14 days.
+    - Wrong-password errors don't reveal which emails have accounts.
+    - There's no password reset in the demo (email is blocked on the free host).
+  - **Home (`/vendor`):** the vendor's registration status in plain words, the messages we sent, the next step ("Update my registration" when we asked for something), their vendor ID once active, and their bills.
+  - **Two ways in, one account:**
+    - **invited:** the invite link asks them to create an account (company and email pre-filled from the invite), then opens the form;
+    - **no invite, has a bill:** "Register and submit your bill" (section 4).
+  - **Privacy:** a vendor only ever sees their own registration and bills.
+    - An application tied to an account opens only for that account.
+    - Another vendor gets "not found".
+  - **Demo shortcuts:** the console's "Try a scenario" list still opens the forms without a login, so reviewers can try cases quickly.
+
 ## 2. Who is involved
 
 | Role | In the demo | What they can do |
@@ -130,6 +150,35 @@ The design follows one principle: **a vendor can prove who they are, but only so
 6. **Payment:** never automatic. After activation the bill is "passed to accounts payable" and paid only once a purchase order is raised for the work and the receipt is recorded (outside this demo). The vendor is told the same in plain words.
 
 ---
+
+### Bills from active vendors (`/vendor/bills/new`)
+
+Once a vendor is active, it sends later bills from the portal without registering again. Each bill:
+
+1. **Is checked.** Gemini reads the invoice. Then the same bill rules (`R-BILL-01`…`09`) run against the vendor's **verified** record in the vendor master, plus document type and authenticity, plus:
+
+   | Rule | Check | If it fails |
+   |---|---|---|
+   | `R-BILL-10` | **The bank account printed on the bill is the one we verified.** Asking to be paid into a new account through an invoice is the most common vendor-payment fraud. | REVIEW, fraud class. Pay only the verified account; confirm any change by calling the vendor on a number we already have. |
+
+2. **Gets a status:**
+   - **Vendor to fix** (with the exact items; the vendor corrects and resubmits the same bill);
+   - **Internal review** (wrong seller, duplicate, bank change, unknown employee…);
+   - **Awaiting confirmation**.
+3. **Is confirmed** by the employee the vendor named ("Yes, I engaged this vendor for this work" or "No, I didn't"). Only that employee can answer. A "no" makes it fraud class.
+4. **Is approved for payment by someone else:**
+   - the employee who asked for the work can't approve it;
+   - **₹10 lakh or more, or any fraud signal:** only the Finance controller can approve;
+   - only the Finance controller can reject.
+5. **Is never paid from here.** "Approved for payment" means it goes on to purchase-order and goods-receipt matching.
+
+The company sees all of this on **Bills** (`/bills`) and each bill's page:
+- the vendor's verified profile (vendor ID, GSTIN, masked PAN, the account we pay into, how well each fact was proven at onboarding, a link to the onboarding run);
+- the reasons and every check;
+- what the AI read;
+- the actions, and the audit trail.
+
+**Vendors** (`/vendors`) lists every portal account and where it stands. The vendor sees only plain-language status: "with our team", "approved", or the items to fix.
 
 ## 5. Step 1: the vendor's form and documents
 
@@ -579,6 +628,7 @@ The dashboard's **Try a scenario** list starts each case through a fresh invite 
 | 5 | **Proprietorship, personal account:** Shinde Electricals | Account in the owner's name; accepted through the proprietorship branch of `R-NAME-03` | **Approved**, medium risk |
 | 6 | **Unsolicited application** (started from `/apply`, not from the scenario list) | No invite (`R-INV-01`) | **Pending: internal review** |
 | 7 | **Bill-first, clean:** Kesari Facility Services (Pune) | No invite; emergency cleaning bill of ₹1,25,670, correctly addressed with CGST + SGST; engaged by Priya Nair | **Approved**, medium risk → Arjun can't activate until Priya confirms → Priya can't approve → Arjun activates |
+| 9 | **Portal: later bills from Kesari (once active)** | "A normal monthly bill" (₹40,120) and "A bill asking for payment to a new bank account" (₹23,600; `R-BILL-10`) | Clean: awaiting confirmation → Priya confirms → Arjun approves. New bank: **internal review, fraud class**; only the Finance controller can decide |
 | 8 | **Bill-first, flawed bill:** Brindavan Cooling Systems (Bengaluru) | Charges CGST + SGST on a Karnataka → Maharashtra supply (needs IGST, `R-BILL-06`); amount typed ₹98,472 vs bill ₹94,872 (`R-BILL-04`) | **Pending: vendor to fix**, with both corrections explained |
 | — | Real-world files (only on Shubham's machine): hand-written PAN on paper, AI-generated PAN card, screenshot of a GST certificate | `AU-1`, `AU-2`, … | Vendor to fix or internal review |
 

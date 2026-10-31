@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Submit a bill{% endblock %}
+{% block content %}
+<div class="reveal max-w-3xl mx-auto">
+  <div class="kicker"><a href="/vendor" class="hover:text-slate-900">My account</a> / new bill</div>
+  <h1 class="text-[30px] sm:text-[38px] leading-tight mt-1">Submit a bill</h1>
+  <p class="text-slate-600 text-sm mt-2">Vendor <span class="mono">{{ vm.vendor_id }}</span> · address the invoice to <b>{{ BUYER.legal_name }}</b>, GSTIN <span class="mono">{{ BUYER.gstin }}</span>.</p>
+
+  {% if demo_bills %}
+  <div class="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-900">
+    <b>Demo:</b> fill in a sample bill for this fictional vendor:
+    <div class="mt-2 flex flex-wrap gap-2">
+      {% for key, d in demo_bills.items() %}<a href="/vendor/bills/new?demo={{ key }}" class="rounded-md border px-3 py-1.5 text-xs {{ 'bg-violet-700 text-white border-violet-700' if demo == key else 'bg-white border-violet-300 hover:border-violet-500' }}">{{ d.title }}</a>{% endfor %}
+    </div>
+    {% if demo %}<div class="text-xs mt-2">Leave the file empty to use <span class="mono">{{ demo_bills[demo].file }}</span>, or upload your own.</div>{% endif %}
+  </div>
+  {% endif %}
+
+  <div class="mt-5">
+    {% set action = '/vendor/bills/new' %}{% set button = 'Submit bill' %}
+    {% set file_note = ('demo: ' ~ demo_bills[demo].file) if demo else '' %}
+    {% include "_bill_form.html" %}
+  </div>
+</div>
+{% endblock %}

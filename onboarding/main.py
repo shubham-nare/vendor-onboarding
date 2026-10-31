@@ -64,6 +64,8 @@ async def readyz():
         return JSONResponse({"ok": False, "db": type(e).__name__}, status_code=503)
 
 
+from onboarding.portal import router as portal_router  # noqa: E402
 from onboarding.web import router  # noqa: E402
 
 app.include_router(router)
+app.include_router(portal_router)

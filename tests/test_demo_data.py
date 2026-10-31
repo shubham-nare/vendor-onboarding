@@ -63,7 +63,7 @@ def test_master_and_blocklist_ids_valid():
 
 def test_generated_documents_exist_for_every_scenario():
     manifest = json.loads((DOCS / "manifest.json").read_text(encoding="utf-8"))
-    assert set(manifest) == set(SCENARIOS)
+    assert set(manifest) == set(SCENARIOS) | {"extra"}  # "extra": loose documents such as later bills
     for key, m in manifest.items():
         for slot, info in m["files"].items():
             assert (DOCS / info["file"]).stat().st_size > 10_000, (key, slot)

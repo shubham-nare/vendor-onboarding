@@ -274,7 +274,8 @@ def tax_invoice(b: dict) -> dict:
     }
 
 
-def service_invoice(b: dict, *, invoice_no: str, date: str, lines: list[dict], igst: int = 0, cgst: int = 0, sgst: int = 0) -> dict:
+def service_invoice(b: dict, *, invoice_no: str, date: str, lines: list[dict], igst: int = 0, cgst: int = 0, sgst: int = 0,
+                    bank_line: str = "") -> dict:
     """A services tax invoice addressed to us (BUYER)."""
     return {
         "kind": "tax_invoice",
@@ -293,7 +294,7 @@ def service_invoice(b: dict, *, invoice_no: str, date: str, lines: list[dict], i
         "cgst": cgst,
         "sgst": sgst,
         "igst": igst,
-        "bank_line": f"Bank: {b['bank']['bank']}, A/c {b['bank']['account']}, IFSC {b['bank']['ifsc']}",
+        "bank_line": bank_line or f"Bank: {b['bank']['bank']}, A/c {b['bank']['account']}, IFSC {b['bank']['ifsc']}",
     }
 
 
@@ -438,6 +439,19 @@ SCENARIOS: dict[str, dict] = {
             "invoice": service_invoice(BRINDAVAN, invoice_no="BCS/26-27/0877", date="24/10/2026", lines=BRINDAVAN_LINES, cgst=9, sgst=9),
         },
     },
+}
+
+
+# Bills an ACTIVE Kesari sends later through the supplier portal (rendered to fixtures/documents/extra/).
+EXTRA_DOCUMENTS = {
+    "kesari_bill_clean": service_invoice(
+        KESARI, invoice_no="KFS/2026-27/0207", date="28/10/2026", cgst=9, sgst=9,
+        lines=[{"desc": "Housekeeping of Plant 2 canteen and washrooms, October 2026", "hsn": "998533", "qty": 1, "rate": 34000.00}]),
+    # Same vendor, but the bill asks to be paid into a NEW account: the classic bank-change fraud.
+    "kesari_bill_newbank": service_invoice(
+        KESARI, invoice_no="KFS/2026-27/0211", date="30/10/2026", cgst=9, sgst=9,
+        lines=[{"desc": "Pest control treatment, Plant 2 stores", "hsn": "998531", "qty": 1, "rate": 20000.00}],
+        bank_line="Bank details (NEW ACCOUNT, please update your records): Kotak Mahindra Bank, A/c 4613902788, IFSC KKBK0000721"),
 }
 
 

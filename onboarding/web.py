@@ -20,13 +20,15 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
 
-from onboarding import runner
+from urllib.parse import quote
+
+from onboarding import auth, runner
 from onboarding import validators as V
 from onboarding.authenticity.assess import assess
 from onboarding.config import get_settings
 from onboarding.demo_data import BUYER, SCENARIOS
 from onboarding.models import (Application, Bill, Document, Employee, Fact, HumanAction, Invite, Message, Run, RunEvent, RuleResult, StoredFile,
-                               VendorMaster, now)
+                               VendorAccount, VendorLink, VendorMaster, now)
 from onboarding.pipeline import STAGES, create_run, sessions, stages_for
 from onboarding.rules import BILL_HIGH_RISK, SLOT_LABEL, SLOT_TITLE, inr, money
 
@@ -54,9 +56,14 @@ router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 
-def _fmt_dt(d: datetime | None) -> str:
+def _fmt_dt(d: datetime | str | None) -> str:
     if not d:
         return ""
+    if isinstance(d, str):  # ISO timestamps stored in JSON (bill audit trails)
+        try:
+            d = datetime.fromisoformat(d)
+        except ValueError:
+            return d
     ist = (d if d.tzinfo else d.replace(tzinfo=timezone.utc)).astimezone(timezone(timedelta(hours=5, minutes=30)))
     return ist.strftime("%d %b, %H:%M IST")
 
@@ -98,7 +105,53 @@ async def _actor(request: Request, s) -> Employee | None:
 
 async def render(request: Request, s, name: str, **ctx) -> HTMLResponse:
     ctx.update(request=request, actor=await _actor(request, s), employees=await _employees(s), path=request.url.path)
+    if "vendor_account" not in ctx:
+        ctx["vendor_account"] = await vendor_account(request, s)
     return templates.TemplateResponse(request, name, ctx)
+
+
+# --- vendor portal sessions ---------------------------------------------------------------------
+async def vendor_account(request: Request, s) -> VendorAccount | None:
+    acct_id = auth.read_session(request.cookies.get(auth.COOKIE))
+    return await s.get(VendorAccount, acct_id) if acct_id else None
+
+
+def safe_next(nxt: str | None, default: str = "/vendor") -> str:
+    """Only local paths: never redirect a vendor to another site after login."""
+    return nxt if nxt and nxt.startswith("/") and not nxt.startswith("//") and "\\" not in nxt else default
+
+
+async def _needs_login(s, app: Application | None) -> bool:
+    """A new invite needs an account. An application already tied to an account needs that login.
+    One submitted as a guest (demo shortcut) stays reachable with its private link, as before."""
+    if app is None:
+        return True
+    return (await s.execute(select(VendorLink).where(VendorLink.application_id == app.id))).scalar_one_or_none() is not None
+
+
+def login_redirect(nxt: str, register: bool = False) -> RedirectResponse:
+    return RedirectResponse(f"/vendor/{'register' if register else 'login'}?next={quote(nxt)}", status_code=303)
+
+
+async def claim(s, acct: VendorAccount, *, invite: Invite | None = None, app: Application | None = None) -> VendorLink:
+    """Tie an invite and/or an application to the vendor's account (first account wins)."""
+    if app is not None:
+        link = (await s.execute(select(VendorLink).where(VendorLink.application_id == app.id))).scalar_one_or_none()
+        if link and link.account_id != acct.id:
+            raise HTTPException(403, "This registration belongs to another vendor account. Log in with that account.")
+        if link:
+            return link
+    if invite is not None:
+        link = (await s.execute(select(VendorLink).where(VendorLink.invite_id == invite.id))).scalars().first()
+        if link and link.account_id != acct.id:
+            raise HTTPException(403, "This invitation was already opened with another vendor account. Log in with that account.")
+        if link:
+            if app is not None and link.application_id is None:
+                link.application_id = app.id
+            return link
+    link = VendorLink(account_id=acct.id, invite_id=invite.id if invite else None, application_id=app.id if app else None)
+    s.add(link)
+    return link
 
 
 def demo_catalog() -> dict[str, dict]:
@@ -134,7 +187,7 @@ async def _latest_run(s, app_id: int) -> Run | None:
 
 
 # --- dashboard ----------------------------------------------------------------------------------
-@router.get("/", response_class=HTMLResponse)
+@router.get("/console", response_class=HTMLResponse)
 async def dashboard(request: Request):
     async with sessions()() as s:
         rows = (await s.execute(select(Run, Application).join(Application, Application.id == Run.application_id).order_by(Run.id.desc()).limit(200))).all()
@@ -166,7 +219,7 @@ async def dashboard(request: Request):
 
 @router.post("/act-as")
 async def act_as(request: Request, employee_id: int = Form(...)):
-    back = request.headers.get("referer") or "/"
+    back = request.headers.get("referer") or "/console"
     resp = RedirectResponse(back, status_code=303)
     resp.set_cookie("actor", str(employee_id), max_age=60 * 60 * 24 * 30, samesite="lax")
     return resp
@@ -257,6 +310,12 @@ async def _resolve_employee(s, text: str) -> Employee | None:
 async def apply_form(request: Request, token: str, demo: str = ""):
     async with sessions()() as s:
         inv, bill, app = await _vendor_link(s, token)
+        acct = await vendor_account(request, s)
+        if not acct and not demo and await _needs_login(s, app):
+            return login_redirect(f"/apply/{token}", register=app is None)
+        if acct:
+            await claim(s, acct, invite=inv, app=app)
+            await s.commit()
         prev, message = None, None
         if app:
             prev = await _latest_run(s, app.id)
@@ -264,13 +323,18 @@ async def apply_form(request: Request, token: str, demo: str = ""):
                 return RedirectResponse(f"/status/{token}", status_code=303)
             message = (await s.execute(select(Message).where(Message.run_id == prev.id, Message.audience == "vendor"))).scalars().first()
         prev_docs = {d.slot: d for d in (await s.execute(select(Document).where(Document.run_id == prev.id))).scalars()} if prev else {}
+        start = {"legal_name": inv.company_name, "contact_email": inv.contact_email} if inv else {}
+        if acct and not prev:
+            start = {"legal_name": start.get("legal_name") or acct.company_name, "contact_name": acct.contact_name, "contact_email": acct.email}
         return await render(request, s, "apply.html", invite=inv, bill=bill, token=token, app=app, prev=prev, prev_docs=prev_docs, message=message,
-                            **_form_context(demo, prev.form if prev else {"legal_name": inv.company_name, "contact_email": inv.contact_email}))
+                            **_form_context(demo, prev.form if prev else start))
 
 
 @router.get("/apply", response_class=HTMLResponse)
 async def apply_unsolicited(request: Request, demo: str = ""):
     async with sessions()() as s:
+        if not demo and not await vendor_account(request, s):
+            return login_redirect("/apply")
         return await render(request, s, "apply.html", invite=None, bill=None, token="", app=None, prev=None, prev_docs={}, message=None, **_form_context(demo, {}))
 
 
@@ -278,8 +342,14 @@ async def apply_unsolicited(request: Request, demo: str = ""):
 async def bill_form(request: Request, demo: str = ""):
     """Self-registration for a vendor who already did work for us and wants to be paid."""
     async with sessions()() as s:
+        acct = await vendor_account(request, s)
+        if not demo and not acct:
+            return login_redirect("/bill", register=True)
+        start = {"bill_mode": True}
+        if acct:
+            start |= {"legal_name": acct.company_name, "contact_name": acct.contact_name, "contact_email": acct.email}
         return await render(request, s, "apply.html", invite=None, bill=None, bill_mode=True, token="", app=None, prev=None, prev_docs={},
-                            message=None, **_form_context(demo, {"bill_mode": True}))
+                            message=None, **_form_context(demo, start))
 
 
 def _form_context(demo: str, values: dict) -> dict:
@@ -341,6 +411,11 @@ async def apply_submit(request: Request, token: str):
     form, files, demo = await _collect_form(request)
     async with sessions()() as s:
         inv, bill, app = await _vendor_link(s, token)
+        acct = await vendor_account(request, s)
+        if not acct and not demo and await _needs_login(s, app):
+            return login_redirect(f"/apply/{token}")
+        if acct:
+            await claim(s, acct, invite=inv, app=app)
         if bill and bill.confirmation == "awaiting":
             emp = await _resolve_employee(s, form.get("bill_engaged_by", ""))
             bill.engaged_by_text, bill.engaged_employee_id = form.get("bill_engaged_by", ""), emp.id if emp else None
@@ -357,8 +432,17 @@ async def apply_submit(request: Request, token: str):
         run = await create_run(s, form, files, invite_token=token if inv else None, parent_run_id=parent)
         if app:
             app.current_status = "IN_PROGRESS"
-            await s.commit()
+        if acct:
+            await claim(s, acct, invite=inv, app=await s.get(Application, run.application_id))
+        await s.commit()
     runner.start(run.id)
+    return _after_submit(run, acct, demo)
+
+
+def _after_submit(run: Run, acct: VendorAccount | None, demo: str) -> RedirectResponse:
+    """Portal vendors go back to their portal; demo shortcuts open the internal live view."""
+    if acct and not demo:
+        return RedirectResponse(f"/vendor?submitted={run.id}", status_code=303)
     return RedirectResponse(f"/runs/{run.id}?from=vendor", status_code=303)
 
 
@@ -370,13 +454,18 @@ async def bill_submit(request: Request):
         form.setdefault(k, "")
     files = _fill_files(files, demo, {}, form)
     async with sessions()() as s:
+        acct = await vendor_account(request, s)
+        if not acct and not demo:
+            return login_redirect("/bill")
         run = await create_run(s, form, files, invite_token=None)
         emp = await _resolve_employee(s, form.get("bill_engaged_by", ""))
         s.add(Bill(application_id=run.application_id, token=secrets.token_urlsafe(18), engaged_by_text=form.get("bill_engaged_by", ""),
                    engaged_employee_id=emp.id if emp else None))
+        if acct:
+            await claim(s, acct, app=await s.get(Application, run.application_id))
         await s.commit()
     runner.start(run.id)
-    return RedirectResponse(f"/runs/{run.id}?from=vendor", status_code=303)
+    return _after_submit(run, acct, demo)
 
 
 @router.post("/apply")
@@ -384,9 +473,15 @@ async def apply_unsolicited_submit(request: Request):
     form, files, demo = await _collect_form(request)
     files = _fill_files(files, demo, {}, form)
     async with sessions()() as s:
+        acct = await vendor_account(request, s)
+        if not acct and not demo:
+            return login_redirect("/apply")
         run = await create_run(s, form, files, invite_token=None)
+        if acct:
+            await claim(s, acct, app=await s.get(Application, run.application_id))
+            await s.commit()
     runner.start(run.id)
-    return RedirectResponse(f"/runs/{run.id}?from=vendor", status_code=303)
+    return _after_submit(run, acct, demo)
 
 
 @router.get("/status/{token}", response_class=HTMLResponse)

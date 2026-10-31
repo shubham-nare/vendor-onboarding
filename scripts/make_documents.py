@@ -20,7 +20,7 @@ sys.path.insert(0, str(ROOT))
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined  # noqa: E402
 
-from onboarding.demo_data import SCENARIOS  # noqa: E402
+from onboarding.demo_data import EXTRA_DOCUMENTS, SCENARIOS  # noqa: E402
 
 TEMPLATES = ROOT / "fixtures" / "doc_templates"
 OUT = ROOT / "fixtures" / "documents"
@@ -75,7 +75,7 @@ def main() -> None:
     (re-rendering changes the files' bytes, which invalidates their saved AI readings)."""
     env = Environment(loader=FileSystemLoader(TEMPLATES), undefined=StrictUndefined, autoescape=True)
     only = set(sys.argv[1:])
-    unknown = only - set(SCENARIOS)
+    unknown = only - set(SCENARIOS) - {"extra"}
     if unknown:
         sys.exit(f"Unknown scenario(s): {', '.join(sorted(unknown))}")
     manifest: dict[str, dict] = {}
@@ -99,6 +99,17 @@ def main() -> None:
                 files[slot] = {"file": str(path.relative_to(OUT)).replace("\\", "/"), "actual_kind": doc["kind"]}
                 print(f"  {key:26} {slot:18} -> {path.name} ({path.stat().st_size // 1024} KB, really a {doc['kind']})")
             manifest[key] = {"expected": sc["expected"], "files": files}
+        if not only or "extra" in only:  # loose documents (e.g. later bills), one folder
+            folder = OUT / "extra"
+            if folder.exists():
+                shutil.rmtree(folder)
+            folder.mkdir()
+            files = {}
+            for name, doc in EXTRA_DOCUMENTS.items():
+                path = render(env, doc, folder / name, profile)
+                files[name] = {"file": str(path.relative_to(OUT)).replace("\\", "/"), "actual_kind": doc["kind"]}
+                print(f"  extra                      {name:18} -> {path.name}")
+            manifest["extra"] = {"expected": "", "files": files}
     (OUT / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     print(f"Done: {sum(len(m['files']) for m in manifest.values())} documents in {OUT}")
 
