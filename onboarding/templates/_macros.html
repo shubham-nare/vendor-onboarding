@@ -1,29 +1,43 @@
 {% macro status_badge(status, size='sm') -%}
-  {% set c = {'APPROVED': 'bg-emerald-100 text-emerald-800 ring-emerald-200', 'ACTIVE': 'bg-emerald-600 text-white ring-emerald-700',
-              'PENDING_VENDOR': 'bg-amber-100 text-amber-800 ring-amber-200', 'PENDING_REVIEW': 'bg-violet-100 text-violet-800 ring-violet-200',
-              'REJECTED': 'bg-rose-100 text-rose-800 ring-rose-200'}.get(status, 'bg-slate-100 text-slate-600 ring-slate-200') %}
-  <span class="inline-flex items-center rounded-full ring-1 {{ c }} {{ 'px-3 py-1 text-sm' if size == 'lg' else 'px-2 py-0.5 text-xs' }} font-medium whitespace-nowrap">{{ STATUS_LABEL.get(status, status) }}</span>
+  {% set c = {'APPROVED': 'text-emerald-700 bg-emerald-50', 'ACTIVE': 'text-white bg-emerald-600 !border-emerald-600',
+              'PENDING_VENDOR': 'text-amber-700 bg-amber-50', 'PENDING_REVIEW': 'text-violet-600 bg-violet-50',
+              'REJECTED': 'text-rose-600 bg-rose-50'}.get(status, 'text-slate-500 bg-slate-50') %}
+  <span class="tag {{ c }} {{ '!text-xs !px-2 !py-0.5' if size == 'lg' }}">{{ STATUS_LABEL.get(status, status) }}</span>
 {%- endmacro %}
 
 {% macro level_chip(level) -%}
-  {% set c = {'A0': 'bg-slate-100 text-slate-600 ring-slate-300', 'A1': 'bg-sky-50 text-sky-800 ring-sky-200', 'A2': 'bg-blue-100 text-blue-800 ring-blue-300',
-              'A3': 'bg-indigo-600 text-white ring-indigo-700', 'A4': 'bg-emerald-600 text-white ring-emerald-700'}.get(level, 'bg-slate-100') %}
-  <span class="inline-flex items-center gap-1 whitespace-nowrap rounded-md ring-1 px-1.5 py-0.5 text-xs font-semibold {{ c }}" title="{{ LEVEL_NAMES.get(level, '') }}">{{ level }} <span class="font-normal">{{ LEVEL_NAMES.get(level, '') }}</span></span>
+  {% set n = (level[1:] | int) if level and level[1:].isdigit() else 0 %}
+  {% set c = {'A0': 'text-slate-400', 'A1': 'text-sky-800', 'A2': 'text-blue-800', 'A3': 'text-indigo-600', 'A4': 'text-emerald-600'}.get(level, 'text-slate-400') %}
+  <span class="ladder {{ c }}" title="{{ level }}: {{ LEVEL_NAMES.get(level, '') }}">
+    <span class="bars" aria-hidden="true">{% for i in range(5) %}<i class="{{ 'on' if i <= n }}"></i>{% endfor %}</span>
+    <b>{{ level }}</b><span>{{ LEVEL_NAMES.get(level, '') }}</span>
+  </span>
 {%- endmacro %}
 
 {% macro result_chip(result) -%}
-  {% set c = {'PASS': 'text-emerald-700 bg-emerald-50', 'FAIL': 'text-rose-700 bg-rose-50', 'WARN': 'text-amber-700 bg-amber-50',
-              'SKIPPED': 'text-slate-500 bg-slate-100', 'ERROR': 'text-violet-700 bg-violet-50'}.get(result, '') %}
-  <span class="inline-block w-14 text-center rounded px-1 py-0.5 text-[11px] font-semibold {{ c }}">{{ result }}</span>
+  {% set c = {'PASS': 'text-emerald-700', 'FAIL': 'text-rose-600', 'WARN': 'text-amber-700', 'SKIPPED': 'text-slate-400', 'ERROR': 'text-violet-600'}.get(result, '') %}
+  <span class="tag {{ c }} !text-[9.5px] w-[54px] justify-center">{{ result }}</span>
 {%- endmacro %}
 
 {% macro severity_chip(sev) -%}
-  {% set c = {'info': 'bg-slate-100 text-slate-600', 'warn': 'bg-amber-100 text-amber-800', 'vendor': 'bg-orange-100 text-orange-800',
-              'review': 'bg-violet-100 text-violet-800', 'fraud': 'bg-rose-600 text-white'}.get(sev, 'bg-slate-100') %}
-  <span class="inline-block shrink-0 self-start rounded px-1.5 py-0.5 text-[11px] font-semibold uppercase {{ c }}">{{ sev }}</span>
+  {% set c = {'info': 'text-slate-500', 'warn': 'text-amber-700', 'vendor': 'text-orange-800', 'review': 'text-violet-600', 'fraud': 'text-white bg-rose-600 !border-rose-600'}.get(sev, 'text-slate-500') %}
+  <span class="tag {{ c }} !text-[9.5px] shrink-0 self-start mt-px">{{ sev }}</span>
 {%- endmacro %}
 
 {% macro tier_chip(tier) -%}
-  {% set c = {'low': 'text-emerald-700 bg-emerald-50 ring-emerald-200', 'medium': 'text-amber-700 bg-amber-50 ring-amber-200', 'high': 'text-rose-700 bg-rose-50 ring-rose-200'}.get(tier, 'text-slate-500 bg-slate-50 ring-slate-200') %}
-  {% if tier %}<span class="inline-block whitespace-nowrap rounded-full ring-1 px-2 py-0.5 text-xs {{ c }}">{{ tier }} risk</span>{% endif %}
+  {% set c = {'low': 'text-emerald-700', 'medium': 'text-amber-700', 'high': 'text-rose-600'}.get(tier, 'text-slate-500') %}
+  {% if tier %}<span class="inline-flex items-center gap-1.5 text-xs whitespace-nowrap {{ c }}"><span class="h-2 w-2 rounded-full bg-current"></span>{{ tier }} risk</span>{% endif %}
+{%- endmacro %}
+
+{% macro icon(name, cls='h-4 w-4') -%}
+  {% set paths = {
+    'lock': '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+    'check': '<path d="M5 12.5l4.2 4.2L19 7"/>',
+    'alert': '<path d="M12 8v5"/><path d="M12 16.5v.01"/>',
+    'arrow': '<path d="M5 12h14"/><path d="M13 6l6 6-6 6"/>',
+    'doc': '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>',
+    'plus': '<path d="M12 5v14"/><path d="M5 12h14"/>',
+    'shield': '<path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="M9 12l2 2 4-4"/>',
+  } %}
+  <svg class="{{ cls }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{{ paths.get(name, '') | safe }}</svg>
 {%- endmacro %}

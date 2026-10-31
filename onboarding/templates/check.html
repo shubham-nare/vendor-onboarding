@@ -2,7 +2,9 @@
 {% from "_macros.html" import level_chip, severity_chip %}
 {% block title %}Document check{% endblock %}
 {% block content %}
-<h1 class="text-2xl font-semibold tracking-tight">Document check</h1>
+<div class="reveal">
+<div class="kicker">Forensics, no AI</div>
+<h1 class="text-[38px] leading-tight mt-1">Document check</h1>
 <p class="text-slate-500 text-sm mt-1 max-w-3xl">Checks a file on its own, without the AI: the digital signature (GST certificates from the portal are signed by GSTN), what software made or re-saved it, how many times it was saved, and image details. Upload two files to compare them side by side, e.g. a genuine certificate and an edited copy.</p>
 
 <form method="post" action="/check" enctype="multipart/form-data" class="mt-5 bg-white rounded-xl border p-4 flex flex-wrap items-center gap-4 text-sm">
@@ -14,7 +16,7 @@
 </form>
 <p class="text-xs text-slate-500 mt-2">Sample: a real GST registration certificate published by the Office of the IGR Maharashtra, signed by GSTN (public document). It's used only to show the signature check.</p>
 
-<div class="mt-6 grid gap-4 {{ 'md:grid-cols-2' if results | length > 1 }} {{ 'lg:grid-cols-3' if results | length > 2 }}">
+<div class="mt-6 grid grid-cols-1 gap-4 {{ 'md:grid-cols-2' if results | length > 1 }} {{ 'lg:grid-cols-3' if results | length > 2 }}">
 {% for r in results %}
   {% set a = r.auth %}
   {% set sig = a.signature %}
@@ -23,7 +25,15 @@
       <div class="font-medium text-sm break-all">{{ r.filename }}</div>
       {{ level_chip(a.level) }}
     </div>
-    <div class="text-xs text-slate-500 mt-0.5">{{ r.mime }} · {{ (r.size / 1024) | round(1) }} KB</div>
+    <div class="mono text-[11px] text-slate-500 mt-0.5">{{ r.mime }} · {{ (r.size / 1024) | round(1) }} KB</div>
+    {% set fraud = a.worst == 'fraud' %}
+    <div class="mt-5 mb-1">
+      {% if sig.present and sig.intact and sig.valid %}<span class="stamp stamp-land text-emerald-600 text-[17px]">Signature verified<span class="text-[9px] tracking-[.12em] border-l-2 border-current pl-2 leading-tight">GSTN<br>{{ sig.signed_at | sigdate }}</span></span>
+      {% elif sig.present %}<span class="stamp stamp-land text-rose-600 text-[17px]">Signature broken</span>
+      {% elif fraud %}<span class="stamp stamp-land text-rose-600 text-[17px]">Likely edited<span class="text-[9px] tracking-[.12em] border-l-2 border-current pl-2 leading-tight">no<br>signature</span></span>
+      {% elif a.facts.kind == 'pdf' %}<span class="stamp stamp-land text-amber-600 text-[17px]">No signature</span>
+      {% else %}<span class="stamp stamp-land text-slate-500 text-[17px]">Image · unsigned</span>{% endif %}
+    </div>
 
     <div class="mt-4 rounded-lg p-3 text-sm {{ 'bg-emerald-50 border border-emerald-200' if sig.present and sig.intact and sig.valid else ('bg-rose-50 border border-rose-200' if sig.present else 'bg-slate-50 border') }}">
       <div class="font-medium">Digital signature</div>
@@ -64,5 +74,6 @@
     </div>
   </div>
 {% endfor %}
+</div>
 </div>
 {% endblock %}

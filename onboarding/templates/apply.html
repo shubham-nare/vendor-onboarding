@@ -1,18 +1,21 @@
 {% extends "base.html" %}
 {% block title %}Register as a vendor{% endblock %}
 {% block content %}
+<div class="reveal">
 {% set v = values %}
 <div class="max-w-3xl mx-auto">
   {% if invite %}
-    <h1 class="text-2xl font-semibold tracking-tight">{{ 'Update your registration' if prev else 'Register as a vendor' }}</h1>
+    <div class="kicker">Invitation{% if app %} · {{ app.ref }}{% endif %}</div>
+    <h1 class="text-[38px] leading-tight mt-1">{{ 'Update your registration' if prev else 'Register as a vendor' }}</h1>
     <p class="text-slate-500 text-sm mt-1"><b>{{ invite.sponsor.name }}</b> ({{ invite.sponsor.department }}) invited <b>{{ invite.company_name }}</b> to register as a supplier.{% if app %} Reference <span class="mono">{{ app.ref }}</span>.{% endif %}</p>
   {% else %}
-    <h1 class="text-2xl font-semibold tracking-tight">Register as a vendor</h1>
+    <div class="kicker">No invitation</div>
+    <h1 class="text-[38px] leading-tight mt-1">Register as a vendor</h1>
     <p class="text-sm mt-2 rounded-md bg-amber-50 border border-amber-200 p-3 text-amber-900">You're applying without an invitation link. We'll review your application manually; it can't be approved automatically.</p>
   {% endif %}
 
   {% if demo %}
-  <div class="mt-4 rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-sm text-indigo-900">
+  <div class="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-900">
     <b>Demo:</b> "{{ demo_title }}". The form is pre-filled. Files left empty below are taken from the scenario:
     <ul class="mt-1 text-xs mono">{% for slot, fn in demo_files.items() %}<li>{{ SLOT_TITLE.get(slot, slot) }} → {{ fn }}</li>{% endfor %}</ul>
     <div class="text-xs mt-1">Upload your own file in any slot to replace it (e.g. a phone photo).</div>
@@ -21,8 +24,8 @@
 
   {% if prev and message %}
   <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
-    <div class="text-xs uppercase tracking-wide text-amber-700">What we need from you</div>
-    <pre class="mt-2 whitespace-pre-wrap text-sm text-slate-800 font-sans">{{ message.body }}</pre>
+    <div class="kicker !text-amber-700">What we need from you</div>
+    <pre class="mt-2 whitespace-pre-wrap font-display text-[16px] leading-relaxed text-slate-800">{{ message.body }}</pre>
   </div>
   {% endif %}
 
@@ -31,7 +34,7 @@
     <input type="hidden" name="country" value="{{ v.get('country', 'India') }}">
 
     <section class="bg-white rounded-xl border p-5">
-      <h2 class="font-semibold">Business</h2>
+      <h2 class="text-xl flex items-baseline gap-3"><span class="mono text-[12px] text-indigo-600 tracking-widest">01</span>Business</h2>
       <div class="grid md:grid-cols-2 gap-4 mt-4 text-sm">
         <label class="block">Type of business
           <select name="business_type" id="bt" class="mt-1 w-full rounded-md border px-2 py-2" onchange="toggleType()">
@@ -48,7 +51,7 @@
     </section>
 
     <section class="bg-white rounded-xl border p-5">
-      <h2 class="font-semibold">Address &amp; contact</h2>
+      <h2 class="text-xl flex items-baseline gap-3"><span class="mono text-[12px] text-indigo-600 tracking-widest">02</span>Address &amp; contact</h2>
       <div class="grid md:grid-cols-2 gap-4 mt-4 text-sm">
         <label class="block md:col-span-2">Registered address<input name="address" value="{{ v.get('address', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
         <label class="block">City<input name="city" value="{{ v.get('city', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
@@ -66,7 +69,7 @@
     </section>
 
     <section class="bg-white rounded-xl border p-5">
-      <h2 class="font-semibold">Bank account for payments</h2>
+      <h2 class="text-xl flex items-baseline gap-3"><span class="mono text-[12px] text-indigo-600 tracking-widest">03</span>Bank account for payments</h2>
       <div class="grid md:grid-cols-3 gap-4 mt-4 text-sm">
         <label class="block">Account holder name<input name="bank_holder" value="{{ v.get('bank_holder', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
         <label class="block">Account number<input name="bank_account" value="{{ v.get('bank_account', '') }}" class="mt-1 w-full rounded-md border px-3 py-2 mono"></label>
@@ -77,7 +80,7 @@
     </section>
 
     <section class="bg-white rounded-xl border p-5">
-      <h2 class="font-semibold">Documents</h2>
+      <h2 class="text-xl flex items-baseline gap-3"><span class="mono text-[12px] text-indigo-600 tracking-widest">04</span>Documents</h2>
       <p class="text-xs text-slate-500 mt-1">PDF, JPG or PNG, up to 10 MB each. Please upload the original files: the GST certificate as downloaded from the GST portal, and clear photos or scans of the PAN card and a cancelled cheque.</p>
       <div class="mt-4 space-y-3 text-sm">
         {% for slot in ['gst_certificate', 'pan_card', 'bank_proof', 'udyam_certificate'] %}
@@ -98,7 +101,7 @@
 
     <div class="flex items-center justify-between">
       <p class="text-xs text-slate-500 max-w-md">By submitting you confirm these details are correct. We check them against your documents and official sources; you'll hear back on this page.</p>
-      <button type="submit" class="rounded-md bg-indigo-600 text-white px-6 py-2.5 hover:bg-indigo-700">{{ 'Resubmit' if prev else 'Submit for verification' }}</button>
+      <button type="submit" class="rounded-md bg-indigo-600 text-white font-medium px-6 py-3 hover:bg-indigo-700 shadow-[3px_3px_0_rgba(28,27,24,.18)]">{{ 'Resubmit' if prev else 'Submit for verification' }}</button>
     </div>
   </form>
 </div>
@@ -111,4 +114,5 @@ function toggleType() {
 }
 toggleType();
 </script>
+</div>
 {% endblock %}

@@ -1,56 +1,64 @@
 {% extends "base.html" %}
-{% from "_macros.html" import status_badge, tier_chip %}
+{% from "_macros.html" import status_badge, tier_chip, icon %}
 {% block title %}Dashboard{% endblock %}
 {% block content %}
-<div class="flex items-end justify-between">
+<div class="reveal">
+<div class="flex flex-wrap items-end justify-between gap-4">
   <div>
-    <h1 class="text-2xl font-semibold tracking-tight">Vendor onboarding</h1>
-    <p class="text-slate-500 text-sm mt-1">Every application a sponsor invited, checked document by document. Rules decide; AI only reads; people activate and confirm rejections.</p>
+    <div class="kicker">Internal console</div>
+    <h1 class="text-[42px] leading-[1.05] mt-1">The onboarding <em class="text-indigo-600">register</em></h1>
+    <p class="text-slate-600 text-[15px] mt-2 max-w-2xl">Every vendor a sponsor invited, checked document by document. <span class="text-slate-900">Rules decide; the AI only reads; people activate and confirm rejections.</span></p>
   </div>
-  <a href="/invites" class="rounded-md bg-indigo-600 text-white text-sm px-4 py-2 hover:bg-indigo-700">+ Invite a vendor</a>
+  <a href="/invites" class="inline-flex items-center gap-2 rounded-md bg-indigo-600 text-white text-sm font-medium px-4 py-2.5 hover:bg-indigo-700 shadow-[3px_3px_0_rgba(28,27,24,.18)]">{{ icon('plus') }} Invite a vendor</a>
 </div>
 
-<div class="grid grid-cols-2 md:grid-cols-6 gap-3 mt-6">
+<div class="mt-8 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 border border-slate-200 bg-white divide-x divide-y lg:divide-y-0 divide-slate-200 rounded-xl overflow-hidden">
   {% for label, value, cls in [
-      ('Applications', stats.applications, 'text-slate-800'),
+      ('Applications', stats.applications, 'text-slate-900'),
       ('Active / approved', counts.ACTIVE + counts.APPROVED, 'text-emerald-700'),
-      ('Waiting on vendor', counts.PENDING_VENDOR, 'text-amber-700'),
-      ('Internal review', counts.PENDING_REVIEW, 'text-violet-700'),
-      ('Rejected', counts.REJECTED, 'text-rose-700'),
-      ('Fraud-class flags', stats.fraud, 'text-rose-700')] %}
-  <div class="bg-white rounded-xl border p-4">
-    <div class="text-xs text-slate-500">{{ label }}</div>
-    <div class="text-2xl font-semibold mt-1 {{ cls }}">{{ value }}</div>
+      ('Waiting on vendor', counts.PENDING_VENDOR, 'text-amber-600'),
+      ('Internal review', counts.PENDING_REVIEW, 'text-violet-600'),
+      ('Rejected', counts.REJECTED, 'text-rose-600'),
+      ('Fraud-class flags', stats.fraud, 'text-indigo-600')] %}
+  <div class="px-5 py-4">
+    <div class="kicker !text-[10px]">{{ label }}</div>
+    <div class="font-display text-[44px] leading-none mt-2 {{ cls }}">{{ value }}</div>
   </div>
   {% endfor %}
 </div>
-<p class="text-xs text-slate-500 mt-2">{{ stats.runs }} runs · average time per run {{ stats.avg_seconds if stats.avg_seconds is not none else '–' }} s · {{ stats.first_pass }} approved on the first submission</p>
+<p class="mono text-[11px] text-slate-500 mt-3 tracking-wide">{{ stats.runs }} runs · avg {{ stats.avg_seconds if stats.avg_seconds is not none else '–' }} s per run · {{ stats.first_pass }} approved on the first submission</p>
 
-<div class="grid xl:grid-cols-[1fr_330px] gap-6 mt-6">
+<div class="grid xl:grid-cols-[1fr_340px] gap-6 mt-8">
   <section class="bg-white rounded-xl border min-w-0">
-    <div class="px-4 py-3 border-b flex items-center justify-between">
-      <h2 class="font-semibold">Past runs</h2>
-      <span class="text-xs text-slate-500">newest first · click a row for the full reasoning</span>
+    <div class="px-5 py-4 border-b border-slate-200 flex items-baseline justify-between">
+      <h2 class="text-xl">Past runs</h2>
+      <span class="kicker !text-[10px]">newest first · open a row for the reasoning</span>
     </div>
     {% if not runs %}
-      <p class="p-6 text-sm text-slate-500">No runs yet. Start one from "Try a scenario" on the right, or invite a vendor.</p>
+      <p class="p-8 text-sm text-slate-500">No runs yet. Start one from "Try a scenario", or invite a vendor.</p>
     {% else %}
     <div class="overflow-x-auto">
     <table class="w-full text-sm">
-      <thead class="text-left text-xs text-slate-500 bg-slate-50">
-        <tr><th class="px-4 py-2">Ref</th><th class="px-2 py-2">Vendor</th><th class="px-2 py-2">Decision</th><th class="px-2 py-2">Now</th><th class="px-2 py-2">Risk</th><th class="px-2 py-2">Sponsor</th><th class="px-2 py-2">When</th><th class="px-2 py-2 text-right pr-4">Time</th></tr>
+      <thead class="text-left text-slate-500 bg-slate-50 border-b border-slate-200">
+        <tr><th class="pl-5 pr-2 py-2.5 font-medium">Ref</th><th class="px-2 font-medium">Vendor</th><th class="px-2 font-medium">Decision</th><th class="px-2 font-medium">Risk</th><th class="px-2 font-medium">Sponsor</th><th class="pr-5 pl-2 font-medium text-right">When · time</th></tr>
       </thead>
-      <tbody class="divide-y">
+      <tbody class="divide-y divide-slate-100">
       {% for r in runs %}
-        <tr class="hover:bg-slate-50 cursor-pointer" onclick="location.href='/runs/{{ r.run.id }}'">
-          <td class="px-4 py-2 mono text-xs whitespace-nowrap">{{ r.app.ref }}{% if r.resubmission %}<span class="ml-1 text-[10px] text-indigo-600">resubmitted</span>{% endif %}</td>
-          <td class="px-2 py-2 min-w-[15rem]">{{ r.app.legal_name }}{% if r.fraud %} <span class="ml-1 whitespace-nowrap text-[10px] font-semibold text-rose-700 bg-rose-50 px-1 rounded">FRAUD CLASS</span>{% endif %}</td>
-          <td class="px-2 py-2">{% if r.run.state == 'done' %}{{ status_badge(r.run.status) }}{% elif r.run.state in ('failed', 'interrupted') %}<span class="text-xs text-rose-700">{{ r.run.state }}</span>{% else %}<span class="text-xs text-indigo-600">running…</span>{% endif %}</td>
-          <td class="px-2 py-2">{% if r.run.state == 'done' and r.app.current_status != r.run.status %}{{ status_badge(r.app.current_status) }}{% endif %}</td>
-          <td class="px-2 py-2">{{ tier_chip(r.run.risk_tier) }}</td>
-          <td class="px-2 py-2 text-xs text-slate-600 whitespace-nowrap">{{ r.sponsor or '—' }}</td>
-          <td class="px-2 py-2 text-xs text-slate-500 whitespace-nowrap">{{ r.run.started_at | dt }}</td>
-          <td class="px-2 py-2 text-xs text-slate-500 text-right pr-4 whitespace-nowrap">{{ '%.1f s' % r.seconds if r.seconds is not none else '' }}{% if r.reads == 'saved' %}<div class="text-[10px] text-amber-600">saved AI reading</div>{% endif %}</td>
+        {% set stripe = {'APPROVED': 'bg-emerald-500', 'PENDING_VENDOR': 'bg-amber-400', 'PENDING_REVIEW': 'bg-violet-500', 'REJECTED': 'bg-rose-500'}.get(r.run.status, 'bg-slate-300') %}
+        <tr class="group hover:bg-slate-50 cursor-pointer" onclick="location.href='/runs/{{ r.run.id }}'">
+          <td class="pl-5 pr-2 py-3 relative whitespace-nowrap"><span class="absolute left-0 top-2 bottom-2 w-[3px] rounded-r {{ stripe }}"></span>
+            <a href="/runs/{{ r.run.id }}" class="mono text-[12.5px] text-slate-800 group-hover:text-indigo-700">{{ r.app.ref }}</a>
+            {% if r.resubmission %}<div class="mono text-[10px] text-slate-500">resubmitted</div>{% endif %}</td>
+          <td class="px-2 py-3 min-w-[13rem]"><span class="font-medium">{{ r.app.legal_name }}</span>
+            {% if r.fraud %}<span class="tag text-indigo-600 !text-[9px] ml-1.5">fraud class</span>{% endif %}</td>
+          <td class="px-2 py-3">
+            {% if r.run.state == 'done' %}{{ status_badge(r.run.status) }}
+              {% if r.app.current_status != r.run.status %}<div class="mt-1 text-[11px] text-slate-500">now {{ STATUS_LABEL.get(r.app.current_status, r.app.current_status) | lower }}</div>{% endif %}
+            {% elif r.run.state in ('failed', 'interrupted') %}<span class="tag text-rose-600">{{ r.run.state }}</span>
+            {% else %}<span class="inline-flex items-center gap-2 text-xs text-indigo-700"><span class="ink-dot !h-2 !w-2"></span>running</span>{% endif %}</td>
+          <td class="px-2 py-3">{{ tier_chip(r.run.risk_tier) }}</td>
+          <td class="px-2 py-3 text-[13px] text-slate-600 whitespace-nowrap">{{ r.sponsor or '—' }}</td>
+          <td class="pr-5 pl-2 py-3 mono text-[11px] text-slate-500 text-right whitespace-nowrap">{{ r.run.started_at | dt }}<div class="text-slate-400">{{ '%.1f s' % r.seconds if r.seconds is not none else '' }}{% if r.reads == 'saved' %} · <span class="text-amber-700">saved reading</span>{% endif %}</div></td>
         </tr>
       {% endfor %}
       </tbody>
@@ -59,24 +67,28 @@
     {% endif %}
   </section>
 
-  <section class="bg-white rounded-xl border">
-    <div class="px-4 py-3 border-b">
-      <h2 class="font-semibold">Try a scenario</h2>
-      <p class="text-xs text-slate-500 mt-0.5">Opens the vendor form through a fresh sponsor invite, pre-filled. You can swap in your own files before submitting.</p>
+  <section class="bg-white rounded-xl border self-start">
+    <div class="px-5 py-4 border-b border-slate-200">
+      <h2 class="text-xl">Try a scenario</h2>
+      <p class="text-[13px] text-slate-500 mt-1">Opens the vendor form through a fresh sponsor invite, pre-filled. Swap in your own files before submitting.</p>
     </div>
-    <ul class="divide-y">
+    <ol class="divide-y divide-slate-100">
       {% for key, sc in catalog.items() if not sc.resubmission_of %}
-      <li class="px-4 py-3 flex items-start gap-3">
-        <div class="flex-1">
-          <div class="text-sm">{{ sc.title }}</div>
-          <div class="mt-1 flex items-center gap-2">{{ status_badge(sc.expected) }}<span class="text-[11px] text-slate-400">expected</span>
-            {% if sc.private %}<span class="whitespace-nowrap text-[10px] text-slate-500 bg-slate-100 rounded px-1">real-world test file</span>{% endif %}</div>
-        </div>
-        <a href="/demo/{{ key }}" class="shrink-0 text-xs rounded-md border px-2.5 py-1.5 hover:bg-slate-50">Open as vendor →</a>
+      <li>
+        <a href="/demo/{{ key }}" class="group flex items-start gap-3 px-5 py-3.5 hover:bg-slate-50">
+          <span class="mono text-[11px] text-slate-400 pt-0.5 w-5">{{ '%02d' % loop.index }}</span>
+          <span class="flex-1">
+            <span class="block text-[14px] leading-snug group-hover:text-indigo-700">{{ sc.title }}</span>
+            <span class="mt-1.5 flex flex-wrap items-center gap-2">{{ status_badge(sc.expected) }}
+              {% if sc.private %}<span class="mono text-[10px] text-slate-500">· real-world file</span>{% endif %}</span>
+          </span>
+          <span class="text-slate-400 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-transform pt-0.5">{{ icon('arrow') }}</span>
+        </a>
       </li>
       {% endfor %}
-    </ul>
-    <p class="px-4 py-3 text-xs text-slate-500 border-t">Tejas's fix-and-resubmit happens from the vendor's own link after the first run asks for changes.</p>
+    </ol>
+    <p class="px-5 py-3 text-xs text-slate-500 border-t border-slate-200">Tejas's fix-and-resubmit happens from the vendor's own link after the first run asks for changes.</p>
   </section>
+</div>
 </div>
 {% endblock %}

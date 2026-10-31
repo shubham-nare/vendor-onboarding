@@ -1,13 +1,16 @@
 {% extends "base.html" %}
+{% from "_macros.html" import icon %}
 {% block title %}System check{% endblock %}
 {% block content %}
-<h1 class="text-2xl font-semibold tracking-tight">System check</h1>
+<div class="reveal">
+<div class="kicker">Health</div>
+<h1 class="text-[38px] leading-tight mt-1">System check</h1>
 <p class="text-slate-500 text-sm mt-1">Live status of everything the process depends on.</p>
 {% if done == 'reset' %}<div class="mt-4 rounded-md bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-900">Demo reset: all runs cleared, seed data reloaded.</div>{% endif %}
-<div class="mt-6 bg-white rounded-xl border divide-y max-w-3xl">
+<div class="mt-6 bg-white rounded-xl border divide-y divide-slate-100 max-w-3xl">
   {% for name, ok, detail in checks %}
   <div class="p-4 flex gap-3">
-    <span class="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-white text-[11px] {{ 'bg-emerald-500' if ok else 'bg-rose-500' }}">{{ '✓' if ok else '!' }}</span>
+    <span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-white {{ 'bg-emerald-600' if ok else 'bg-rose-600' }}">{{ icon('check' if ok else 'alert', 'h-3.5 w-3.5') }}</span>
     <div><div class="text-sm font-medium">{{ name }}</div><div class="text-xs text-slate-500">{{ detail }}</div></div>
   </div>
   {% endfor %}
@@ -17,4 +20,5 @@
   <input type="password" name="passcode" placeholder="Passcode" class="rounded-md border px-3 py-1.5">
   <button class="rounded-md bg-rose-600 text-white px-4 py-1.5">Reset</button>
 </form>
+</div>
 {% endblock %}

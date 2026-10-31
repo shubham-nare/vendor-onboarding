@@ -2,7 +2,9 @@
 {% from "_macros.html" import status_badge %}
 {% block title %}Invites{% endblock %}
 {% block content %}
-<h1 class="text-2xl font-semibold tracking-tight">Invites</h1>
+<div class="reveal">
+<div class="kicker">Sponsors</div>
+<h1 class="text-[38px] leading-tight mt-1">Invites</h1>
 <p class="text-slate-500 text-sm mt-1">Onboarding is invite-only. An employee who needs a vendor (the <b>sponsor</b>) sends a link with the business reason. The sponsor can't approve the vendor: someone else does.</p>
 
 {% if created %}
@@ -18,7 +20,7 @@
 
 <div class="grid lg:grid-cols-3 gap-6 mt-6">
   <section class="bg-white rounded-xl border p-5">
-    <h2 class="font-semibold">Invite a vendor</h2>
+    <h2 class="text-xl">Invite a vendor</h2>
     {% if actor and actor.role != 'sponsor' %}
       <p class="mt-2 text-sm rounded-md bg-amber-50 border border-amber-200 p-3 text-amber-900">You're acting as <b>{{ actor.name }}</b> ({{ ROLE_LABEL[actor.role] }}). Only a sponsor sends invites: switch "Acting as" to Priya Nair or Rahul Desai.</p>
     {% endif %}
@@ -56,5 +58,6 @@
       </tbody>
     </table>
   </section>
+</div>
 </div>
 {% endblock %}

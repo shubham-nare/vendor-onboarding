@@ -531,19 +531,19 @@ async def doc_check(request: Request, sample: str = ""):
         return await render(request, s, "check.html", results=results)
 
 
-def _check_one(filename: str, raw: bytes) -> dict:
+def _check_one(filename: str, raw: bytes, label: str = "") -> dict:
     mime = mimetypes.guess_type(filename)[0] or "application/octet-stream"
     a = assess(raw, mime, None)
     d = a.as_dict()
     d["facts"] = {k: v for k, v in d["facts"].items() if k != "text"}
-    return dict(filename=filename, size=len(raw), mime=mime, auth=d)
+    return dict(filename=filename + (f" ({label})" if label else ""), size=len(raw), mime=mime, auth=d)
 
 
 @router.post("/check", response_class=HTMLResponse)
 async def doc_check_post(request: Request, file_a: UploadFile = File(None), file_b: UploadFile = File(None), with_sample: str = Form("")):
     results = []
     if with_sample and PUBLIC_SAMPLE.exists():
-        results.append(_check_one(PUBLIC_SAMPLE.name + " (genuine sample)", PUBLIC_SAMPLE.read_bytes()))
+        results.append(_check_one(PUBLIC_SAMPLE.name, PUBLIC_SAMPLE.read_bytes(), "genuine sample"))
     for up in (file_a, file_b):
         if up is not None and up.filename:
             raw = await up.read()

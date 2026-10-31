@@ -2,12 +2,14 @@
 {% from "_macros.html" import level_chip %}
 {% block title %}What is verified{% endblock %}
 {% block content %}
+<div class="reveal">
 <div class="max-w-4xl">
-<h1 class="text-2xl font-semibold tracking-tight">What is verified, and what isn't</h1>
+<div class="kicker">Honesty page</div>
+<h1 class="text-[38px] leading-tight mt-1">What is verified, and what <em class="text-indigo-600">isn't</em></h1>
 <p class="text-slate-500 text-sm mt-1">A buyer should know exactly how much each "approved" is worth. This page says what this build really checks, what it simulates, and what it assumes.</p>
 
 <section id="levels" class="mt-8">
-  <h2 class="font-semibold">How well a fact is proven</h2>
+  <h2 class="text-xl">How well a fact is proven</h2>
   <p class="text-sm text-slate-600 mt-1">Every key fact (GSTIN, legal name, PAN, bank account) gets a level. A valid-looking number is only the start: someone can write a valid PAN on a blank sheet of paper.</p>
   <div class="mt-3 bg-white rounded-xl border divide-y text-sm">
     {% for lv, what, example in [
@@ -22,7 +24,7 @@
 </section>
 
 <section class="mt-8">
-  <h2 class="font-semibold">Real vs simulated in this build</h2>
+  <h2 class="text-xl">Real vs simulated in this build</h2>
   <div class="mt-3 bg-white rounded-xl border overflow-hidden">
   <table class="w-full text-sm">
     <thead class="bg-slate-50 text-left text-xs text-slate-500"><tr><th class="px-4 py-2">Check</th><th class="px-2 py-2">In this build</th><th class="px-4 py-2">In production</th></tr></thead>
@@ -47,7 +49,7 @@
 </section>
 
 <section class="mt-8">
-  <h2 class="font-semibold">How the decision is made</h2>
+  <h2 class="text-xl">How the decision is made</h2>
   <ul class="mt-2 text-sm text-slate-700 list-disc pl-5 space-y-1">
     <li><b>Rules decide; the AI only reads documents.</b> Every outcome traces to a named rule with its evidence.</li>
     <li>Order: out of scope → <b>reject</b> → <b>internal review</b> → <b>vendor fixes</b> → <b>approved</b>. Approval requires every required rule to pass.</li>
@@ -60,7 +62,7 @@
 </section>
 
 <section class="mt-8">
-  <h2 class="font-semibold">Tested on imperfect real-world inputs</h2>
+  <h2 class="text-xl">Tested on imperfect real-world inputs</h2>
   <div class="mt-3 grid md:grid-cols-2 gap-4 text-sm">
     <div class="bg-white rounded-xl border p-4">
       <div class="font-medium">Blurry, compressed, tilted copies of genuine documents</div>
@@ -79,7 +81,7 @@
 </section>
 
 <section class="mt-8 mb-4">
-  <h2 class="font-semibold">Assumptions and limits</h2>
+  <h2 class="text-xl">Assumptions and limits</h2>
   <ul class="mt-2 text-sm text-slate-700 list-disc pl-5 space-y-1">
     <li>Vendors are Indian and GST-registered; others go to a manual path.</li>
     <li>All demo vendors are fictional. Their documents carry a SPECIMEN banner and are recognised by fingerprint, because a fictional PAN card can't legally carry the national emblem.</li>
@@ -88,5 +90,6 @@
     <li>No logins in the demo: the "Acting as" menu stands in for single sign-on so you can see who may do what.</li>
   </ul>
 </section>
+</div>
 </div>
 {% endblock %}

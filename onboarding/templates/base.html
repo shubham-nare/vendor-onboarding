@@ -4,53 +4,174 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Vendor onboarding{% endblock %} · Vendor Assurance</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=Schibsted+Grotesk:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    // "The Registry": warm ledger paper, carbon ink, seal vermilion. Tailwind palettes are remapped so
+    // every template shares one set of tokens.
+    tailwind.config = { theme: { extend: {
+      colors: {
+        white: '#FFFDF7',
+        slate:   { 50: '#F7F3EA', 100: '#EFE9DC', 200: '#E3DBCB', 300: '#CCC2AE', 400: '#A1988A', 500: '#776F62', 600: '#5A544A', 700: '#423E36', 800: '#2B2924', 900: '#1C1B18' },
+        indigo:  { 50: '#FBEEE8', 100: '#F6D9CE', 200: '#EDB3A0', 300: '#E08A6F', 400: '#CF6545', 500: '#BD4826', 600: '#A63A1C', 700: '#8A2E16', 800: '#6C2512', 900: '#4E1B0E' },
+        emerald: { 50: '#EAF3ED', 100: '#CFE5D7', 200: '#A2CBB2', 300: '#6EAC88', 400: '#3E8C62', 500: '#22744B', 600: '#1B623F', 700: '#165033', 800: '#113F28', 900: '#0C2D1D' },
+        amber:   { 50: '#FBF3DF', 100: '#F4E2B3', 200: '#EACA7D', 300: '#DCAF4C', 400: '#C9942A', 500: '#A97616', 600: '#8C6011', 700: '#6F4B0E', 800: '#56390B', 900: '#3D2908' },
+        violet:  { 50: '#EEEFF7', 100: '#D9DBEF', 200: '#B4B7DE', 300: '#8A8EC9', 400: '#666AB2', 500: '#4A4E99', 600: '#3A3E82', 700: '#2E3168', 800: '#232650', 900: '#181A38' },
+        rose:    { 50: '#F9ECEC', 100: '#F2D1D2', 200: '#E5A4A8', 300: '#D2747A', 400: '#BB4A52', 500: '#A1313B', 600: '#892431', 700: '#6F1C28', 800: '#55161F', 900: '#3C0F16' },
+        orange:  { 100: '#F7DFC9', 800: '#7A3B12' },
+        sky:     { 50: '#EEF3F4', 200: '#C3D4D8', 800: '#2F4C55' },
+        blue:    { 100: '#DDE5EE', 300: '#9FB3CB', 800: '#26466A' },
+      },
+      fontFamily: {
+        sans: ['"Schibsted Grotesk"', 'ui-sans-serif', 'sans-serif'],
+        display: ['Newsreader', 'Georgia', 'serif'],
+        mono: ['"DM Mono"', 'ui-monospace', 'monospace'],
+      },
+      borderRadius: { md: '4px', lg: '5px', xl: '7px' },
+    } } };
+  </script>
   <style>
-    body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
-    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-    details > summary { list-style: none; cursor: pointer; }
-    details > summary::-webkit-details-marker { display: none; }
-    .spin { animation: spin 1s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .fade-in { animation: fade .35s ease-out; }
-    @keyframes fade { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } }
+    :root {
+      --paper: #F3EEE3; --sheet: #FFFDF7; --ink: #1C1B18; --ink-soft: #5A544A; --rule: #E3DBCB;
+      --seal: #A63A1C; --ledger: #1B623F; --pen: #3A3E82; --turmeric: #8C6011; --crimson: #892431;
+      --ease-out: cubic-bezier(.2, .8, .2, 1);
+    }
+    html { background: var(--paper); }
+    main > * , .reveal > * { min-width: 0; }
+    body { font-family: "Schibsted Grotesk", ui-sans-serif, sans-serif; color: var(--ink); background: transparent; -webkit-font-smoothing: antialiased; }
+    /* paper grain */
+    body::before { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: -1; opacity: .5;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .35  0 0 0 0 .3  0 0 0 0 .22  0 0 0 .09 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
+    h1, h2, .font-display { font-family: Newsreader, Georgia, serif; font-optical-sizing: auto; letter-spacing: -0.01em; }
+    h1 { font-weight: 500; }
+    h2 { font-weight: 600; }
+    .mono { font-family: "DM Mono", ui-monospace, monospace; }
+    .kicker { font-family: "DM Mono", monospace; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-soft); }
+
+    /* sheets of paper */
+    main .bg-white.border, main section.bg-white { box-shadow: 0 1px 0 rgba(28,27,24,.05), 4px 4px 0 rgba(28,27,24,.055); border-color: var(--rule); }
+    main table thead { font-family: "DM Mono", monospace; letter-spacing: .08em; text-transform: uppercase; font-size: 10.5px !important; }
+
+    /* security-print header band */
+    .guilloche { background-color: var(--ink);
+      background-image:
+        repeating-radial-gradient(circle at 0% 120%, transparent 0 11px, rgba(243,238,227,.055) 11px 12px),
+        repeating-radial-gradient(circle at 100% -20%, transparent 0 11px, rgba(189,72,38,.08) 11px 12px); }
+    .seal-rule { height: 3px; background: repeating-linear-gradient(90deg, var(--seal) 0 14px, transparent 14px 18px); opacity: .85; }
+
+    /* rubber stamps */
+    .stamp { display: inline-flex; align-items: center; gap: .6rem; padding: .55rem 1.15rem .5rem; border: 3px double currentColor; border-radius: 7px;
+      font-family: "DM Mono", monospace; font-weight: 500; text-transform: uppercase; letter-spacing: .16em; line-height: 1.1; transform: rotate(-3.5deg);
+      -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300'><filter id='d'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' seed='4'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -9 5.9'/></filter><rect width='100%' height='100%' filter='url(%23d)'/></svg>");
+              mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300'><filter id='d'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' seed='4'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -9 5.9'/></filter><rect width='100%' height='100%' filter='url(%23d)'/></svg>"); }
+    .stamp-land { animation: stamp .5s var(--ease-out) .35s both; }
+    @keyframes stamp { 0% { opacity: 0; transform: scale(1.9) rotate(-11deg); } 60% { opacity: .95; transform: scale(.96) rotate(-3deg); } 100% { opacity: 1; transform: scale(1) rotate(-3.5deg); } }
+    .tag { display: inline-flex; align-items: center; gap: .3rem; border: 1.5px solid currentColor; border-radius: 3px; padding: .05rem .4rem; font-family: "DM Mono", monospace;
+      font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; line-height: 1.5; }
+
+    /* proof ladder (assurance A0-A4) */
+    .ladder { display: inline-flex; align-items: center; gap: .5rem; white-space: nowrap; }
+    .ladder .bars { display: inline-flex; gap: 2px; align-items: flex-end; }
+    .ladder .bars i { width: 5px; border-radius: 1px; background: var(--rule); }
+    .ladder .bars i:nth-child(1) { height: 6px; } .ladder .bars i:nth-child(2) { height: 8px; } .ladder .bars i:nth-child(3) { height: 10px; }
+    .ladder .bars i:nth-child(4) { height: 12px; } .ladder .bars i:nth-child(5) { height: 14px; }
+    .ladder .bars i.on { background: currentColor; }
+    .ladder b { font-family: "DM Mono", monospace; font-weight: 500; font-size: 11px; }
+    .ladder span { font-size: 12px; color: var(--ink-soft); }
+
+    /* live ledger spine */
+    #stages li { position: relative; }
+    #stages li::before { content: ""; position: absolute; left: 26.5px; top: 0; bottom: 0; width: 1.5px; background: #D5CCBA; }
+    #stages li:first-child::before { top: 18px; } #stages li:last-child::before { bottom: calc(100% - 18px); }
+    #stages .icon { position: relative; z-index: 1; background: var(--sheet); }
+    .ink-dot { width: 12px; height: 12px; border-radius: 9999px; background: var(--seal); box-shadow: 0 0 0 0 rgba(166,58,28,.5); animation: ink 1.4s ease-out infinite; }
+    @keyframes ink { to { box-shadow: 0 0 0 9px rgba(166,58,28,0); } }
+
+    /* load choreography */
+    .reveal > * { animation: rise .55s var(--ease-out) both; }
+    .reveal > *:nth-child(2) { animation-delay: .06s; } .reveal > *:nth-child(3) { animation-delay: .12s; } .reveal > *:nth-child(4) { animation-delay: .18s; }
+    .reveal > *:nth-child(5) { animation-delay: .24s; } .reveal > *:nth-child(6) { animation-delay: .3s; } .reveal > *:nth-child(n+7) { animation-delay: .36s; }
+    @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    .fade-in { animation: rise .35s var(--ease-out) both; }
+    .spin { animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* controls */
+    input:not([type=checkbox]):not([type=file]), select, textarea { background: var(--sheet); border-color: #D5CCBA !important; transition: border-color .15s, box-shadow .15s; }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--seal) !important; box-shadow: 0 0 0 3px rgba(166,58,28,.15); }
+    input[type=checkbox] { accent-color: var(--seal); width: 1rem; height: 1rem; }
+    input[type=file]::file-selector-button { font: inherit; font-size: 12px; border: 1px solid #CCC2AE; background: var(--paper); border-radius: 4px; padding: .3rem .7rem; margin-right: .6rem; cursor: pointer; }
+    a, button, summary, [onclick], label:has(input[type=checkbox]) { cursor: pointer; }
+    button, a { transition: background-color .15s, color .15s, border-color .15s, transform .15s, box-shadow .15s; }
+    button:not(:disabled):active { transform: translateY(1px); }
+    :focus-visible { outline: 2px solid var(--seal); outline-offset: 2px; }
+    details > summary { list-style: none; } details > summary::-webkit-details-marker { display: none; }
+    ::selection { background: #F6D9CE; }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0s !important; transition-duration: .01ms !important; }
+    }
   </style>
 </head>
-<body class="bg-slate-50 text-slate-800 min-h-screen">
+<body class="min-h-screen">
   {% set vendor_page = path.startswith('/apply') or path.startswith('/status') %}
-  <header class="{{ 'bg-white border-b' if vendor_page else 'bg-slate-900 text-white' }}">
-    <div class="max-w-7xl mx-auto px-5 py-3 flex items-center gap-6">
-      <a href="/" class="flex items-center gap-2 font-semibold tracking-tight">
-        <span class="inline-flex h-7 w-7 items-center justify-center rounded-md {{ 'bg-indigo-600 text-white' if vendor_page else 'bg-indigo-500' }} text-sm">VA</span>
-        <span>Vendor Assurance</span>
+  {% macro seal(size=34, light=false) -%}
+    <svg width="{{ size }}" height="{{ size }}" viewBox="0 0 40 40" aria-hidden="true">
+      <circle cx="20" cy="20" r="18.5" fill="none" stroke="#BD4826" stroke-width="1.5"/>
+      <circle cx="20" cy="20" r="15" fill="#A63A1C"/>
+      <circle cx="20" cy="20" r="12.6" fill="none" stroke="#F6D9CE" stroke-width=".6" stroke-dasharray="1.2 1.6"/>
+      <text x="20" y="24.6" text-anchor="middle" font-family="Newsreader, Georgia, serif" font-style="italic" font-size="13" fill="#FFFDF7">va</text>
+    </svg>
+  {%- endmacro %}
+  {% if vendor_page %}
+  <header class="border-b border-slate-200 bg-white/70 backdrop-blur">
+    <div class="max-w-5xl mx-auto px-5 py-3.5 flex items-center gap-3">
+      {{ seal(30) }}
+      <div class="leading-tight">
+        <div class="font-display text-lg">Vendor Assurance</div>
+        <div class="kicker !text-[10px]">Supplier registration</div>
+      </div>
+      <a href="/" class="ml-auto text-xs text-slate-500 hover:text-slate-800 underline decoration-dotted underline-offset-4">Internal console (demo) →</a>
+    </div>
+  </header>
+  {% else %}
+  <header class="guilloche text-white">
+    <div class="max-w-7xl mx-auto px-5 py-3 flex flex-wrap items-center gap-x-8 gap-y-2">
+      <a href="/" class="flex items-center gap-3">
+        {{ seal(34) }}
+        <span class="leading-tight">
+          <span class="block font-display text-[19px]">Vendor Assurance</span>
+          <span class="block mono text-[10px] tracking-[.18em] uppercase text-slate-400">Onboarding register</span>
+        </span>
       </a>
-      {% if vendor_page %}
-        <span class="text-sm text-slate-500">Supplier registration portal</span>
-        <a href="/" class="ml-auto text-xs text-slate-400 hover:text-slate-600">← back to the internal console (demo)</a>
-      {% else %}
-      <nav class="flex gap-1 text-sm">
-        {% for href, label in [('/', 'Dashboard'), ('/invites', 'Invites'), ('/outbox', 'Vendor outbox'), ('/check', 'Document check'), ('/assumptions', 'What is verified'), ('/system', 'System')] %}
-          <a href="{{ href }}" class="px-3 py-1.5 rounded-md {{ 'bg-white/15' if path == href else 'hover:bg-white/10 text-slate-300' }}">{{ label }}</a>
+      <nav class="flex flex-wrap gap-1 text-[13.5px]" aria-label="Main">
+        {% for href, label in [('/', 'Dashboard'), ('/invites', 'Invites'), ('/outbox', 'Outbox'), ('/check', 'Document check'), ('/assumptions', 'What is verified'), ('/system', 'System')] %}
+          {% set on = path == href %}
+          <a href="{{ href }}" class="px-3 py-2 border-b-2 {{ 'border-indigo-400 text-white' if on else 'border-transparent text-slate-300 hover:text-white' }}" {{ 'aria-current=page' if on }}>{{ label }}</a>
         {% endfor %}
       </nav>
       {% if actor %}
-      <form method="post" action="/act-as" class="ml-auto flex items-center gap-2 text-sm">
-        <label class="text-slate-400">Acting as</label>
-        <select name="employee_id" onchange="this.form.submit()" class="bg-slate-800 border border-slate-700 rounded-md px-2 py-1">
+      <form method="post" action="/act-as" class="ml-auto flex items-center gap-2 text-[13px] min-w-0 max-w-full">
+        <label for="actas" class="mono text-[10px] tracking-[.16em] uppercase text-slate-400">Acting as</label>
+        <select id="actas" name="employee_id" onchange="this.form.submit()" class="!bg-slate-800 !border-slate-700 text-white rounded-md px-2 py-1.5 min-w-0 max-w-[62vw] sm:max-w-none">
           {% for e in employees %}
             <option value="{{ e.id }}" {{ 'selected' if e.id == actor.id }}>{{ e.name }} · {{ ROLE_LABEL[e.role] }}</option>
           {% endfor %}
         </select>
       </form>
       {% endif %}
-      {% endif %}
     </div>
+    <div class="seal-rule"></div>
   </header>
-  <main class="max-w-7xl mx-auto px-5 py-6">
+  {% endif %}
+  <main class="{{ 'max-w-5xl' if vendor_page else 'max-w-7xl' }} mx-auto px-5 py-8">
     {% block content %}{% endblock %}
   </main>
-  <footer class="max-w-7xl mx-auto px-5 pb-8 text-xs text-slate-400">
-    Demo build for a case study. All vendors are fictional; GST, PAN, penny-drop, CIN and Udyam answers are <span class="font-semibold text-amber-600">SIMULATED</span> and labelled; the bank-branch lookup is live.
+  <footer class="max-w-7xl mx-auto px-5 pb-10 text-xs text-slate-500 flex items-center gap-3">
+    <span class="h-px flex-1 bg-slate-300"></span>
+    <span>Demo build for a case study · all vendors fictional · GST, PAN, penny-drop, CIN and Udyam answers are <span class="tag text-amber-700 !text-[9.5px]">simulated</span> · bank-branch lookup is live</span>
+    <span class="h-px flex-1 bg-slate-300"></span>
   </footer>
 </body>
 </html>

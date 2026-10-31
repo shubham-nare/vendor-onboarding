@@ -1,22 +1,25 @@
 {% extends "base.html" %}
 {% block title %}Vendor outbox{% endblock %}
 {% block content %}
-<h1 class="text-2xl font-semibold tracking-tight">Vendor outbox</h1>
+<div class="reveal">
+<div class="kicker">Correspondence</div>
+<h1 class="text-[38px] leading-tight mt-1">Vendor outbox</h1>
 <p class="text-slate-500 text-sm mt-1">Every message written to a vendor. The free host blocks email, so messages are kept here; in production they're emailed. Rejections and approvals are <b>held</b> until a person confirms; fraud-class cases get a neutral "under review" note.</p>
 <div class="mt-6 space-y-3">
 {% for m, run, app in rows %}
-  <div class="bg-white rounded-xl border p-4">
+  <div class="bg-white rounded-xl border p-5 max-w-4xl">
     <div class="flex items-center gap-3 text-xs">
       <span class="mono text-slate-500">{{ app.ref }}</span>
       <a href="/runs/{{ run.id }}" class="text-indigo-700 underline">{{ app.legal_name }}</a>
       <span class="text-slate-400">{{ m.created_at | dt }}</span>
-      <span class="ml-auto rounded px-1.5 py-0.5 {{ 'bg-emerald-50 text-emerald-700' if m.state == 'sent' else 'bg-amber-50 text-amber-800' }}">{{ {'sent': 'sent', 'held': 'held for a person', 'draft': 'not sent'}[m.state] }}</span>
+      <span class="ml-auto tag {{ 'text-emerald-700' if m.state == 'sent' else 'text-amber-700' }}">{{ {'sent': 'sent', 'held': 'held for a person', 'draft': 'not sent'}[m.state] }}</span>
     </div>
-    <div class="font-medium text-sm mt-2">{{ m.subject }}</div>
-    <pre class="mt-1 whitespace-pre-wrap text-sm font-sans text-slate-700">{{ m.body }}</pre>
+    <div class="mono text-[11.5px] text-slate-500 mt-3 pt-3 border-t border-dashed border-slate-300">Subject: {{ m.subject }}</div>
+    <pre class="mt-1 whitespace-pre-wrap font-display text-[16px] leading-relaxed text-slate-800">{{ m.body }}</pre>
   </div>
 {% else %}
   <p class="text-sm text-slate-500">No messages yet.</p>
 {% endfor %}
+</div>
 </div>
 {% endblock %}
