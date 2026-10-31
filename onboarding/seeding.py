@@ -13,10 +13,10 @@ from onboarding.db import engine
 from onboarding.models import Base, Blocklist, Employee, Invite, SimRegistry, VendorMaster, now
 
 EMPLOYEES = [
-    dict(name="Priya Nair", department="Procurement, Plant 2", role="sponsor", email="priya.nair@buyer.example.com"),
+    dict(name="Priya Nair", department="Operations, Plant 2", role="sponsor", email="priya.nair@buyer.example.com"),
     dict(name="Rahul Desai", department="Plant Head, Pune", role="sponsor", email="rahul.desai@buyer.example.com"),
-    dict(name="Arjun Mehta", department="Procurement Operations", role="maker", email="arjun.mehta@buyer.example.com"),
-    dict(name="Kavita Rao", department="Finance Controller", role="checker", email="kavita.rao@buyer.example.com"),
+    dict(name="Arjun Mehta", department="Procurement", role="maker", email="arjun.mehta@buyer.example.com"),
+    dict(name="Kavita Rao", department="Finance", role="checker", email="kavita.rao@buyer.example.com"),
 ]
 
 INVITES = {  # scenario_key -> (sponsor, company, reason, category, band, high)

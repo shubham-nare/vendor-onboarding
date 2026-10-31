@@ -3,9 +3,9 @@
 {% block title %}Invites{% endblock %}
 {% block content %}
 <div class="reveal">
-<div class="kicker">Sponsors</div>
+<div class="kicker">Requesters</div>
 <h1 class="text-[30px] sm:text-[38px] leading-tight mt-1">Invites</h1>
-<p class="text-slate-500 text-sm mt-1">Onboarding is invite-only. An employee who needs a vendor (the <b>sponsor</b>) sends a link with the business reason. The sponsor can't approve the vendor: someone else does.</p>
+<p class="text-slate-500 text-sm mt-1">Onboarding is invite-only. The employee who needs a vendor (the <b>requester</b>) sends the vendor a link, with the business reason and expected spend. That way every vendor traces back to a real need, and the requester can't approve the vendor they asked for: someone else does.</p>
 
 {% if created %}
 <div class="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
@@ -22,7 +22,7 @@
   <section class="bg-white rounded-xl border p-4 sm:p-5 self-start">
     <h2 class="text-xl">Invite a vendor</h2>
     {% if actor and actor.role != 'sponsor' %}
-      <p class="mt-2 text-sm rounded-md bg-amber-50 border border-amber-200 p-3 text-amber-900">You're acting as <b>{{ actor.name }}</b> ({{ ROLE_LABEL[actor.role] }}). Only a sponsor sends invites: switch "Acting as" to Priya Nair or Rahul Desai.</p>
+      <p class="mt-2 text-sm rounded-md bg-amber-50 border border-amber-200 p-3 text-amber-900">You're acting as <b>{{ actor.name }}</b> ({{ ROLE_LABEL[actor.role] }}). Only a requester sends invites: switch "Acting as" (top right) to Priya Nair or Rahul Desai.</p>
     {% endif %}
     <form method="post" action="/invites" class="mt-4 space-y-3 text-sm">
       <label class="block">Vendor company name<input name="company_name" required class="mt-1 w-full rounded-md border px-3 py-2" placeholder="As registered"></label>
@@ -44,13 +44,13 @@
     <h2 class="px-4 py-3 border-b text-xl">Recent invites</h2>
     <div class="overflow-x-auto">
     <table class="rtable w-full text-sm">
-      <thead class="text-left text-xs text-slate-500 bg-slate-50"><tr><th class="px-4 py-2">Vendor</th><th class="px-2 py-2">Sponsor &amp; reason</th><th class="px-2 py-2">Spend</th><th class="px-2 py-2">Status</th><th class="px-2 py-2"></th></tr></thead>
+      <thead class="text-left text-xs text-slate-500 bg-slate-50"><tr><th class="px-4 py-2">Vendor</th><th class="px-2 py-2">Requested by &amp; reason</th><th class="px-2 py-2">Spend</th><th class="px-2 py-2">Status</th><th class="px-2 py-2"></th></tr></thead>
       <tbody class="divide-y">
       {% for i in invites %}
         {% set a = apps.get(i.id) %}
         <tr>
           <td class="px-4 py-2 font-medium sm:font-normal">{{ i.company_name }}<div class="text-xs text-slate-400">{{ i.contact_email }}</div></td>
-          <td class="px-2 py-2 text-xs" data-label="Sponsor &amp; reason"><b>{{ emps[i.sponsor_id].name }}</b><div class="text-slate-500 line-clamp-2">{{ i.business_reason }}</div></td>
+          <td class="px-2 py-2 text-xs" data-label="Requested by &amp; reason"><b>{{ emps[i.sponsor_id].name }}</b><div class="text-slate-500 line-clamp-2">{{ i.business_reason }}</div></td>
           <td class="inline-sm px-2 py-2 text-xs whitespace-nowrap">{{ i.spend_band }}{% if i.high_spend %}<span class="block text-rose-700">high</span>{% endif %}</td>
           <td class="inline-sm px-2 py-2">{% if a %}{{ status_badge(a.current_status) }}{% else %}<span class="text-xs text-slate-500">{{ i.status }}{% if i.scenario_key %} · demo template{% endif %}</span>{% endif %}</td>
           <td class="inline-sm px-2 py-2 text-right pr-4 whitespace-nowrap">{% if a %}<a class="text-xs text-indigo-700 underline" href="/status/{{ i.token }}">vendor view</a>{% elif not i.scenario_key %}<a class="text-xs text-indigo-700 underline" href="/apply/{{ i.token }}">open link</a>{% endif %}</td>

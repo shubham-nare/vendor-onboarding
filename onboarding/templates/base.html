@@ -171,14 +171,50 @@
         {% endfor %}
       </nav>
       {% if actor %}
-      <form method="post" action="/act-as" class="ml-auto flex items-center gap-2 text-[13px] min-w-0">
-        <label for="actas" class="hidden sm:inline mono text-[10px] tracking-[.16em] uppercase text-slate-400 whitespace-nowrap">Acting as</label>
-        <select id="actas" name="employee_id" aria-label="Acting as" onchange="this.form.submit()" class="!bg-slate-800 !border-slate-700 text-white rounded-md px-2 py-2 sm:py-1.5 min-w-0 w-[42vw] sm:w-auto max-w-[19rem]">
-          {% for e in employees %}
-            <option value="{{ e.id }}" {{ 'selected' if e.id == actor.id }}>{{ e.name }} · {{ ROLE_LABEL[e.role] }}</option>
-          {% endfor %}
-        </select>
-      </form>
+      {% set ROLE_TONE = {'sponsor': ('bg-amber-100 text-amber-800', 'text-amber-700'), 'maker': ('bg-violet-100 text-violet-700', 'text-violet-600'), 'checker': ('bg-emerald-100 text-emerald-700', 'text-emerald-700')} %}
+      {% macro avatar(e, size='h-8 w-8 text-[11px]') -%}
+        {%- set tone = {'sponsor': 'bg-amber-100 text-amber-800', 'maker': 'bg-violet-100 text-violet-700', 'checker': 'bg-emerald-100 text-emerald-700'}[e.role] -%}
+        <span class="{{ size }} {{ tone }} shrink-0 inline-flex items-center justify-center rounded-full mono font-medium" aria-hidden="true">{{ e.name.split()[0][0] }}{{ e.name.split()[-1][0] }}</span>
+      {%- endmacro %}
+      <details id="persona" class="ml-auto relative min-w-0">
+        <summary class="flex items-center gap-2.5 rounded-lg border border-slate-700 bg-slate-800/80 hover:bg-slate-800 pl-1.5 pr-2.5 py-1.5 select-none" aria-label="Acting as {{ actor.name }}, {{ ROLE_LABEL[actor.role] }}. Change person">
+          {{ avatar(actor) }}
+          <span class="leading-tight text-left min-w-0">
+            <span class="hidden sm:block mono text-[9.5px] tracking-[.16em] uppercase text-slate-400">Acting as</span>
+            <span class="block text-[13.5px] font-medium truncate"><span class="sm:hidden">{{ actor.name.split()[0] }}</span><span class="hidden sm:inline">{{ actor.name }}</span><span class="hidden sm:inline font-normal text-slate-300"> · {{ ROLE_LABEL[actor.role] }}</span></span>
+          </span>
+          <svg class="h-3.5 w-3.5 text-slate-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+        </summary>
+        <form method="post" action="/act-as" class="absolute right-0 top-full mt-2 z-50 w-[23rem] max-w-[calc(100vw-2rem)] rounded-xl border border-slate-300 bg-white text-slate-900 shadow-[0_12px_40px_rgba(28,27,24,.28)] overflow-hidden fade-in">
+          <div class="px-4 pt-3.5 pb-3 border-b border-slate-200 bg-slate-50">
+            <div class="kicker !text-[10px]">Switch person · demo</div>
+            <p class="text-[12.5px] text-slate-600 mt-1 leading-snug">There are no logins in this demo. Pick who you are to see what that person is allowed to do.</p>
+          </div>
+          <ul class="divide-y divide-slate-100">
+            {% for e in employees %}
+            {% set me = e.id == actor.id %}
+            <li>
+              <button name="employee_id" value="{{ e.id }}" class="w-full text-left flex gap-3 px-4 py-3 {{ 'bg-indigo-50/60' if me else 'hover:bg-slate-50' }}" {{ 'aria-current=true' if me }}>
+                {{ avatar(e, 'h-9 w-9 text-[12px] mt-0.5') }}
+                <span class="flex-1 min-w-0">
+                  <span class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span class="text-[14px] font-medium">{{ e.name }}</span>
+                    <span class="tag {{ ROLE_TONE[e.role][1] }} !text-[9.5px]">{{ ROLE_LABEL[e.role] }}</span>
+                    {% if me %}<span class="ml-auto inline-flex items-center gap-1 text-[11px] text-indigo-700 font-medium"><svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.2 4.2L19 7"/></svg>you</span>{% endif %}
+                  </span>
+                  <span class="block text-[11.5px] text-slate-500 mt-0.5">{{ e.department }}</span>
+                  <span class="block text-[12.5px] text-slate-700 mt-1 leading-snug">{{ ROLE_HINT[e.role] }}</span>
+                </span>
+              </button>
+            </li>
+            {% endfor %}
+          </ul>
+        </form>
+      </details>
+      <script>
+        document.addEventListener('click', e => { const d = document.getElementById('persona'); if (d && d.open && !d.contains(e.target)) d.open = false; });
+        document.addEventListener('keydown', e => { const d = document.getElementById('persona'); if (e.key === 'Escape' && d && d.open) { d.open = false; d.querySelector('summary').focus(); } });
+      </script>
       {% endif %}
     </div>
     <div class="seal-rule"></div>

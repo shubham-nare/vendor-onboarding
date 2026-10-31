@@ -147,7 +147,7 @@ def evaluate(ctx: Context) -> list[R]:
     # Layer 0: invite ------------------------------------------------------------------
     inv = ctx.invite
     if not inv:
-        add(R("R-INV-01", "invite", FAIL, "Application did not come through a sponsor's invite", "REVIEW",
+        add(R("R-INV-01", "invite", FAIL, "Application did not come through an employee's invite", "REVIEW",
               internal="Unsolicited application: no valid invite token. Never auto-approved.", fraud=True))
     else:
         expired = inv.get("expires_at") and inv["expires_at"] < datetime.now(timezone.utc)
@@ -157,7 +157,7 @@ def evaluate(ctx: Context) -> list[R]:
             add(R("R-INV-01", "invite", FAIL, f"Invite link is {why}", "REVIEW", {"invite_status": why},
                   internal="The invite can't vouch for this application.", fraud=bool(other_app)))
         else:
-            add(R("R-INV-01", "invite", PASS, f"Invited by {inv.get('sponsor', 'a sponsor')}: {inv.get('reason', '')}"))
+            add(R("R-INV-01", "invite", PASS, f"Requested by {inv.get('sponsor', 'an employee')}: {inv.get('reason', '')}"))
         nm = M.compare_name(inv.get("company_name", ""), f.get("legal_name", ""), individual=False)
         if nm.status == M.MATCH or (bt == "PROPRIETORSHIP" and M.compare_name(inv.get("company_name", ""), f.get("proprietor_name", ""), individual=True).status == M.MATCH):
             add(R("R-INV-02", "invite", PASS, "The business that applied is the one that was invited", {"invited": inv.get("company_name"), "applied": f.get("legal_name"), "score": nm.score}))

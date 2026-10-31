@@ -41,7 +41,13 @@ STATUS_LABEL = {"APPROVED": "Approved", "PENDING_VENDOR": "Pending: vendor to fi
 LEVEL_NAMES = {"A0": "Declared", "A1": "Evidenced", "A2": "Genuine", "A3": "Cryptographically proven", "A4": "Confirmed at source"}
 SPEND_BANDS = ["Under 1 lakh", "1-5 lakh", "5-10 lakh", "10-25 lakh", "25-50 lakh", "50 lakh - 1 crore", "Over 1 crore"]
 HIGH_SPEND = {"50 lakh - 1 crore", "Over 1 crore"}
-ROLE_LABEL = {"sponsor": "Sponsor (requests vendors)", "maker": "Procurement exec", "checker": "Finance controller"}
+# Internal role codes stay sponsor | maker | checker (stored in the database); people see these labels.
+ROLE_LABEL = {"sponsor": "Requester", "maker": "Procurement reviewer", "checker": "Finance controller"}
+ROLE_HINT = {
+    "sponsor": "Needs a new vendor. Sends the invite with the business reason. Can't approve a vendor they asked for.",
+    "maker": "Checks applications. Activates normal-risk vendors and asks vendors to fix things.",
+    "checker": "Senior sign-off. Approves high-risk or fraud-flagged vendors; the only one who can reject after review.",
+}
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -70,7 +76,7 @@ templates.env.filters["dt"] = _fmt_dt
 templates.env.filters["sigdate"] = lambda v: (f"{v[6:8]}/{v[4:6]}/{v[:4]} {v[8:10]}:{v[10:12]}" if isinstance(v, str) and len(v) >= 12 and v[:12].isdigit() else v)
 templates.env.filters["mask"] = lambda value, name="": _mask(name, value)
 templates.env.globals.update(STATUS_LABEL=STATUS_LABEL, LEVEL_NAMES=LEVEL_NAMES, SLOT_TITLE=SLOT_TITLE, SLOT_LABEL=SLOT_LABEL,
-                             ROLE_LABEL=ROLE_LABEL, BUSINESS_TYPES=V.BUSINESS_TYPES, mask_pan=V.mask_pan, mask_account=V.mask_account)
+                             ROLE_LABEL=ROLE_LABEL, ROLE_HINT=ROLE_HINT, BUSINESS_TYPES=V.BUSINESS_TYPES, mask_pan=V.mask_pan, mask_account=V.mask_account)
 
 
 # --- shared helpers ------------------------------------------------------------------------------
@@ -112,7 +118,7 @@ def demo_catalog() -> dict[str, dict]:
         paths = {slot: PRIVATE / fn for slot, fn in swap.items()}
         if all(p.exists() for p in paths.values()):  # private inputs exist only on Shubham's laptop
             out[key] = dict(base, title=title, expected=expected, files={**base["files"], **paths}, private=True)
-    out["unsolicited_nilgiri"] = dict(base, title="Application with no sponsor invite", expected="PENDING_REVIEW", invite_scenario=None)
+    out["unsolicited_nilgiri"] = dict(base, title="Application with no invite (unsolicited)", expected="PENDING_REVIEW", invite_scenario=None)
     return out
 
 
@@ -177,7 +183,7 @@ async def create_invite(request: Request, company_name: str = Form(...), contact
     async with sessions()() as s:
         actor = await _actor(request, s)
         if not actor or actor.role != "sponsor":
-            raise HTTPException(403, "Only a sponsor (the employee who needs the vendor) can send an invite. Switch 'Acting as' to a sponsor.")
+            raise HTTPException(403, "Only a requester (the employee who needs the vendor) can send an invite. Switch 'Acting as' to Priya Nair or Rahul Desai.")
         if len(business_reason.strip()) < 10:
             raise HTTPException(400, "Please give a business reason (at least a sentence): it's shown to the approver.")
         inv = Invite(token=secrets.token_urlsafe(18), sponsor_id=actor.id, company_name=company_name.strip(), contact_email=contact_email.strip(),
@@ -441,7 +447,7 @@ def _allowed_actions(run: Run, app: Application, inv: Invite | None, actor: Empl
         if not actor:
             why = "Pick who you're acting as."
         elif actor.role == "sponsor" or (inv and inv.sponsor_id == actor.id):
-            why = "Segregation of duties: the sponsor who asked for this vendor can't approve, activate or reject it."
+            why = "Segregation of duties: the employee who requested this vendor can't approve, activate or reject it."
         elif a in ("review_reject",) and actor.role != "checker":
             why = "Only the Finance controller can reject after review."
         elif a in ("activate", "review_approve") and high and actor.role != "checker":
