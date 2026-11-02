@@ -434,7 +434,7 @@ async def _vendor_link(s, token: str) -> tuple[Invite | None, Bill | None, Appli
 
 
 async def _resolve_employee(s, text: str) -> Employee | None:
-    """Match 'Priya Nair', 'priya', 'priya.nair@shaubhamnare.example.com' to one employee (None if unknown or ambiguous)."""
+    """Match 'Priya Nair', 'priya', 'priya.nair@nareenterprises.example.com' to one employee (None if unknown or ambiguous)."""
     t = " ".join((text or "").lower().replace(".", " ").split())
     if not t:
         return None
@@ -516,10 +516,7 @@ async def _collect_form(request: Request) -> tuple[dict, dict[str, tuple[str, by
     f["gst_registered"] = data.get("gst_registered", "on") == "on"
     if data.get("bill_mode") == "1":
         f["bill_mode"] = True
-        for k in BILL_FIELDS:
-            f[k] = str(data.get(k) or "").strip()
-        f["bill_invoice_number"] = f["bill_invoice_number"].upper()
-        f["bill_amount"] = f["bill_amount"].replace(",", "").replace("\u20b9", "").strip()
+        f["bill_engaged_by"] = str(data.get("bill_engaged_by") or "").strip()   # the rest is read from the bill itself
     files: dict[str, tuple[str, bytes]] = {}
     for slot in SLOTS:
         up = data.get(slot)

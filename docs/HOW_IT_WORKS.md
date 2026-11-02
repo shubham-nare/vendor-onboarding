@@ -36,7 +36,7 @@ It also writes the vendor a clear message saying exactly what is needed.
 
 The home page (`/`) asks **"Who are you?"**:
 
-- **"I work at Shaubham Nare"** → **Employee log in** (`/company/login`), then the internal console (`/console`): dashboard, runs, bills, vendors, invites. Every company page needs an employee login, because the console shows vendors' bank details, PAN and documents. In production this would be the company's single sign-on.
+- **"I work at Nare Enterprises"** → **Employee log in** (`/company/login`), then the internal console (`/console`): dashboard, runs, bills, vendors, invites. Every company page needs an employee login, because the console shows vendors' bank details, PAN and documents. In production this would be the company's single sign-on.
 - **"I'm a vendor or supplier"** → the **supplier portal**:
   - **Accounts:** a vendor **creates an account** (company, name, work email, password) and **logs in** on later visits.
     - Passwords are stored only as salted **scrypt** hashes.
@@ -67,7 +67,7 @@ The home page (`/`) asks **"Who are you?"**:
 
 | Who | Email | What they see |
 |---|---|---|
-| Company (Arjun Mehta, Procurement reviewer) | `arjun.mehta@shaubhamnare.example.com` | The console. Priya, Rahul and Kavita log in the same way with their own `@shaubhamnare.example.com` emails. |
+| Company (Arjun Mehta, Procurement reviewer) | `arjun.mehta@nareenterprises.example.com` | The console. Priya, Rahul and Kavita log in the same way with their own `@nareenterprises.example.com` emails. |
 | Vendor (Sneha Kulkarni, Kesari Facility Services) | `billing@kesarifacility.example.com` | An empty vendor account, ready to register with a bill (a demo link pre-fills Kesari's details and documents). |
 
 After logging in, the **"Acting as"** menu (bottom of the left sidebar; top right on a phone) lets the demo switch person without logging out. It lists each person with their role and what they're allowed to do, so you can watch the permissions change. In production each person logs in as themselves and the menu doesn't exist.
@@ -131,18 +131,18 @@ Real companies also get vendors who **already did the work**: an emergency repai
 The design follows one principle: **a vendor can prove who they are, but only someone inside the company can confirm that we owe them.**
 
 1. **The vendor registers at `/bill`.** It's the same form and documents as an invited vendor, plus a **Your bill** section:
-   - the tax invoice file, invoice number, date and total (including GST);
-   - what the work was;
-   - **who at our company engaged them** (name or work email);
-   - a PO number, if they have one.
+   - the tax invoice file;
+   - **who at our company engaged them** (name or work email).
+
+   The vendor doesn't type the invoice number, date, total, the work or the PO number. Gemini reads them from the bill, and the console shows them as "read from the bill by AI". If something can't be read clearly, the vendor is asked for a clearer copy.
 2. **All the normal vendor checks run**, plus a **Bill checks** stage (shown only for these registrations):
 
    | Rule | Check | If it fails |
    |---|---|---|
-   | `R-BILL-01` | The invoice number typed matches the bill | VENDOR |
+   | `R-BILL-01` | The invoice number is read clearly from the bill (older submissions with a typed number: it matches the bill) | VENDOR |
    | `R-BILL-02` | The bill was issued by this vendor (seller GSTIN = the vendor's GSTIN) | REVIEW (someone else's invoice) |
    | `R-BILL-03` | The bill is addressed to us (buyer GSTIN = ours). Without that we can't pay it or claim the GST credit. | VENDOR, with our exact name, GSTIN and address |
-   | `R-BILL-04` | The amount typed matches the bill's total (to within ₹1) | VENDOR |
+   | `R-BILL-04` | The bill's total is read clearly (older submissions with a typed amount: it matches, to within ₹1) | VENDOR |
    | `R-BILL-05` | The bill adds up: taxable value + GST = total | VENDOR |
    | `R-BILL-06` | **The right kind of GST:** CGST + SGST when the vendor is in our state, IGST when it isn't. Decided from the two GSTINs' state codes. | VENDOR ("send a corrected invoice"); no GST at all is a WARN |
    | `R-BILL-07` | Dated sensibly: not in the future (VENDOR); not more than a year old (REVIEW: the credit may be lost) | VENDOR / REVIEW |
@@ -660,7 +660,7 @@ The dashboard's **Try a scenario** list starts each case through a fresh invite 
 | 6 | **Unsolicited application** (started from `/apply`, not from the scenario list) | No invite (`R-INV-01`) | **Pending: internal review** |
 | 7 | **Bill-first, clean:** Kesari Facility Services (Pune) | No invite; emergency cleaning bill of ₹1,25,670, correctly addressed with CGST + SGST; engaged by Priya Nair | **Approved**, medium risk → Arjun can't activate until Priya confirms → Priya can't approve → Arjun activates |
 | 9 | **Portal: later bills from Kesari (once active)** | "A normal monthly bill" (₹40,120) and "A bill asking for payment to a new bank account" (₹23,600; `R-BILL-10`) | Clean: awaiting confirmation → Priya confirms → Arjun approves. New bank: **internal review, fraud class**; only the Finance controller can decide |
-| 8 | **Bill-first, flawed bill:** Brindavan Cooling Systems (Bengaluru) | Charges CGST + SGST on a Karnataka → Maharashtra supply (needs IGST, `R-BILL-06`); amount typed ₹98,472 vs bill ₹94,872 (`R-BILL-04`) | **Pending: vendor to fix**, with both corrections explained |
+| 8 | **Bill-first, flawed bill:** Brindavan Cooling Systems (Bengaluru) | Charges CGST + SGST on a Karnataka → Maharashtra supply (needs IGST, `R-BILL-06`) | **Pending: vendor to fix**, with the correction explained |
 | — | Real-world files (only on Shubham's machine): hand-written PAN on paper, AI-generated PAN card, screenshot of a GST certificate | `AU-1`, `AU-2`, … | Vendor to fix or internal review |
 
 **Document check:** the genuine GSTN-signed public certificate shows **A3, signature verified** (chain CCA India 2014 → e-Mudhra → GSTN). The same certificate edited in Canva shows no signature, Producer and Creator "Canva," and the editor's name as Author: **"Likely edited," fraud class.**

@@ -142,6 +142,12 @@ async def run_pipeline(run_id: int, *, prefer_cache: bool = False, pace: float =
             read: DocRead | None = res.read if res.ok else None
             doc.read = {"origin": origin, "model": res.model, "seconds": res.seconds, **(read.model_dump() if read else {"error": res.error})}
             infos[slot] = DocInfo(slot, doc.filename, doc.sha256, sf.mime, read, origin, None)
+        if form.get("bill_mode"):   # the bill's number, date, amount and work come from the bill (AI reading), not from retyping
+            from onboarding.rules import bill_fields_from_read
+            inv_info = infos.get("invoice")
+            is_invoice = bool(inv_info and inv_info.read and inv_info.read.doc_type == "TAX_INVOICE")
+            form = {**form, **bill_fields_from_read(inv_info.read if is_invoice else None), "bill_read_from_document": True}
+            run.form = form
 
         # S4 authenticity (code)
         for slot, (doc, sf) in files.items():

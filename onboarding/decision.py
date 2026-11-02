@@ -158,7 +158,8 @@ def _messages(d: Decision, rules: list[R], ctx: Context, ref: str) -> None:
         d.vendor_body = f"{hi}\n\nGood news: {company} has passed our checks. You'll receive a confirmation once your vendor account is activated.\n\nVendor Onboarding Team"
         d.vendor_state = "held"
     if f.get("bill_mode") and d.status in (PENDING_REVIEW, APPROVED):
-        note = (f"About your bill {f.get('bill_invoice_number', '')} for {inr(money(f.get('bill_amount')))}: we'll process it once your registration is "
+        about = f"your bill {f.get('bill_invoice_number')} for {inr(money(f.get('bill_amount')))}" if f.get("bill_invoice_number") and f.get("bill_amount") else "your bill"
+        note = (f"About {about}: we'll process it once your registration is "
                 "complete and our team has confirmed the work. Payment then follows our usual purchase-order and receipt checks.")
         d.vendor_body = d.vendor_body.replace("\n\nVendor Onboarding Team", f"\n\n{note}\n\nVendor Onboarding Team")
     lines = [f"Status: {d.status} | risk tier: {d.risk_tier}" + (" | FRAUD-CLASS SIGNAL (vendor told nothing specific)" if d.fraud else "")]

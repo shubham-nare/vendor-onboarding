@@ -138,7 +138,7 @@ def required_fields(form: dict) -> list[str]:
     if form.get("msme"):
         req.append("udyam_no")
     if form.get("bill_mode"):
-        req += ["bill_invoice_number", "bill_amount", "bill_description", "bill_engaged_by"]
+        req += ["bill_engaged_by"]   # everything else about the bill is read from the bill itself
     return req
 
 
@@ -427,7 +427,7 @@ def evaluate(ctx: Context) -> list[R]:
     # Layer 7: risk (vendor master, blocklist, reused files) ------------------------------------------
     if ctx.blocklist:
         add(R("R-RISK-01", "risk", FAIL, "PAN, GSTIN or bank account is on the blocklist", "REJECT", {"hits": ctx.blocklist},
-              vendor_text="After review, we're unable to proceed with your registration. If you believe this is a mistake, please contact procurement@shaubhamnare.example.com.",
+              vendor_text="After review, we're unable to proceed with your registration. If you believe this is a mistake, please contact procurement@nareenterprises.example.com.",
               internal=f"Blocklist reason: {ctx.blocklist[0].get('reason')}", fraud=True))
     else:
         add(R("R-RISK-01", "risk", PASS, "Not on the blocklist"))
@@ -510,6 +510,24 @@ def _parse_any_date(text: str | None) -> datetime | None:
     return None
 
 
+def bill_fields_from_read(read) -> dict:
+    """What the bill itself says, read by the AI, in the form's field names: the vendor doesn't retype it.
+    Only clearly read values count (a partly read number would mislead the duplicate check)."""
+    out = {"bill_invoice_number": "", "bill_invoice_date": "", "bill_amount": "", "bill_description": "", "bill_po": ""}
+    if read is None:
+        return out
+    clear = {x.name: (x.value or "").strip() for x in read.fields if x.value and x.legibility == "clear"}
+    some = {x.name: (x.value or "").strip() for x in read.fields if x.value and x.legibility in ("clear", "partial")}
+    out["bill_invoice_number"] = clear.get("invoice_number", "").upper()
+    d = _parse_any_date(clear.get("invoice_date"))
+    out["bill_invoice_date"] = d.strftime("%Y-%m-%d") if d else clear.get("invoice_date", "")
+    amt = money(clear.get("total_amount"))
+    out["bill_amount"] = f"{amt:.2f}" if amt is not None else ""
+    out["bill_description"] = some.get("work_description", "")
+    out["bill_po"] = clear.get("po_number", "").upper()
+    return out
+
+
 def _bill_rules(add, ctx: Context, inv_doc: DocInfo | None) -> None:
     from onboarding.demo_data import BUYER  # the buying company (us)
 
@@ -517,6 +535,7 @@ def _bill_rules(add, ctx: Context, inv_doc: DocInfo | None) -> None:
     bill = ctx.bill or {}
     gstin = V.normalise_id(f.get("gstin", ""))
     typed_amount = money(f.get("bill_amount"))
+    from_doc = bool(f.get("bill_read_from_document"))   # the figures were read from the bill, not typed by the vendor
 
     # Who engaged the vendor: must be a real employee (they confirm it after the run).
     who = bill.get("engaged_employee")
@@ -540,8 +559,9 @@ def _bill_rules(add, ctx: Context, inv_doc: DocInfo | None) -> None:
     # Invoice number on the form vs the bill
     num, nleg = val(inv_doc, "invoice_number")
     if num and nleg == "clear":
-        same = V.normalise_id(num).replace("/", "").replace("-", "") == V.normalise_id(f.get("bill_invoice_number", "")).replace("/", "").replace("-", "")
-        add(R("R-BILL-01", "bill", PASS if same else FAIL, "Invoice number matches the bill" if same else f"Invoice number differs from the bill ({num})", "VENDOR",
+        same = from_doc or V.normalise_id(num).replace("/", "").replace("-", "") == V.normalise_id(f.get("bill_invoice_number", "")).replace("/", "").replace("-", "")
+        add(R("R-BILL-01", "bill", PASS if same else FAIL, f"Invoice number read from the bill: {num}" if from_doc else
+              ("Invoice number matches the bill" if same else f"Invoice number differs from the bill ({num})"), "VENDOR",
               {"form": f.get("bill_invoice_number"), "invoice": num},
               vendor_text="" if same else f"The invoice number you entered ({f.get('bill_invoice_number')}) doesn't match the bill you uploaded ({num}). Please correct it."))
     elif nleg in ("partial", "unreadable"):
@@ -580,7 +600,8 @@ def _bill_rules(add, ctx: Context, inv_doc: DocInfo | None) -> None:
     if total is None:
         add(R("R-BILL-04", "bill", FAIL, "The bill's total couldn't be read", "VENDOR", vendor_text=reupload("invoice", "total amount")))
     elif typed_amount is not None and abs(total - typed_amount) <= 1:
-        add(R("R-BILL-04", "bill", PASS, f"Amount entered matches the bill: {inr(total)}", {"form": typed_amount, "invoice": total}))
+        add(R("R-BILL-04", "bill", PASS, f"Total read from the bill: {inr(total)}" if from_doc else f"Amount entered matches the bill: {inr(total)}",
+              {"form": typed_amount, "invoice": total}))
     else:
         add(R("R-BILL-04", "bill", FAIL, f"Amount entered ({inr(typed_amount)}) differs from the bill's total ({inr(total)})", "VENDOR",
               {"form": typed_amount, "invoice": total},

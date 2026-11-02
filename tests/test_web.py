@@ -135,7 +135,9 @@ def flows(tmp_path_factory):
                 await as_("maker")  # the reviewer watches the run (a requester sees only their own)
                 r = await c.get(f"/demo/{key}")
                 assert r.status_code == 303 and r.headers["location"].startswith("/bill")
-                assert (await c.get(r.headers["location"])).status_code == 200
+                bill_form = await c.get(r.headers["location"])
+                assert bill_form.status_code == 200
+                out.setdefault("bill_form", bill_form.text)
                 d = _form_data(cat[key]["form"], key)
                 d["bill_mode"] = "1"
                 r = await c.post("/bill", data=d)
@@ -265,10 +267,17 @@ def test_bill_first_same_invoice_twice_is_flagged(flows):
     assert _rules(flows["kesari_dup_events"]).get("R-BILL-08") == "FAIL"
 
 
-def test_bill_first_wrong_gst_type_and_amount_go_back_to_the_vendor(flows):
+def test_bill_first_wrong_gst_type_goes_back_to_the_vendor(flows):
     page = flows["brindavan_page"]
     assert "Pending: vendor to fix" in page
-    assert "must charge IGST" in page and "98,472.00" in page and "94,872.00" in page
+    assert "must charge IGST" in page
+    assert "94,872.00" in page and "read from the bill by AI" in page     # the figures come from the bill itself
+
+
+def test_bill_form_asks_only_who_engaged_the_vendor(flows):
+    form = flows["bill_form"]
+    assert 'name="bill_engaged_by"' in form
+    assert not any(f'name="{k}"' in form for k in ("bill_invoice_number", "bill_invoice_date", "bill_amount", "bill_description", "bill_po"))
 
 
 def test_bill_first_denied_engagement_goes_to_finance_and_vendor_learns_nothing(flows):

@@ -145,13 +145,13 @@
     <section id="bill" class="bg-white rounded-xl border overflow-hidden">
       <div class="px-4 sm:px-6 py-4 border-b border-slate-200 flex flex-wrap items-baseline justify-between gap-2">
         <h2 class="text-xl">The bill</h2>
-        <span class="kicker !text-[10px]">submitted with the registration · never paid automatically</span>
+        <span class="kicker !text-[10px]">{{ 'read from the bill by AI · ' if f.bill_read_from_document }}submitted with the registration · never paid automatically</span>
       </div>
       <div class="p-4 sm:p-6 grid md:grid-cols-[1fr_auto] gap-6">
         <dl class="text-[14px] grid grid-cols-[8.5rem_1fr] gap-x-3 gap-y-1.5 min-w-0">
           <dt class="text-slate-500">Invoice</dt><dd class="mono text-[13px] break-words">{{ f.bill_invoice_number }}{% if f.bill_invoice_date %} · {{ f.bill_invoice_date }}{% endif %}</dd>
           <dt class="text-slate-500">Amount</dt><dd class="font-display text-[22px] leading-tight">{{ inr(money(f.bill_amount)) }}</dd>
-          <dt class="text-slate-500">Work</dt><dd class="break-words">{{ f.bill_description }}</dd>
+          <dt class="text-slate-500">Work</dt><dd class="break-words">{{ f.bill_description or '—' }}</dd>
           <dt class="text-slate-500">PO number</dt><dd>{{ f.bill_po or 'none (work done without a purchase order)' }}</dd>
           <dt class="text-slate-500">Engaged by</dt><dd>{{ bill_emp.name if bill_emp else bill.engaged_by_text }}{% if bill_emp %} <span class="text-slate-500">· {{ bill_emp.department }}</span>{% endif %}</dd>
         </dl>

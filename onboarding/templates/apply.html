@@ -122,14 +122,10 @@
           {%- elif prev_docs.get('invoice') %}keeps: <span class="mono">{{ prev_docs['invoice'].filename }}</span>{% endif -%}
         </div>
       </div>
-      <div class="grid md:grid-cols-3 gap-4 mt-4 text-sm">
-        <label class="block">Invoice number<input name="bill_invoice_number" value="{{ v.get('bill_invoice_number', '') }}" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase"></label>
-        <label class="block">Invoice date<input name="bill_invoice_date" type="date" value="{{ v.get('bill_invoice_date', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
-        <label class="block">Total amount, incl. GST (&#8377;)<input name="bill_amount" inputmode="decimal" value="{{ v.get('bill_amount', '') }}" class="mt-1 w-full rounded-md border px-3 py-2 mono" placeholder="e.g. 125670.00"></label>
-        <label class="block md:col-span-3">What was the work?<input name="bill_description" value="{{ v.get('bill_description', '') }}" class="mt-1 w-full rounded-md border px-3 py-2" placeholder="What you did, where and when"></label>
+      <p class="mt-3 text-[12.5px] text-slate-500">We read the invoice number, date, amount and the work from your bill, so you don't need to type them.</p>
+      <div class="grid md:grid-cols-3 gap-4 mt-3 text-sm">
         <label class="block md:col-span-2">Who at {{ BUYER.short_name }} engaged you?<input name="bill_engaged_by" value="{{ v.get('bill_engaged_by', '') }}" class="mt-1 w-full rounded-md border px-3 py-2" placeholder="Their name or work email">
           <span class="block text-xs text-slate-500 mt-1">We'll ask them to confirm the work. Bills nobody here can confirm aren't paid.</span></label>
-        <label class="block">PO number <span class="text-slate-400">(if you have one)</span><input name="bill_po" value="{{ v.get('bill_po', '') }}" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase"></label>
       </div>
     </section>
     {% endif %}

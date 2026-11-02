@@ -1,6 +1,6 @@
 """The two front doors and everything behind the vendor one.
 
-  /                     choose: "I work at Shaubham Nare" (console) or "I'm a vendor" (portal)
+  /                     choose: "I work at Nare Enterprises" (console) or "I'm a vendor" (portal)
   /vendor/register      create a vendor account        /vendor/login, /vendor/logout
   /vendor               the vendor's home: registration status, messages, next step, bills
   /vendor/bills/new     an ACTIVE vendor submits another bill
@@ -249,9 +249,7 @@ async def vendor_bill_form(request: Request, demo: str = ""):
 
 async def _bill_fields(request: Request) -> tuple[dict, tuple[str, bytes] | None, str]:
     data = await request.form()
-    f = {k: str(data.get(k) or "").strip() for k in ("invoice_number", "invoice_date", "amount", "description", "engaged_by", "po_number")}
-    f["invoice_number"] = f["invoice_number"].upper()
-    f["amount"] = f["amount"].replace(",", "").replace("₹", "")
+    f = {"engaged_by": str(data.get("engaged_by") or "").strip()}   # number, date, amount, work and PO are read from the bill
     up, file = data.get("invoice"), None
     if up is not None and hasattr(up, "read") and getattr(up, "filename", ""):
         raw = await up.read()
@@ -263,12 +261,8 @@ async def _bill_fields(request: Request) -> tuple[dict, tuple[str, bytes] | None
     if file is None and demo in DEMO_BILLS and (EXTRA / DEMO_BILLS[demo]["file"]).exists():
         p = EXTRA / DEMO_BILLS[demo]["file"]
         file = (p.name, p.read_bytes())
-    missing = [lbl for k, lbl in (("invoice_number", "invoice number"), ("amount", "amount"), ("description", "what the work was"),
-                                  ("engaged_by", "who engaged you")) if not f[k]]
-    if missing:
-        raise HTTPException(400, f"Please fill in: {', '.join(missing)}.")
-    if money(f["amount"]) is None:
-        raise HTTPException(400, "Please enter the amount as a number, e.g. 40120.00")
+    if not f["engaged_by"]:
+        raise HTTPException(400, "Please fill in: who engaged you.")
     return f, file, demo
 
 
@@ -296,12 +290,12 @@ async def vendor_bill_submit(request: Request):
         emp = await _resolve_employee(s, f["engaged_by"])
         reg = pf["active"]
         b = VendorBill(ref=await B.next_ref(s), account_id=acct.id, application_id=reg["app"].id, vendor_id=reg["vendor"].vendor_id,
-                       invoice_number=f["invoice_number"], invoice_date=f["invoice_date"], amount=f["amount"], description=f["description"],
-                       engaged_by_text=f["engaged_by"], engaged_employee_id=emp.id if emp else None, po_number=f["po_number"],
+                       invoice_number="", invoice_date="", amount="", description="",   # filled from the bill when it's read
+                       engaged_by_text=f["engaged_by"], engaged_employee_id=emp.id if emp else None, po_number="",
                        filename=file[0], sha256=await _store(s, *file))
         s.add(b)
         await s.flush()
-        B.trail(b, acct.contact_name or acct.email, "Vendor", "submitted", f"{b.invoice_number} · {f['amount']}")
+        B.trail(b, acct.contact_name or acct.email, "Vendor", "submitted", file[0])
         await s.commit()
         bid = b.id
     B.start_check(bid, prefer_cache=bool(demo))
@@ -333,8 +327,6 @@ async def vendor_bill_resubmit(request: Request, bill_id: int):
         b = await _own_bill(s, acct, bill_id)
         if b.status != "vendor_fix":
             raise HTTPException(409, "This bill isn't waiting for changes from you.")
-        b.invoice_number, b.invoice_date, b.amount, b.description, b.po_number = (f["invoice_number"], f["invoice_date"], f["amount"],
-                                                                                    f["description"], f["po_number"])
         if b.confirmation == "awaiting":
             emp = await _resolve_employee(s, f["engaged_by"])
             b.engaged_by_text, b.engaged_employee_id = f["engaged_by"], emp.id if emp else None

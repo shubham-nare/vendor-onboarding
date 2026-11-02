@@ -93,15 +93,20 @@ async def check_bill(bill_id: int, *, prefer_cache: bool = False) -> VendorBill:
         b.read = {"origin": origin, "model": res.model, "seconds": res.seconds, **(read.model_dump() if read else {"error": res.error})}
         auth = assess(sf.data, sf.mime, read)
         b.authenticity = auth.as_dict()
+        # the bill's own details come from the bill (AI reading), not from the vendor retyping them
+        from onboarding.rules import bill_fields_from_read
+        got = bill_fields_from_read(read if read and read.doc_type == "TAX_INVOICE" else None)
+        b.invoice_number, b.invoice_date, b.amount = got["bill_invoice_number"], got["bill_invoice_date"], got["bill_amount"]
+        b.description, b.po_number = got["bill_description"], got["bill_po"]
 
         # duplicates: the same invoice number from this vendor, in another bill or in its registration
         number = norm_number(b.invoice_number)
         dups = [{"ref": o.ref} for o in (await s.execute(select(VendorBill).where(VendorBill.vendor_id == b.vendor_id, VendorBill.id != b.id,
                                                                                    VendorBill.status != "rejected"))).scalars()
-                if norm_number(o.invoice_number) == number]
+                if number and norm_number(o.invoice_number) == number]
         for form, ref in (await s.execute(select(Run.form, Application.ref).join(Application, Application.id == Run.application_id)
                                           .where(Run.application_id == b.application_id))).all():
-            if (form or {}).get("bill_mode") and norm_number(form.get("bill_invoice_number", "")) == number:
+            if number and (form or {}).get("bill_mode") and norm_number(form.get("bill_invoice_number", "")) == number:
                 dups.append({"ref": f"{ref} (registration bill)"})
                 break
 
@@ -123,7 +128,8 @@ async def check_bill(bill_id: int, *, prefer_cache: bool = False) -> VendorBill:
             add(R(f"R-{sig.code}", "authenticity", WARN if outcome == "WARN" else FAIL, f"Bill: {sig.title}", outcome,
                   {"detail": sig.detail}, vendor_text=sig.vendor_text, internal=sig.detail, fraud=sig.severity == "fraud"))
         form = {"gstin": vm.gstin, "bank_account": vm.account, "bill_mode": True, "bill_invoice_number": b.invoice_number,
-                "bill_invoice_date": b.invoice_date, "bill_amount": b.amount, "bill_engaged_by": b.engaged_by_text}
+                "bill_invoice_date": b.invoice_date, "bill_amount": b.amount, "bill_engaged_by": b.engaged_by_text,
+                "bill_read_from_document": True}
         ctx = Context(form=form, docs={"invoice": info},
                       bill={"engaged_employee": emp.name if emp else None, "engaged_department": emp.department if emp else "", "duplicates": dups})
         _bill_rules(add, ctx, info if read and read.doc_type == "TAX_INVOICE" else None)

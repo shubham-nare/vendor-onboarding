@@ -95,7 +95,7 @@
       {% for b in vbills %}
       <li><a href="/vendor/bills/{{ b.id }}" class="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 sm:px-5 py-3.5 hover:bg-slate-50">
         <span class="mono text-[12px] text-slate-500 w-20">{{ b.ref }}</span>
-        <span class="flex-1 min-w-[10rem]"><span class="mono text-[13px]">{{ b.invoice_number }}</span><span class="block text-xs text-slate-500 truncate">{{ b.description }}</span></span>
+        <span class="flex-1 min-w-[10rem]"><span class="mono text-[13px]">{{ b.invoice_number or 'being read…' }}</span><span class="block text-xs text-slate-500 truncate">{{ b.description }}</span></span>
         <span class="font-medium">{{ inr(money(b.amount)) }}</span>
         {% set vt = {'approved': ('Approved', 'text-emerald-700'), 'rejected': ('Not payable', 'text-rose-600'), 'vendor_fix': ('Action needed', 'text-amber-700'), 'checking': ('Checking', 'text-violet-600')}.get(b.status, ('In review', 'text-slate-500')) %}
         <span class="tag {{ vt[1] }}">{{ vt[0] }}</span>

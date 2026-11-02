@@ -15,16 +15,16 @@ from onboarding import auth
 from onboarding.models import Base, Blocklist, Employee, Invite, SimRegistry, StaffLogin, VendorAccount, VendorMaster, now
 
 EMPLOYEES = [
-    dict(name="Priya Nair", department="Operations, Plant 2", role="sponsor", email="priya.nair@shaubhamnare.example.com"),
-    dict(name="Rahul Desai", department="Plant Head, Pune", role="sponsor", email="rahul.desai@shaubhamnare.example.com"),
-    dict(name="Arjun Mehta", department="Procurement", role="maker", email="arjun.mehta@shaubhamnare.example.com"),
-    dict(name="Kavita Rao", department="Finance", role="checker", email="kavita.rao@shaubhamnare.example.com"),
+    dict(name="Priya Nair", department="Operations, Plant 2", role="sponsor", email="priya.nair@nareenterprises.example.com"),
+    dict(name="Rahul Desai", department="Plant Head, Pune", role="sponsor", email="rahul.desai@nareenterprises.example.com"),
+    dict(name="Arjun Mehta", department="Procurement", role="maker", email="arjun.mehta@nareenterprises.example.com"),
+    dict(name="Kavita Rao", department="Finance", role="checker", email="kavita.rao@nareenterprises.example.com"),
 ]
 
 # Demo logins (fictional people, shown on the login pages so anyone reviewing the demo can sign in).
 # Every employee logs in with their own email; one vendor account is ready, with no registration yet.
 DEMO_PASSWORD = os.environ.get("DEMO_PASSWORD", "vardhan-demo-26")
-DEMO_COMPANY_EMAIL = "arjun.mehta@shaubhamnare.example.com"
+DEMO_COMPANY_EMAIL = "arjun.mehta@nareenterprises.example.com"
 DEMO_VENDOR = dict(email=dd.KESARI["contact"]["email"], company_name=dd.KESARI["legal_name"], contact_name=dd.KESARI["contact"]["name"])
 
 INVITES = {  # scenario_key -> (sponsor, company, reason, category, band, high)

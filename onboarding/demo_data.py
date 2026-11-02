@@ -161,10 +161,10 @@ SHINDE = {  # proprietorship: legal name = owner, trade name = business
 
 # The buying company (us). Bills must be addressed to it; its state decides CGST+SGST vs IGST.
 BUYER = {
-    "legal_name": "Shaubham Nare Pvt. Ltd.",
-    "short_name": "Shaubham Nare",
-    "pan": "AAKCS3382N",
-    "gstin": gstin("27", "AAKCS3382N"),
+    "legal_name": "Nare Enterprises",
+    "short_name": "Nare Enterprises",
+    "pan": "AAKFN3382N",
+    "gstin": gstin("27", "AAKFN3382N"),
     "address": "Gat No. 418, Chakan Industrial Area Phase I, Pune, Maharashtra, 410501",
     "state": "Maharashtra",
 }
@@ -412,10 +412,7 @@ SCENARIOS: dict[str, dict] = {
         "expected": "APPROVED",
         "bill": True,
         "form": form(KESARI, "PVT_LTD", cin=KESARI["cin"]) | {
-            "bill_mode": True, "bill_invoice_number": "KFS/2026-27/0193", "bill_invoice_date": "2026-10-21",
-            "bill_amount": f"{invoice_total(KESARI_LINES, 18):.2f}",
-            "bill_description": "Emergency deep cleaning of the Plant 2 shop floor after the waterlogging on 17 Oct",
-            "bill_engaged_by": "Priya Nair", "bill_po": ""},
+            "bill_mode": True, "bill_engaged_by": "Priya Nair"},   # the bill's number, date, amount and work are read from the bill
         "documents": {
             "gst_certificate": gst_cert(KESARI),
             "pan_card": pan_card(KESARI["legal_name"], KESARI["pan"], date_label="Date of Incorporation/Formation", date=KESARI["incorporated"]),
@@ -424,14 +421,11 @@ SCENARIOS: dict[str, dict] = {
         },
     },
     "bill_brindavan": {
-        "title": "Bill with the wrong GST type and a mistyped amount",
+        "title": "Bill charging the wrong type of GST",
         "expected": "PENDING_VENDOR",
         "bill": True,
         "form": form(BRINDAVAN, "PVT_LTD", cin=BRINDAVAN["cin"]) | {
-            "bill_mode": True, "bill_invoice_number": "BCS/26-27/0877", "bill_invoice_date": "2026-10-24",
-            "bill_amount": "98472.00",  # digits swapped: the invoice says 94,872.00
-            "bill_description": "Breakdown repair of the Plant 2 control-room AC (compressor replaced)",
-            "bill_engaged_by": "rahul.desai@shaubhamnare.example.com", "bill_po": ""},
+            "bill_mode": True, "bill_engaged_by": "rahul.desai@nareenterprises.example.com"},
         "documents": {
             "gst_certificate": gst_cert(BRINDAVAN),
             "pan_card": pan_card(BRINDAVAN["legal_name"], BRINDAVAN["pan"], date_label="Date of Incorporation/Formation", date=BRINDAVAN["incorporated"]),

@@ -20,7 +20,7 @@
         <tr class="hover:bg-slate-50 cursor-pointer" onclick="location.href='/bills/{{ b.id }}'">
           <td class="pl-5 pr-2 py-3 whitespace-nowrap"><a href="/bills/{{ b.id }}" class="mono text-[12.5px] hover:text-indigo-700">{{ b.ref }}</a></td>
           <td class="px-2 py-3 font-medium" data-label="Vendor"><span class="inline-flex items-center gap-2.5">{{ monogram(vm.legal_name, "h-7 w-7 text-[10.5px]") }}{{ vm.legal_name }}</span> <span class="mono text-[11px] text-slate-500 font-normal">{{ vm.vendor_id }}</span>{% if b.fraud and full %} <span class="tag text-indigo-600 !text-[9px]">fraud class</span>{% endif %}</td>
-          <td class="px-2 py-3 mono text-[12px]" data-label="Invoice">{{ b.invoice_number }}</td>
+          <td class="px-2 py-3 mono text-[12px]" data-label="Invoice">{{ b.invoice_number or 'being read…' }}</td>
           <td class="px-2 py-3 text-right whitespace-nowrap" data-label="Amount">{{ inr(money(b.amount)) }}</td>
           <td class="inline-sm px-2 py-3"><span class="tag {{ TONE.get(b.status, '') }}">{{ B.STATUS_TEXT.get(b.status, b.status) }}</span></td>
           <td class="inline-sm px-2 py-3">{{ tier_chip(b.risk_tier) }}</td>
