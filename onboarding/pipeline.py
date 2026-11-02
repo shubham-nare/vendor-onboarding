@@ -49,6 +49,12 @@ def sessions() -> async_sessionmaker:
     return async_sessionmaker(engine(), expire_on_commit=False)
 
 
+def read_sessions() -> async_sessionmaker:
+    """For pages that only read: autocommit, so there's no BEGIN before and ROLLBACK after the
+    request (two network round trips each time). Never use these for writes that must be atomic."""
+    return async_sessionmaker(engine().execution_options(isolation_level="AUTOCOMMIT"), expire_on_commit=False)
+
+
 # --- creating a run -----------------------------------------------------------------------------
 async def create_run(s: AsyncSession, form: dict, files: dict[str, tuple[str, bytes]], *, invite_token: str | None,
                      parent_run_id: int | None = None) -> Run:

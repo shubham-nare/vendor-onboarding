@@ -77,6 +77,8 @@ def sim_records() -> list[dict]:
 
 
 async def seed(reset: bool = False, dispose: bool = True) -> dict:
+    from onboarding import staff_cache
+    staff_cache.clear()
     eng = engine()
     async with eng.begin() as conn:
         if reset:
@@ -118,6 +120,7 @@ async def seed(reset: bool = False, dispose: bool = True) -> dict:
         counts = {}
         for model in (Employee, StaffLogin, VendorAccount, Invite, VendorMaster, Blocklist, SimRegistry):
             counts[model.__tablename__] = len((await s.execute(select(model))).scalars().all())
+    staff_cache.clear()  # again, in case a page refilled it mid-seed
     if dispose:
         await eng.dispose()
     return counts

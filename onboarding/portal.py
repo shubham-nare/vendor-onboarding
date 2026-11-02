@@ -12,12 +12,14 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import re
 from pathlib import Path
 
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import select, func
 
 from onboarding import access, auth
 from onboarding import bills as B
@@ -25,9 +27,10 @@ from onboarding.demo_data import KESARI, SCENARIOS
 from onboarding.models import (Application, Bill, Employee, Fact, Invite, Message, Run, StaffLogin, StoredFile, VendorAccount, VendorBill,
                                VendorLink, VendorMaster, now)
 from onboarding.seeding import DEMO_COMPANY_EMAIL, DEMO_PASSWORD, DEMO_VENDOR
-from onboarding.pipeline import sessions
+from onboarding.pipeline import read_sessions, sessions
 from onboarding.rules import money
-from onboarding.web import (MAX_BYTES, ROLE_LABEL, _actor, _employees, _latest_run, _resolve_employee, render, safe_next, vendor_account)
+from onboarding.web import (MAX_BYTES, ROLE_LABEL, _actor, _all, _employees, _reads, _resolve_employee, _rows, render, safe_next,
+                             vendor_account)
 
 router = APIRouter()
 ROOT = Path(__file__).resolve().parent.parent
@@ -165,29 +168,46 @@ async def logout():
 
 
 # --- the vendor's home ----------------------------------------------------------------------------
+async def _nothing(_s) -> list:
+    return []
+
+
+async def _registration(app_id: int) -> dict:
+    """One registration on a vendor's account: latest run, invite or bill, messages sent, vendor ID."""
+    async with read_sessions()() as s:
+        app = await s.get(Application, app_id)
+    app_runs = select(Run.id).where(Run.application_id == app_id)
+    r = await _reads(
+        run=_all(select(Run).where(Run.application_id == app_id).order_by(Run.id.desc()).limit(1)),
+        invite=_all(select(Invite).where(Invite.id == app.invite_id)) if app.invite_id else _nothing,
+        bill=_all(select(Bill).where(Bill.application_id == app_id)),
+        msgs=_all(select(Message).where(Message.run_id.in_(app_runs), Message.audience == "vendor", Message.state == "sent").order_by(Message.id.desc())),
+        vendor=_all(select(VendorMaster).where(VendorMaster.source_run_id.in_(app_runs)).order_by(VendorMaster.id).limit(1)),
+    )
+    inv, bill = (r["invite"] or [None])[0], (r["bill"] or [None])[0]
+    return dict(app=app, run=(r["run"] or [None])[0], invite=inv, bill=bill, token=inv.token if inv else (bill.token if bill else ""),
+                msgs=r["msgs"], vendor=(r["vendor"] or [None])[0])
+
+
+async def _pending_invite(invite_id: int):
+    async with read_sessions()() as s:
+        inv = await s.get(Invite, invite_id)
+        if inv:
+            await s.refresh(inv, ["sponsor"])
+        return inv
+
+
 async def _portfolio(s, acct: VendorAccount) -> dict:
-    """Everything this account can see: invitations it opened, its registration(s), its vendor ID, its bills."""
-    links = (await s.execute(select(VendorLink).where(VendorLink.account_id == acct.id).order_by(VendorLink.id))).scalars().all()
-    regs, pending_invites = [], []
-    for ln in links:
-        if ln.application_id is None:
-            inv = await s.get(Invite, ln.invite_id) if ln.invite_id else None
-            if inv:
-                await s.refresh(inv, ["sponsor"])
-                pending_invites.append(inv)
-            continue
-        app = await s.get(Application, ln.application_id)
-        run = await _latest_run(s, app.id)
-        inv = await s.get(Invite, app.invite_id) if app.invite_id else None
-        bill = (await s.execute(select(Bill).where(Bill.application_id == app.id))).scalar_one_or_none()
-        run_ids = [r for (r,) in (await s.execute(select(Run.id).where(Run.application_id == app.id))).all()]
-        msgs = (await s.execute(select(Message).where(Message.run_id.in_(run_ids), Message.audience == "vendor", Message.state == "sent")
-                                .order_by(Message.id.desc()))).scalars().all()
-        vm = (await s.execute(select(VendorMaster).where(VendorMaster.source_run_id.in_(run_ids)))).scalars().first()
-        regs.append(dict(app=app, run=run, invite=inv, bill=bill, token=inv.token if inv else (bill.token if bill else ""), msgs=msgs, vendor=vm))
-    vbills = (await s.execute(select(VendorBill).where(VendorBill.account_id == acct.id).order_by(VendorBill.id.desc()))).scalars().all()
-    active = next((r for r in regs if r["vendor"] and r["app"].current_status == "ACTIVE"), None)
-    return dict(regs=regs, pending_invites=pending_invites, vbills=vbills, active=active)
+    """Everything this account can see: invitations it opened, its registration(s), its vendor ID, its bills.
+    Registrations are fetched side by side (each is a handful of queries), not one after another."""
+    r = await _reads(links=_all(select(VendorLink).where(VendorLink.account_id == acct.id).order_by(VendorLink.id)),
+                     vbills=_all(select(VendorBill).where(VendorBill.account_id == acct.id).order_by(VendorBill.id.desc())))
+    parts = await asyncio.gather(*(_registration(ln.application_id) if ln.application_id is not None else _pending_invite(ln.invite_id)
+                                   for ln in r["links"] if ln.application_id is not None or ln.invite_id))
+    regs = [x for x in parts if isinstance(x, dict)]
+    pending_invites = [x for x in parts if isinstance(x, Invite)]
+    active = next((g for g in regs if g["vendor"] and g["app"].current_status == "ACTIVE"), None)
+    return dict(regs=regs, pending_invites=pending_invites, vbills=r["vbills"], active=active)
 
 
 @router.get("/vendor", response_class=HTMLResponse)
@@ -330,19 +350,22 @@ async def vendor_bill_resubmit(request: Request, bill_id: int):
 # --- company side: bills and vendors --------------------------------------------------------------
 @router.get("/bills", response_class=HTMLResponse)
 async def bills_list(request: Request):
-    async with sessions()() as s:
-        rows = (await s.execute(select(VendorBill, VendorMaster).join(VendorMaster, VendorMaster.vendor_id == VendorBill.vendor_id)
-                                .order_by(VendorBill.id.desc()))).all()
+    async with read_sessions()() as s:
         emps = {e.id: e for e in await _employees(s)}
-        reg_bills = (await s.execute(select(Bill, Application).join(Application, Application.id == Bill.application_id).order_by(Bill.id.desc()))).all()
         actor = await _actor(request, s)
         full = access.full_view(actor)
+        latest = select(func.max(Run.id)).group_by(Run.application_id)
+        r = await _reads(rows=_rows(select(VendorBill, VendorMaster).join(VendorMaster, VendorMaster.vendor_id == VendorBill.vendor_id)
+                                    .order_by(VendorBill.id.desc())),
+                         reg_bills=_rows(select(Bill, Application).join(Application, Application.id == Bill.application_id).order_by(Bill.id.desc())),
+                         runs=_all(select(Run).where(Run.id.in_(latest))))  # the latest run of every application, in one go
+        rows = r["rows"]
+        latest_run = {run.application_id: run for run in r["runs"]}
         regs = []
-        for bill, app in reg_bills:
+        for bill, app in r["reg_bills"]:
             if not full and not access.owns_application(actor, None, bill):
                 continue
-            run = await _latest_run(s, app.id)
-            regs.append(dict(bill=bill, app=app, run=run, emp=emps.get(bill.engaged_employee_id)))
+            regs.append(dict(bill=bill, app=app, run=latest_run.get(app.id), emp=emps.get(bill.engaged_employee_id)))
         if not full:  # a requester sees the bills that name them
             rows = [(b, vm) for b, vm in rows if access.can_open_bill(actor, b)]
         return await render(request, s, "bills.html", rows=rows, emps=emps, regs=regs, B=B, full=full)
@@ -407,11 +430,9 @@ async def bill_action(request: Request, bill_id: int, action: str = Form(...), c
 
 @router.get("/vendors", response_class=HTMLResponse)
 async def vendors_list(request: Request):
-    async with sessions()() as s:
+    async with read_sessions()() as s:
         accts = (await s.execute(select(VendorAccount).order_by(VendorAccount.id.desc()))).scalars().all()
-        rows = []
-        for a in accts:
-            pf = await _portfolio(s, a)
-            rows.append(dict(acct=a, **pf))
+        pfs = await asyncio.gather(*(_portfolio(s, a) for a in accts))  # side by side, not one account after another
+        rows = [dict(acct=a, **pf) for a, pf in zip(accts, pfs)]
         actor = await _actor(request, s)
         return await render(request, s, "vendors.html", rows=rows, B=B, full=access.full_view(actor))

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import html
 import logging
 from contextlib import asynccontextmanager
@@ -14,6 +15,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from onboarding import auth, db
+from onboarding.db import is_dropped_connection
 from onboarding.models import Base
 from onboarding.pipeline import sweep_interrupted
 
@@ -33,6 +35,7 @@ async def lifespan(_app: FastAPI):
         n = await sweep_interrupted()
         if n:
             log.warning("marked %s unfinished run(s) as interrupted", n)
+        asyncio.get_running_loop().create_task(db.warm_pool())  # in the background: startup isn't held up
     except Exception as e:  # the app still starts; /readyz and /system show the problem
         log.error("startup database step failed: %s", type(e).__name__)
     yield
@@ -55,6 +58,37 @@ async def company_login_required(request: Request, call_next):
         nxt = request.url.path + (f"?{request.url.query}" if request.url.query else "")
         return RedirectResponse(f"/company/login?next={quote(nxt)}", status_code=303)
     return await call_next(request)
+
+
+class RetryPageOnce:
+    """Opening a page only reads, so if the database connection drops before anything was sent,
+    try once more on a fresh connection instead of showing an error. Forms (POST) are never retried.
+    (A plain ASGI wrapper: Starlette's @app.middleware re-raises the first error even after a retry.)"""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or scope["method"] != "GET" or scope["path"].endswith("/stream"):
+            return await self.app(scope, receive, send)
+        started = False
+
+        async def tracking_send(message):
+            nonlocal started
+            started = started or message["type"] == "http.response.start"
+            await send(message)
+
+        try:
+            await self.app(scope, receive, tracking_send)
+        except Exception as e:
+            if started or not is_dropped_connection(e):
+                raise
+            log.warning("database connection dropped on GET %s (%s); retrying once", scope["path"], type(e).__name__)
+            await asyncio.sleep(1.0)  # local network refusals tend to come in short bursts
+            await self.app(scope, receive, send)
+
+
+app.add_middleware(RetryPageOnce)
 
 
 @app.exception_handler(HTTPException)

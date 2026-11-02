@@ -12,6 +12,7 @@ import json
 import mimetypes
 import secrets
 import time
+import weakref
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -22,14 +23,15 @@ from sqlalchemy import func, select
 
 from urllib.parse import quote
 
-from onboarding import access, auth, runner
+from onboarding import access, auth, runner, staff_cache
 from onboarding import validators as V
 from onboarding.authenticity.assess import assess
 from onboarding.config import get_settings
+from onboarding.db import WARM_CONNECTIONS, is_dropped_connection
 from onboarding.demo_data import BUYER, SCENARIOS
 from onboarding.models import (Application, Bill, Document, Employee, Fact, HumanAction, Invite, Message, Run, RunEvent, RuleResult, StoredFile,
                                VendorAccount, VendorBill, VendorLink, VendorMaster, now)
-from onboarding.pipeline import STAGES, create_run, sessions, stages_for
+from onboarding.pipeline import STAGES, create_run, read_sessions, sessions, stages_for
 from onboarding.rules import BILL_HIGH_RISK, SLOT_LABEL, SLOT_TITLE, inr, money
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -89,13 +91,13 @@ templates.env.globals.update(STATUS_LABEL=STATUS_LABEL, LEVEL_NAMES=LEVEL_NAMES,
 
 # --- shared helpers ------------------------------------------------------------------------------
 async def _employees(s) -> list[Employee]:
-    return list((await s.execute(select(Employee).order_by(Employee.id))).scalars())
+    return await staff_cache.employees(s)
 
 
 async def staff_member(request: Request, s) -> Employee | None:
     """The employee logged in to the company console (signed company_session cookie), if any."""
     emp_id = auth.read_session(request.cookies.get(auth.COMPANY_COOKIE), purpose="company")
-    return await s.get(Employee, emp_id) if emp_id else None
+    return next((e for e in await _employees(s) if e.id == emp_id), None) if emp_id else None
 
 
 async def _actor(request: Request, s) -> Employee | None:
@@ -197,20 +199,63 @@ async def _latest_run(s, app_id: int) -> Run | None:
     return (await s.execute(select(Run).where(Run.application_id == app_id).order_by(Run.id.desc()))).scalars().first()
 
 
+_read_slots: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore]" = weakref.WeakKeyDictionary()  # one per event loop
+
+
+async def _reads(**queries):
+    """Run independent read-only queries at the same time, each on its own pooled connection.
+    Every query is a network round trip to the database; sent together they cost about one.
+    At most db.WARM_CONNECTIONS at once (so they reuse open connections instead of opening new
+    ones), and a query whose connection drops is simply asked again: it only reads."""
+    slots = _read_slots.setdefault(asyncio.get_running_loop(), asyncio.Semaphore(WARM_CONNECTIONS))
+
+    async def one(fn):
+        for attempt in range(3):
+            try:
+                async with slots, read_sessions()() as s:
+                    return await fn(s)
+            except Exception as e:
+                if attempt == 2 or not is_dropped_connection(e):
+                    raise
+                await asyncio.sleep(0.5 * (attempt + 1))
+    keys = list(queries)
+    return dict(zip(keys, await asyncio.gather(*(one(queries[k]) for k in keys))))
+
+
+def _all(stmt):
+    return lambda s: _scalars(s, stmt)
+
+
+async def _scalars(s, stmt) -> list:
+    return list((await s.execute(stmt)).scalars().all())
+
+
+def _rows(stmt):
+    async def go(s):
+        return list((await s.execute(stmt)).all())
+    return go
+
+
 # --- dashboard ----------------------------------------------------------------------------------
 @router.get("/console", response_class=HTMLResponse)
 async def dashboard(request: Request):
-    async with sessions()() as s:
-        rows = (await s.execute(select(Run, Application).join(Application, Application.id == Run.application_id).order_by(Run.id.desc()).limit(200))).all()
-        sponsors = {i.id: i for i in (await s.execute(select(Invite))).scalars()}
-        emps = {e.id: e for e in await _employees(s)}
-        docs = (await s.execute(select(Document.run_id, Document.read))).all()
-        origin: dict[int, list[str]] = {}
-        for run_id, read in docs:
-            origin.setdefault(run_id, []).append((read or {}).get("origin", ""))
-        bills = {b.application_id: b for b in (await s.execute(select(Bill))).scalars()}
+    async with read_sessions()() as s:
         actor = await _actor(request, s)
         full = access.full_view(actor)
+        emps = {e.id: e for e in await _employees(s)}
+        q = dict(rows=_rows(select(Run, Application).join(Application, Application.id == Run.application_id).order_by(Run.id.desc()).limit(200)),
+                 invites=_all(select(Invite)),
+                 docs=_rows(select(Document.run_id, Document.read["origin"].as_string())),  # just where each reading came from
+                 bills=_all(select(Bill)))
+        if actor and not full:
+            q["vbills"] = _all(select(VendorBill).where(VendorBill.engaged_employee_id == actor.id, VendorBill.status == "awaiting_confirmation"))
+        r = await _reads(**q)
+        rows = r["rows"]
+        sponsors = {i.id: i for i in r["invites"]}
+        origin: dict[int, list[str]] = {}
+        for run_id, org in r["docs"]:
+            origin.setdefault(run_id, []).append(org or "")
+        bills = {b.application_id: b for b in r["bills"]}
         runs = []
         for run, app in rows:
             inv = sponsors.get(app.invite_id)
@@ -233,8 +278,7 @@ async def dashboard(request: Request):
         if actor and not full:
             to_confirm = sum(1 for r in runs if r["bill"] and r["bill"].engaged_employee_id == actor.id and r["bill"].confirmation == "awaiting"
                              and r["app"].current_status not in ("REJECTED", "ACTIVE"))
-            to_confirm += len((await s.execute(select(VendorBill).where(VendorBill.engaged_employee_id == actor.id,
-                                                                         VendorBill.status == "awaiting_confirmation"))).scalars().all())
+            to_confirm += len(r["vbills"])
         return await render(request, s, "dashboard.html", runs=runs, counts=counts, stats=stats, catalog=demo_catalog(), full=full, to_confirm=to_confirm)
 
 
@@ -249,13 +293,15 @@ async def act_as(request: Request, employee_id: int = Form(...)):
 # --- invites (sponsor) -------------------------------------------------------------------------
 @router.get("/invites", response_class=HTMLResponse)
 async def invites(request: Request, created: str = ""):
-    async with sessions()() as s:
-        rows = (await s.execute(select(Invite).order_by(Invite.id.desc()).limit(100))).scalars().all()
+    async with read_sessions()() as s:
         actor = await _actor(request, s)
+        emps = {e.id: e for e in await _employees(s)}
+        r = await _reads(invites=_all(select(Invite).order_by(Invite.id.desc()).limit(100)),
+                         apps=_all(select(Application).where(Application.invite_id.is_not(None))))
+        rows = r["invites"]
         if not access.full_view(actor):
             rows = [i for i in rows if actor and i.sponsor_id == actor.id]
-        emps = {e.id: e for e in await _employees(s)}
-        apps = {a.invite_id: a for a in (await s.execute(select(Application).where(Application.invite_id.is_not(None)))).scalars()}
+        apps = {a.invite_id: a for a in r["apps"]}
         return await render(request, s, "invites.html", invites=rows, emps=emps, apps=apps, created=created, bands=SPEND_BANDS, high=HIGH_SPEND)
 
 
@@ -539,38 +585,42 @@ def _event_dict(e: RunEvent, full: bool = True) -> dict:
 
 @router.get("/runs/{run_id}", response_class=HTMLResponse)
 async def run_view(request: Request, run_id: int):
-    async with sessions()() as s:
-        run = await s.get(Run, run_id)
-        if not run:
+    async with read_sessions()() as s:
+        row = (await s.execute(select(Run, Application, Invite, Bill).join(Application, Application.id == Run.application_id)
+                               .outerjoin(Invite, Invite.id == Application.invite_id).outerjoin(Bill, Bill.application_id == Application.id)
+                               .where(Run.id == run_id))).first()
+        if not row:
             raise HTTPException(404, "No such run")
-        app = await s.get(Application, run.application_id)
-        inv = await s.get(Invite, app.invite_id) if app.invite_id else None
-        sponsor = await s.get(Employee, inv.sponsor_id) if inv else None
-        bill = (await s.execute(select(Bill).where(Bill.application_id == app.id))).scalar_one_or_none()
-        bill_emp = await s.get(Employee, bill.engaged_employee_id) if bill and bill.engaged_employee_id else None
-        events = [_event_dict(e) for e in (await s.execute(select(RunEvent).where(RunEvent.run_id == run_id).order_by(RunEvent.seq))).scalars()]
-        docs = sorted((await s.execute(select(Document).where(Document.run_id == run_id))).scalars().all(),
-                      key=lambda d: SLOTS.index(d.slot) if d.slot in SLOTS else 99)
-        rules = (await s.execute(select(RuleResult).where(RuleResult.run_id == run_id).order_by(RuleResult.id))).scalars().all()
-        facts = (await s.execute(select(Fact).where(Fact.run_id == run_id).order_by(Fact.id))).scalars().all()
-        msgs = {m.audience: m for m in (await s.execute(select(Message).where(Message.run_id == run_id).order_by(Message.id))).scalars()}
-        extra_msgs = (await s.execute(select(Message).where(Message.run_id == run_id, Message.audience == "vendor").order_by(Message.id))).scalars().all()
-        actions = (await s.execute(select(HumanAction, Employee).join(Employee, Employee.id == HumanAction.employee_id)
-                                   .where(HumanAction.run_id.in_(select(Run.id).where(Run.application_id == app.id))).order_by(HumanAction.id))).all()
-        history = (await s.execute(select(Run).where(Run.application_id == app.id).order_by(Run.id))).scalars().all()
-        latest = history[-1].id == run.id
-        vendor = (await s.execute(select(VendorMaster).where(VendorMaster.source_run_id.in_([r.id for r in history])))).scalars().first()
+        run, app, inv, bill = row
         actor = await _actor(request, s)
         if not access.can_open_application(actor, inv, bill):
             raise access.forbid("This application")
         full = access.full_view(actor)
-        if not full:
-            events = [_event_dict(e, full=False) for e in (await s.execute(select(RunEvent).where(RunEvent.run_id == run_id).order_by(RunEvent.seq))).scalars()]
+        emps = {e.id: e for e in await _employees(s)}
+        sponsor = emps.get(inv.sponsor_id) if inv else None
+        bill_emp = emps.get(bill.engaged_employee_id) if bill and bill.engaged_employee_id else None
+        app_runs = select(Run.id).where(Run.application_id == app.id)
+        r = await _reads(
+            events=_all(select(RunEvent).where(RunEvent.run_id == run_id).order_by(RunEvent.seq)),
+            docs=_all(select(Document).where(Document.run_id == run_id)),
+            rules=_all(select(RuleResult).where(RuleResult.run_id == run_id).order_by(RuleResult.id)),
+            facts=_all(select(Fact).where(Fact.run_id == run_id).order_by(Fact.id)),
+            msgs=_all(select(Message).where(Message.run_id == run_id).order_by(Message.id)),
+            actions=_rows(select(HumanAction, Employee).join(Employee, Employee.id == HumanAction.employee_id)
+                          .where(HumanAction.run_id.in_(app_runs)).order_by(HumanAction.id)),
+            history=_all(select(Run).where(Run.application_id == app.id).order_by(Run.id)),
+            vendor=_all(select(VendorMaster).where(VendorMaster.source_run_id.in_(app_runs)).order_by(VendorMaster.id).limit(1)),
+        )
+        events = [_event_dict(e, full) for e in r["events"]]
+        docs = sorted(r["docs"], key=lambda d: SLOTS.index(d.slot) if d.slot in SLOTS else 99)
+        msgs = {m.audience: m for m in r["msgs"]}  # the latest message per audience
+        history = r["history"]
         return await render(request, s, "run.html", run=run, app=app, invite=inv, sponsor=sponsor, bill=bill, bill_emp=bill_emp, full=full,
                             vendor_token=inv.token if inv else (bill.token if bill else ""), events=events, stages=stages_for(run.form), docs=docs,
-                            rules=rules, facts=facts, vendor_msg=msgs.get("vendor"), all_vendor_msgs=extra_msgs, internal=msgs.get("internal"),
-                            actions=actions, history=history, latest=latest, vendor=vendor, allowed=_allowed_actions(run, app, inv, actor, bill, bill_emp),
-                            from_vendor=request.query_params.get("from") == "vendor")
+                            rules=r["rules"], facts=r["facts"], vendor_msg=msgs.get("vendor"),
+                            all_vendor_msgs=[m for m in r["msgs"] if m.audience == "vendor"], internal=msgs.get("internal"),
+                            actions=r["actions"], history=history, latest=history[-1].id == run.id, vendor=(r["vendor"] or [None])[0],
+                            allowed=_allowed_actions(run, app, inv, actor, bill, bill_emp), from_vendor=request.query_params.get("from") == "vendor")
 
 
 async def _guard_run(request: Request, s, run_id: int) -> bool:
@@ -589,7 +639,7 @@ async def _guard_run(request: Request, s, run_id: int) -> bool:
 
 @router.get("/runs/{run_id}/events")
 async def run_events(request: Request, run_id: int, after: int = 0):
-    async with sessions()() as s:
+    async with read_sessions()() as s:
         full = await _guard_run(request, s, run_id)
         evs = (await s.execute(select(RunEvent).where(RunEvent.run_id == run_id, RunEvent.seq > after).order_by(RunEvent.seq))).scalars().all()
         run = await s.get(Run, run_id)
@@ -599,13 +649,13 @@ async def run_events(request: Request, run_id: int, after: int = 0):
 @router.get("/runs/{run_id}/stream")
 async def run_stream(request: Request, run_id: int, after: int = 0):
     """Server-sent events, tailing run_events in the database (so a refresh or a second viewer sees the same thing)."""
-    async with sessions()() as s:
+    async with read_sessions()() as s:
         full = await _guard_run(request, s, run_id)
 
     async def gen():
         last, started, quiet = after, time.monotonic(), 0
         while time.monotonic() - started < 300:
-            async with sessions()() as s:
+            async with read_sessions()() as s:
                 evs = (await s.execute(select(RunEvent).where(RunEvent.run_id == run_id, RunEvent.seq > last).order_by(RunEvent.seq))).scalars().all()
                 run = await s.get(Run, run_id)
             finished = False
@@ -762,7 +812,7 @@ async def run_action(request: Request, run_id: int, action: str = Form(...), com
 # --- outbox, document check, assumptions, system -----------------------------------------------------
 @router.get("/outbox", response_class=HTMLResponse)
 async def outbox(request: Request):
-    async with sessions()() as s:
+    async with read_sessions()() as s:
         access.require_full(await _actor(request, s), "The outbox")
         rows = (await s.execute(select(Message, Run, Application).join(Run, Run.id == Message.run_id).join(Application, Application.id == Run.application_id)
                                 .where(Message.audience == "vendor").order_by(Message.id.desc()).limit(100))).all()
@@ -815,16 +865,21 @@ async def system(request: Request, done: str = ""):
     st = get_settings()
     checks = []
     t = time.monotonic()
-    async with sessions()() as s:
+    async with read_sessions()() as s:
         access.require_full(await _actor(request, s), "The system page")
-        try:
-            counts = {m.__tablename__: (await s.execute(select(func.count()).select_from(m))).scalar() for m in (Employee, Invite, Application, Run, VendorMaster)}
-            checks.append(("Database (Neon Postgres)", True, f"connected in {round((time.monotonic() - t) * 1000)} ms; " + ", ".join(f"{k}: {v}" for k, v in counts.items())))
-        except Exception as e:
-            checks.append(("Database", False, type(e).__name__))
-        checks.append(("Gemini API key", bool(st.gemini_api_key), f"models: {st.gemini_model} (fallback {st.gemini_fallback_model})" if st.gemini_api_key else "missing: documents can only be read from saved readings"))
         from onboarding.sources import ifsc_lookup
-        r = await ifsc_lookup("HDFC0000009")
+        models = (Employee, Invite, Application, Run, VendorMaster)
+
+        async def db_counts():
+            try:  # one query for all the counts, sent while the bank lookup is in flight
+                row = (await s.execute(select(*(select(func.count()).select_from(m).scalar_subquery() for m in models)))).one()
+                return ("Database (Neon Postgres)", True, f"connected in {round((time.monotonic() - t) * 1000)} ms; "
+                        + ", ".join(f"{m.__tablename__}: {v}" for m, v in zip(models, row)))
+            except Exception as e:
+                return ("Database", False, type(e).__name__)
+        db_check, r = await asyncio.gather(db_counts(), ifsc_lookup("HDFC0000009"))
+        checks.append(db_check)
+        checks.append(("Gemini API key", bool(st.gemini_api_key), f"models: {st.gemini_model} (fallback {st.gemini_fallback_model})" if st.gemini_api_key else "missing: documents can only be read from saved readings"))
         checks.append(("Bank branch lookup (Razorpay IFSC, live)", r.live and r.status == "FOUND", r.source + (f": {r.data.get('BANK')}, {r.data.get('BRANCH')}" if r.data else "")))
         checks.append(("Simulated sources", True, "GST status, PAN status, penny-drop, CIN, Udyam answer from the seeded sim_registry table (labelled SIMULATED)"))
         checks.append(("Background runs", True, f"{runner.busy()} running now (max 2 at a time)"))

@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     gemini_fallback_model: str = "gemini-3.1-flash-lite"
     database_url: str = "sqlite+aiosqlite:///./local.db"
     admin_passcode: str = "change-me"
+    db_direct: bool = True     # use Neon's direct endpoint even if DATABASE_URL is the -pooler one (faster; see db.engine_args)
     session_secret: str = ""   # signs vendor login cookies; if empty, derived from the database URL (also secret)
 
 
