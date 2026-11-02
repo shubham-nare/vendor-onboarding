@@ -276,7 +276,7 @@ def tax_invoice(b: dict) -> dict:
 
 
 def service_invoice(b: dict, *, invoice_no: str, date: str, lines: list[dict], igst: int = 0, cgst: int = 0, sgst: int = 0,
-                    bank_line: str = "") -> dict:
+                    bank_line: str = "", po_no: str = "") -> dict:
     """A services tax invoice addressed to us (BUYER)."""
     return {
         "kind": "tax_invoice",
@@ -296,6 +296,7 @@ def service_invoice(b: dict, *, invoice_no: str, date: str, lines: list[dict], i
         "sgst": sgst,
         "igst": igst,
         "bank_line": bank_line or f"Bank: {b['bank']['bank']}, A/c {b['bank']['account']}, IFSC {b['bank']['ifsc']}",
+        "po_no": po_no,
     }
 
 
@@ -440,14 +441,35 @@ SCENARIOS: dict[str, dict] = {
 # Bills an ACTIVE Kesari sends later through the supplier portal (rendered to fixtures/documents/extra/).
 EXTRA_DOCUMENTS = {
     "kesari_bill_clean": service_invoice(
-        KESARI, invoice_no="KFS/2026-27/0207", date="28/10/2026", cgst=9, sgst=9,
+        KESARI, invoice_no="KFS/2026-27/0207", date="28/10/2026", cgst=9, sgst=9, po_no="PO-2026-0141",
         lines=[{"desc": "Housekeeping of Plant 2 canteen and washrooms, October 2026", "hsn": "998533", "qty": 1, "rate": 34000.00}]),
     # Same vendor, but the bill asks to be paid into a NEW account: the classic bank-change fraud.
     "kesari_bill_newbank": service_invoice(
-        KESARI, invoice_no="KFS/2026-27/0211", date="30/10/2026", cgst=9, sgst=9,
+        KESARI, invoice_no="KFS/2026-27/0211", date="30/10/2026", cgst=9, sgst=9, po_no="PO-2026-0156",
         lines=[{"desc": "Pest control treatment, Plant 2 stores", "hsn": "998531", "qty": 1, "rate": 20000.00}],
         bank_line="Bank details (NEW ACCOUNT, please update your records): Kotak Mahindra Bank, A/c 4613902788, IFSC KKBK0000721"),
+    # Bills 3 shifts; the service confirmation records only 2 delivered.
+    "kesari_bill_overbilled": service_invoice(
+        KESARI, invoice_no="KFS/2026-27/0219", date="02/11/2026", cgst=9, sgst=9, po_no="PO-2026-0163",
+        lines=[{"desc": "Deep cleaning of Plant 2 finished-goods warehouse (per shift)", "hsn": "998533", "qty": 3, "rate": 12000.00}]),
 }
+
+# --- Company-side purchase orders and service confirmations (what invoices are matched against) -------------
+# Seeded as the company's own records. Keyed to the supplier by GSTIN, so they exist before the vendor is active.
+PURCHASE_ORDERS = [
+    {"po_number": "PO-2026-0141", "vendor": KESARI, "cost_centre": "PL2-FACILITIES", "requester": "Priya Nair", "approver": "Rahul Desai",
+     "service_from": "2026-10-01", "service_to": "2026-10-31",
+     "lines": [{"desc": "Housekeeping of Plant 2 canteen and washrooms, October 2026", "qty": 1, "unit": "month", "rate": 34000.00, "tax": 18}],
+     "receipts": [{"number": "SC-2026-0141", "on": "2026-10-31", "by": "Priya Nair", "qty": [1]}]},
+    {"po_number": "PO-2026-0156", "vendor": KESARI, "cost_centre": "PL2-STORES", "requester": "Priya Nair", "approver": "Rahul Desai",
+     "service_from": "2026-10-25", "service_to": "2026-10-31",
+     "lines": [{"desc": "Pest control treatment, Plant 2 stores", "qty": 1, "unit": "job", "rate": 20000.00, "tax": 18}],
+     "receipts": [{"number": "SC-2026-0156", "on": "2026-10-30", "by": "Priya Nair", "qty": [1]}]},
+    {"po_number": "PO-2026-0163", "vendor": KESARI, "cost_centre": "PL2-WAREHOUSE", "requester": "Priya Nair", "approver": "Rahul Desai",
+     "service_from": "2026-11-01", "service_to": "2026-11-07",
+     "lines": [{"desc": "Deep cleaning of Plant 2 finished-goods warehouse (per shift)", "qty": 3, "unit": "shift", "rate": 12000.00, "tax": 18}],
+     "receipts": [{"number": "SC-2026-0163", "on": "2026-11-02", "by": "Priya Nair", "qty": [2]}]},
+]
 
 
 # --- Seeded vendor master + blocklist ---------------------------------------

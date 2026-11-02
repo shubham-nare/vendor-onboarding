@@ -34,7 +34,8 @@ _tasks: set[asyncio.Task] = set()
 STATUS_TEXT = {
     "checking": "Checking", "vendor_fix": "Vendor to fix", "for_review": "Internal review",
     "awaiting_confirmation": "Awaiting confirmation", "ready_for_approval": "Ready for approval",
-    "approved": "Approved for payment", "rejected": "Rejected", "failed": "Check failed",
+    "approved": "Approved for payment", "rejected": "Rejected", "failed": "Check failed", "blocked": "Blocked for investigation",
+    "draft": "Draft",
 }
 VENDOR_TEXT = {  # what the vendor sees: never the internal reasoning
     "checking": "We're checking your bill. This takes under a minute.",
@@ -45,7 +46,30 @@ VENDOR_TEXT = {  # what the vendor sees: never the internal reasoning
     "approved": "Approved. It is paid once the purchase order and receipt are matched.",
     "rejected": "We're unable to pay this bill. Please contact the person who engaged you.",
     "failed": "Your bill is being reviewed by our team. No action is needed from you.",
+    "blocked": "Your bill is being reviewed by our team. No action is needed from you.",
+    "draft": "Not sent yet: check the details we read from your bill, then send it.",
 }
+
+# The invoice statuses people see. Internal: the full lifecycle. Vendor: only what's safe to say.
+INVOICE_TONE = {"Draft": "slate", "Being checked": "indigo", "Needs vendor information": "amber", "Needs internal review": "amber",
+                "Matched and ready for approval": "indigo", "Approved for payment": "emerald", "Payment on hold": "amber",
+                "Payment in progress": "indigo", "Paid": "emerald", "Rejected": "rose", "Blocked for investigation": "rose"}
+
+
+def invoice_status(b, case=None) -> str:
+    pay = case.payment_status if case else "none"
+    if b.status == "approved":
+        return {"on_hold": "Payment on hold", "in_progress": "Payment in progress", "paid": "Paid"}.get(pay, "Approved for payment")
+    return {"draft": "Draft", "checking": "Being checked", "vendor_fix": "Needs vendor information", "for_review": "Needs internal review",
+            "awaiting_confirmation": "Needs internal review", "failed": "Needs internal review", "ready_for_approval": "Matched and ready for approval",
+            "rejected": "Rejected", "blocked": "Blocked for investigation"}.get(b.status, b.status)
+
+
+def vendor_invoice_status(b, case=None) -> str:
+    pay = case.payment_status if case else "none"
+    if b.status == "approved":
+        return "Paid" if pay == "paid" else "Approved for payment"
+    return {"draft": "Draft", "checking": "Received", "vendor_fix": "More information required", "rejected": "Rejected"}.get(b.status, "Under review")
 
 
 def norm_number(x: str) -> str:
@@ -134,11 +158,37 @@ async def check_bill(bill_id: int, *, prefer_cache: bool = False) -> VendorBill:
                       bill={"engaged_employee": emp.name if emp else None, "engaged_department": emp.department if emp else "", "duplicates": dups})
         _bill_rules(add, ctx, info if read and read.doc_type == "TAX_INVOICE" else None)
 
+        # three-way match against the company's purchase order and its receipt / service confirmation
+        from onboarding.ap.match import match_invoice
+        from onboarding.ap.models import InvoiceCase
+        from onboarding.intel.models import Vendor
+        match = {"po": None, "receipts": [], "lines": [], "blocking_duplicate": ""}
+        if read and read.doc_type == "TAX_INVOICE":
+            po_rules, match = await match_invoice(s, b, read, vm.gstin, dups)
+            rules.extend(po_rules)
+            if not b.po_number and match.get("po"):
+                from onboarding.ap.models import PurchaseOrder
+                b.po_number = (await s.get(PurchaseOrder, match["po"])).po_number
+        if match.get("receipts") and b.confirmation == "awaiting":   # the company's own record that the work was delivered
+            b.confirmation = "confirmed"
+            trail(b, "system", "", "work_confirmed", "Delivery confirmed by " + ", ".join(f"{r['number']} ({r['by']})" for r in match["receipts"]))
+        case = (await s.execute(select(InvoiceCase).where(InvoiceCase.bill_id == b.id))).scalar_one_or_none()
+        if case is None:
+            case = InvoiceCase(bill_id=b.id)
+            s.add(case)
+        case.vendor_pk = (await s.execute(select(Vendor.id).where(Vendor.erp_vendor_id == b.vendor_id))).scalar()
+        case.po_id, case.receipt_ids = match.get("po"), [r["id"] for r in match.get("receipts", [])]
+        case.match = {k: v for k, v in match.items() if k != "receipts"} | {"receipts": match.get("receipts", [])}
+        case.updated_at = now()
+
         failing = [r for r in rules if r.result in (FAIL, ERROR)]
         b.fraud = any(r.fraud for r in failing)
         b.rules = [r.as_dict() for r in rules]
         b.vendor_items = list(dict.fromkeys(r.vendor_text for r in failing if r.outcome == "VENDOR" and r.vendor_text))
-        if b.confirmation == "denied" or any(r.outcome == "REVIEW" or r.result == ERROR for r in failing):
+        if match.get("blocking_duplicate"):   # never pay twice: stop it outright and say why
+            b.status = "blocked"
+            case.blocked_reason = f"Duplicate: {match['blocking_duplicate']}."
+        elif b.confirmation == "denied" or any(r.outcome == "REVIEW" or r.result == ERROR for r in failing):
             b.status = "for_review"
         elif b.vendor_items or any(r.outcome == "VENDOR" for r in failing):
             b.status = "vendor_fix"
@@ -152,13 +202,26 @@ async def check_bill(bill_id: int, *, prefer_cache: bool = False) -> VendorBill:
         return b
 
 
-def allowed_bill_actions(b: VendorBill, actor: Employee | None, engaged: Employee | None) -> dict:
-    """Actions on a vendor bill, each with why it's blocked for the current person (if it is)."""
+def failing_review(b: VendorBill) -> list[dict]:
+    return [r for r in (b.rules or []) if r.get("result") in ("FAIL", "ERROR") and r.get("outcome") == "REVIEW"]
+
+
+def allowed_bill_actions(b: VendorBill, actor: Employee | None, engaged: Employee | None, case=None) -> dict:
+    """Actions on a vendor bill, each with why it's blocked for the current person (if it is).
+    Approving an invoice is not paying it: payment is released afterwards by a different person (maker-checker)."""
     acts: list[str] = []
+    pay = case.payment_status if case else "none"
     if b.status in ("awaiting_confirmation", "for_review", "vendor_fix", "ready_for_approval") and b.confirmation == "awaiting" and engaged:
         acts += ["confirm_engagement", "deny_engagement"]
     if b.status in ("ready_for_approval", "for_review"):
         acts += ["approve_payment", "ask_vendor", "reject_bill"]
+    if b.status == "approved":
+        acts += {"none": ["release_payment", "hold_payment"], "unpaid": ["release_payment", "hold_payment"], "on_hold": ["release_hold"],
+                 "in_progress": ["mark_paid", "hold_payment"]}.get(pay, [])
+    if b.status == "blocked":
+        acts += ["unblock"]
+    elif b.status not in ("rejected", "draft", "checking") and pay != "paid":
+        acts += ["block"]
     out = {}
     high = b.risk_tier == "high" or b.fraud or b.confirmation == "denied"
     for a in acts:
@@ -177,7 +240,15 @@ def allowed_bill_actions(b: VendorBill, actor: Employee | None, engaged: Employe
             why = "Only the Finance controller can reject a bill."
         elif a == "approve_payment" and high and actor.role != "checker":
             why = "High-risk bill (₹10 lakh or more, or a fraud signal): needs the Finance controller."
-        out[a] = {"blocked": why, "needs_comment": a in ("deny_engagement", "ask_vendor", "reject_bill")}
+        elif a == "approve_payment" and failing_review(b) and actor.role != "checker":
+            why = "Checks found discrepancies: only the Finance controller can approve over them, with a reason."
+        elif a in ("release_payment", "mark_paid", "release_hold", "unblock") and actor.role != "checker":
+            why = "Only Finance releases payments, records them and lifts holds."
+        elif a == "release_payment" and case and case.approved_by == actor.id:
+            why = "Maker-checker: the person who approved this invoice can't also release its payment."
+        out[a] = {"blocked": why, "needs_comment": a in ("deny_engagement", "ask_vendor", "reject_bill", "block", "unblock", "hold_payment",
+                                                          "release_hold", "mark_paid")
+                  or (a == "approve_payment" and bool(failing_review(b)))}
     return out
 
 
@@ -187,7 +258,16 @@ BILL_ACTION_LABEL = {
     "approve_payment": "Approve for payment",
     "ask_vendor": "Ask the vendor to fix something",
     "reject_bill": "Reject the bill",
+    "release_payment": "Release payment",
+    "mark_paid": "Record the payment",
+    "hold_payment": "Put payment on hold",
+    "release_hold": "Lift the hold",
+    "block": "Block for investigation",
+    "unblock": "Unblock and send to review",
 }
+COMMENT_HINT = {"mark_paid": "Bank payment reference (UTR)", "hold_payment": "Why payment is on hold", "release_hold": "Why the hold is lifted",
+                "block": "What needs investigating", "unblock": "What was found", "ask_vendor": "Message to the vendor",
+                "approve_payment": "Why you approve despite the discrepancies (audit trail)"}
 
 
 def file_mime(filename: str) -> str:

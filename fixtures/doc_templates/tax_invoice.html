@@ -9,7 +9,7 @@
 <div class="title">TAX INVOICE</div>
 <table class="two">
   <tr><td><b>{{ d.seller }}</b><br>{{ d.seller_address }}<br>GSTIN: <b>{{ d.seller_gstin }}</b></td>
-      <td>Invoice No.: <b>{{ d.invoice_no }}</b><br>Invoice Date: {{ d.date }}<br>Place of Supply: {{ d.get('place_of_supply', 'Telangana (36)') }}<br>Reverse Charge: No</td></tr>
+      <td>Invoice No.: <b>{{ d.invoice_no }}</b><br>Invoice Date: {{ d.date }}<br>Place of Supply: {{ d.get('place_of_supply', 'Telangana (36)') }}<br>Reverse Charge: No{% if d.get('po_no') %}<br>Your PO No.: <b>{{ d.po_no }}</b>{% endif %}</td></tr>
   <tr><td colspan="2"><b>Bill To:</b> {{ d.buyer }}<br>{{ d.buyer_address }}<br>GSTIN: {{ d.buyer_gstin }}</td></tr>
 </table>
 <table style="margin-top:10px">

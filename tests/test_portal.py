@@ -107,10 +107,13 @@ def flows(tmp_path_factory):
             bid = await bill("clean")
             out["clean_page"] = (await staff.get(f"/bills/{bid}")).text
             codes = []
-            for actor, action in ((3, "approve_payment"), (1, "confirm_engagement"), (1, "approve_payment"), (3, "approve_payment")):
+            # Priya engaged them (can't approve); Arjun approves; only Finance releases; payment needs its bank reference
+            for actor, action, comment in ((1, "approve_payment", ""), (3, "approve_payment", ""), (3, "release_payment", ""),
+                                           (4, "release_payment", ""), (4, "mark_paid", ""), (4, "mark_paid", "UTR HDFC261103000417")):
                 staff.cookies.set("actor", str(actor))
-                codes.append((await staff.post(f"/bills/{bid}/action", data={"action": action})).status_code)
+                codes.append((await staff.post(f"/bills/{bid}/action", data={"action": action, "comment": comment})).status_code)
             out["clean_codes"] = codes
+            out["clean_paid_page"] = (await staff.get(f"/bills/{bid}")).text
             out["clean_vendor"] = (await v.get(f"/vendor/bills/{bid}")).text
             bid2 = await bill("newbank")
             out["newbank_page"] = (await staff.get(f"/bills/{bid2}")).text
@@ -199,10 +202,13 @@ def test_registration_is_linked_and_activation_unlocks_bills(flows):
     assert "V-1001" in flows["home_active"] and "Submit a new bill" in flows["home_active"]
 
 
-def test_clean_bill_needs_confirmation_and_a_second_person(flows):
-    assert "Awaiting confirmation" in flows["clean_page"] and "Every check on the bill passed" in flows["clean_page"]
-    assert flows["clean_codes"] == [409, 303, 403, 303]
-    assert "Approved for payment" in flows["clean_vendor"]
+def test_clean_bill_matches_its_po_and_payment_needs_finance(flows):
+    page = flows["clean_page"]
+    assert "Matched and ready for approval" in page and "PO-2026-0141" in page and "SC-2026-0141" in page
+    assert flows["clean_codes"] == [403, 303, 403, 303, 400, 303]
+    paid = flows["clean_paid_page"]
+    assert "Paid" in paid and "UTR HDFC261103000417" in paid
+    assert "Paid" in flows["clean_vendor"] or "Approved for payment" in flows["clean_vendor"]
 
 
 def test_bank_change_bill_is_caught_and_kept_from_the_vendor(flows):

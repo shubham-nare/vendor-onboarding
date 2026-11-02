@@ -271,3 +271,5 @@ class VendorBill(Base):
 
 # Vendor Intelligence tables live in their own module; importing it registers them with Base.metadata (create_all).
 from onboarding.intel import models as _intel_models  # noqa: E402,F401
+
+from onboarding.ap import models as _ap_models  # noqa: E402,F401  (purchase orders, invoices, payments, audit)

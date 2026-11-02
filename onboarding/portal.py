@@ -43,6 +43,7 @@ DEMO_BILLS = {
                   amount="40120.00", description="Housekeeping of Plant 2 canteen and washrooms, October 2026", engaged_by="Priya Nair"),
     "newbank": dict(title="A bill asking for payment to a new bank account", file="kesari_bill_newbank.pdf", invoice_number="KFS/2026-27/0211",
                     invoice_date="2026-10-30", amount="23600.00", description="Pest control treatment, Plant 2 stores", engaged_by="Priya Nair"),
+    "overbilled": dict(title="A bill for more shifts than were confirmed", file="kesari_bill_overbilled.pdf", engaged_by="Priya Nair"),
 }
 
 
@@ -380,9 +381,17 @@ async def bill_page(request: Request, bill_id: int):
         facts = (await s.execute(select(Fact).where(Fact.run_id == vm.source_run_id).order_by(Fact.id))).scalars().all() if reg_run else []
         other = (await s.execute(select(VendorBill).where(VendorBill.vendor_id == b.vendor_id, VendorBill.id != b.id).order_by(VendorBill.id.desc()))).scalars().all()
         other = [o for o in other if access.can_open_bill(actor, o)]
+        from onboarding.ap.models import AuditEvent, InvoiceCase, POLine, PurchaseOrder
+        from onboarding.intel.models import Vendor
+        case = (await s.execute(select(InvoiceCase).where(InvoiceCase.bill_id == b.id))).scalar_one_or_none()
+        po = await s.get(PurchaseOrder, case.po_id) if case and case.po_id else None
+        po_lines = (await s.execute(select(POLine).where(POLine.po_id == po.id).order_by(POLine.line_no))).scalars().all() if po else []
+        audit = (await s.execute(select(AuditEvent).where(AuditEvent.entity == "invoice", AuditEvent.entity_id == str(b.id)).order_by(AuditEvent.id))).scalars().all()
+        emps = {e.id: e for e in await _employees(s)}
+        vendor = (await s.execute(select(Vendor).where(Vendor.erp_vendor_id == b.vendor_id))).scalar_one_or_none()
         return await render(request, s, "bill.html", b=b, vm=vm, app=app, acct=acct, engaged=engaged, reg_run=reg_run, facts=facts, other=other,
-                            full=access.full_view(actor), full_bank=access.sees_full_bank(actor),
-                            allowed=B.allowed_bill_actions(b, actor, engaged), labels=B.BILL_ACTION_LABEL, B=B)
+                            full=access.full_view(actor), full_bank=access.sees_full_bank(actor), case=case, po=po, po_lines=po_lines, audit=audit,
+                            emps=emps, vendor=vendor, allowed=B.allowed_bill_actions(b, actor, engaged, case), labels=B.BILL_ACTION_LABEL, B=B)
 
 
 @router.post("/bills/{bill_id}/action")
@@ -395,7 +404,13 @@ async def bill_action(request: Request, bill_id: int, action: str = Form(...), c
         if not access.can_open_bill(actor, b):
             raise access.forbid("This bill")
         engaged = await s.get(Employee, b.engaged_employee_id) if b.engaged_employee_id else None
-        allowed = B.allowed_bill_actions(b, actor, engaged)
+        from onboarding.ap.audit import record
+        from onboarding.ap.models import InvoiceCase
+        case = (await s.execute(select(InvoiceCase).where(InvoiceCase.bill_id == b.id))).scalar_one_or_none()
+        if case is None:
+            case = InvoiceCase(bill_id=b.id)
+            s.add(case)
+        allowed = B.allowed_bill_actions(b, actor, engaged, case)
         if action not in allowed:
             raise HTTPException(409, "That action doesn't apply to this bill right now.")
         if allowed[action]["blocked"]:
@@ -411,11 +426,29 @@ async def bill_action(request: Request, bill_id: int, action: str = Form(...), c
             b.confirmation, b.status, b.risk_tier = "denied", "for_review", "high"
         elif action == "approve_payment":
             b.status = "approved"
+            case.approved_by, case.approved_at, case.payment_status = actor.id, now(), "unpaid"
         elif action == "ask_vendor":
             b.status, b.vendor_items = "vendor_fix", [comment]
         elif action == "reject_bill":
             b.status = "rejected"
+        elif action == "release_payment":
+            case.payment_status, case.released_by, case.released_at = "in_progress", actor.id, now()
+        elif action == "mark_paid":
+            case.payment_status, case.payment_reference, case.paid_at = "paid", comment[:60], now()
+            case.paid_amount, case.payment_recorded_by = money(b.amount), actor.id
+        elif action == "hold_payment":
+            case.payment_status, case.hold_reason = "on_hold", comment
+        elif action == "release_hold":
+            case.payment_status, case.hold_reason = ("in_progress" if case.released_by else "unpaid"), ""
+        elif action == "block":
+            b.status, case.blocked_reason = "blocked", comment
+        elif action == "unblock":
+            b.status = "for_review"
+        case.updated_at = now()
         B.trail(b, actor.name, ROLE_LABEL.get(actor.role, actor.role), action, comment)
+        record(s, entity="invoice", entity_id=b.id, entity_label=f"{b.ref} · {b.invoice_number or b.filename}", action=action, actor=actor,
+               actor_label=f"{actor.name} ({ROLE_LABEL.get(actor.role, actor.role)})", vendor_pk=case.vendor_pk, reason=comment,
+               detail={"status": B.invoice_status(b, case), "amount": b.amount}, override=action == "approve_payment" and bool(B.failing_review(b)))
         await s.commit()
     return RedirectResponse(f"/bills/{bill_id}#actions", status_code=303)
 

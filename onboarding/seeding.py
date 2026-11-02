@@ -109,6 +109,7 @@ async def seed(reset: bool = False, dispose: bool = True) -> dict:
         await s.execute(delete(VendorMaster).where(VendorMaster.source_run_id.is_(None)))
         for m in dd.VENDOR_MASTER:
             s.add(VendorMaster(**m))
+        await seed_purchase_orders(s, emp)
         await s.execute(delete(Blocklist))
         for b in dd.BLOCKLIST:
             s.add(Blocklist(**b))
@@ -140,3 +141,34 @@ async def ensure_demo_logins(s: AsyncSession) -> None:
     if not (await s.execute(select(VendorAccount).where(VendorAccount.email == DEMO_VENDOR["email"]))).scalar_one_or_none():
         s.add(VendorAccount(password_hash=await auth.hash_password_async(DEMO_PASSWORD), **DEMO_VENDOR))
     await s.flush()
+
+
+async def seed_purchase_orders(s: AsyncSession, emp: dict) -> None:
+    """The company's own purchase orders and service confirmations (dd.PURCHASE_ORDERS), added once."""
+    from onboarding.ap.models import GoodsReceipt, POLine, PurchaseOrder, ReceiptLine
+    from onboarding.intel.crypto import lookup_key, mask
+    for spec in dd.PURCHASE_ORDERS:
+        if (await s.execute(select(PurchaseOrder).where(PurchaseOrder.po_number == spec["po_number"]))).scalar_one_or_none():
+            continue
+        v = spec["vendor"]
+        acct = v["bank"]["account"]
+        po = PurchaseOrder(po_number=spec["po_number"], vendor_gstin=v["gstin"], vendor_name=v["legal_name"], cost_centre=spec["cost_centre"],
+                           requester_id=emp[spec["requester"]].id, approver_id=emp[spec["approver"]].id, service_from=spec["service_from"],
+                           service_to=spec["service_to"], payee_account_key=lookup_key("BANK_ACCOUNT", acct), payee_account_display=mask("BANK_ACCOUNT", acct),
+                           payee_ifsc=v["bank"]["ifsc"], source="seed")
+        s.add(po)
+        await s.flush()
+        lines = []
+        for i, ln in enumerate(spec["lines"], 1):
+            pl = POLine(po_id=po.id, line_no=i, description=ln["desc"], quantity=ln["qty"], unit=ln["unit"], unit_price=ln["rate"], tax_rate=ln["tax"])
+            s.add(pl)
+            lines.append(pl)
+        await s.flush()
+        for rc in spec.get("receipts", []):
+            g = GoodsReceipt(po_id=po.id, number=rc["number"], kind="service", received_on=rc["on"], confirmed_by=emp[rc["by"]].id)
+            s.add(g)
+            await s.flush()
+            for pl, q in zip(lines, rc["qty"]):
+                s.add(ReceiptLine(receipt_id=g.id, po_line_id=pl.id, quantity=q))
+    await s.flush()
+

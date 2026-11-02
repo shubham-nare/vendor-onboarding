@@ -157,6 +157,10 @@
       "kesari_bill_newbank": {
         "file": "extra/kesari_bill_newbank.pdf",
         "actual_kind": "tax_invoice"
+      },
+      "kesari_bill_overbilled": {
+        "file": "extra/kesari_bill_overbilled.pdf",
+        "actual_kind": "tax_invoice"
       }
     }
   }
