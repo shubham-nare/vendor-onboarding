@@ -6,114 +6,113 @@
   <title>{% block title %}Vendor onboarding{% endblock %} · Vendor Assurance</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=Schibsted+Grotesk:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
-    // "The Registry": warm ledger paper, carbon ink, seal vermilion. Tailwind palettes are remapped so
-    // every template shares one set of tokens.
+    // A clean product UI: cool greys, one cobalt accent, status colours that carry meaning.
+    // Templates use `indigo` for the brand accent, so it is mapped to the cobalt scale here.
     tailwind.config = { theme: { extend: {
       colors: {
-        white: '#FFFDF7',
-        slate:   { 50: '#F7F3EA', 100: '#EFE9DC', 200: '#E3DBCB', 300: '#CCC2AE', 400: '#A1988A', 500: '#776F62', 600: '#5A544A', 700: '#423E36', 800: '#2B2924', 900: '#1C1B18' },
-        indigo:  { 50: '#FBEEE8', 100: '#F6D9CE', 200: '#EDB3A0', 300: '#E08A6F', 400: '#CF6545', 500: '#BD4826', 600: '#A63A1C', 700: '#8A2E16', 800: '#6C2512', 900: '#4E1B0E' },
-        emerald: { 50: '#EAF3ED', 100: '#CFE5D7', 200: '#A2CBB2', 300: '#6EAC88', 400: '#3E8C62', 500: '#22744B', 600: '#1B623F', 700: '#165033', 800: '#113F28', 900: '#0C2D1D' },
-        amber:   { 50: '#FBF3DF', 100: '#F4E2B3', 200: '#EACA7D', 300: '#DCAF4C', 400: '#C9942A', 500: '#A97616', 600: '#8C6011', 700: '#6F4B0E', 800: '#56390B', 900: '#3D2908' },
-        violet:  { 50: '#EEEFF7', 100: '#D9DBEF', 200: '#B4B7DE', 300: '#8A8EC9', 400: '#666AB2', 500: '#4A4E99', 600: '#3A3E82', 700: '#2E3168', 800: '#232650', 900: '#181A38' },
-        rose:    { 50: '#F9ECEC', 100: '#F2D1D2', 200: '#E5A4A8', 300: '#D2747A', 400: '#BB4A52', 500: '#A1313B', 600: '#892431', 700: '#6F1C28', 800: '#55161F', 900: '#3C0F16' },
-        orange:  { 100: '#F7DFC9', 800: '#7A3B12' },
-        sky:     { 50: '#EEF3F4', 200: '#C3D4D8', 800: '#2F4C55' },
-        blue:    { 100: '#DDE5EE', 300: '#9FB3CB', 800: '#26466A' },
+        indigo: { 50: '#EEF4FF', 100: '#DCE7FE', 200: '#BCD0FC', 300: '#8FB0F8', 400: '#5E87F1', 500: '#3B66E6', 600: '#2950D3', 700: '#2240AB', 800: '#213887', 900: '#1F326B' },
       },
       fontFamily: {
-        sans: ['"Schibsted Grotesk"', 'ui-sans-serif', 'sans-serif'],
-        display: ['Newsreader', 'Georgia', 'serif'],
-        mono: ['"DM Mono"', 'ui-monospace', 'monospace'],
+        sans: ['Geist', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        display: ['Geist', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        mono: ['"Geist Mono"', 'ui-monospace', 'monospace'],
       },
-      borderRadius: { md: '4px', lg: '5px', xl: '7px' },
+      boxShadow: {
+        card: '0 1px 2px rgba(15,23,42,.04), 0 1px 3px rgba(15,23,42,.05)',
+        pop: '0 12px 32px -8px rgba(15,23,42,.18), 0 4px 8px -4px rgba(15,23,42,.08)',
+      },
     } } };
   </script>
   <style>
     :root {
-      --paper: #F3EEE3; --sheet: #FFFDF7; --ink: #1C1B18; --ink-soft: #5A544A; --rule: #E3DBCB;
-      --seal: #A63A1C; --ledger: #1B623F; --pen: #3A3E82; --turmeric: #8C6011; --crimson: #892431;
+      --page: #F5F6F8; --card: #FFFFFF; --ink: #0F172A; --ink-soft: #64748B; --rule: #E5E7EB;
+      --accent: #2950D3; --ok: #059669; --warn: #D97706; --review: #7C3AED; --bad: #E11D48;
       --ease-out: cubic-bezier(.2, .8, .2, 1);
     }
-    html { background: var(--paper); }
+    html { background: var(--page); }
     main > * , .reveal > * { min-width: 0; }
-    body { font-family: "Schibsted Grotesk", ui-sans-serif, sans-serif; color: var(--ink); background: transparent; -webkit-font-smoothing: antialiased; }
-    /* paper grain */
-    body::before { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: -1; opacity: .5;
-      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .35  0 0 0 0 .3  0 0 0 0 .22  0 0 0 .09 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
-    h1, h2, .font-display { font-family: Newsreader, Georgia, serif; font-optical-sizing: auto; letter-spacing: -0.01em; }
-    h1 { font-weight: 500; }
-    h2 { font-weight: 600; }
-    .mono { font-family: "DM Mono", ui-monospace, monospace; }
-    .kicker { font-family: "DM Mono", monospace; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-soft); }
+    body { font-family: Geist, ui-sans-serif, system-ui, sans-serif; color: var(--ink); background: transparent; -webkit-font-smoothing: antialiased; font-feature-settings: "ss01", "cv11"; }
+    h1, h2, .font-display { font-family: Geist, ui-sans-serif, sans-serif; letter-spacing: -0.022em; }
+    body h1 { font-weight: 650; }
+    body h2, body h3 { font-weight: 600; }
+    main h1:not(.hero) { font-size: 26px !important; line-height: 1.2 !important; }
+    @media (min-width: 640px) { main h1:not(.hero) { font-size: 28px !important; } }
+    h1 em, h1 i { font-style: normal; }
+    main h2.text-xl { font-size: 16px; line-height: 1.4; }
+    .font-display.leading-none { font-weight: 650; letter-spacing: -0.03em; }
+    .mono { font-family: "Geist Mono", ui-monospace, monospace; }
+    .kicker { font-family: Geist, sans-serif; font-weight: 600; font-size: 11.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-soft); }
 
-    /* sheets of paper */
-    main .bg-white.border, main section.bg-white { box-shadow: 0 1px 0 rgba(28,27,24,.05), 4px 4px 0 rgba(28,27,24,.055); border-color: var(--rule); }
-    main table thead { font-family: "DM Mono", monospace; letter-spacing: .08em; text-transform: uppercase; font-size: 10.5px !important; }
+    /* cards */
+    main .bg-white.border, main section.bg-white { box-shadow: 0 1px 2px rgba(15,23,42,.04), 0 1px 3px rgba(15,23,42,.05); border-color: var(--rule); border-radius: 12px; }
+    main .rounded-xl { border-radius: 12px; }
+    main table thead { font-family: Geist, sans-serif; letter-spacing: .04em; text-transform: uppercase; font-size: 11px !important; font-weight: 600; }
+    main table thead th { font-weight: 600 !important; }
 
-    /* security-print header band */
-    .guilloche { background-color: var(--ink);
-      background-image:
-        repeating-radial-gradient(circle at 0% 120%, transparent 0 11px, rgba(243,238,227,.055) 11px 12px),
-        repeating-radial-gradient(circle at 100% -20%, transparent 0 11px, rgba(189,72,38,.08) 11px 12px); }
-    .seal-rule { height: 3px; background: repeating-linear-gradient(90deg, var(--seal) 0 14px, transparent 14px 18px); opacity: .85; }
-
-    /* rubber stamps */
-    .stamp { display: inline-flex; align-items: center; gap: .6rem; padding: .55rem 1.15rem .5rem; border: 3px double currentColor; border-radius: 7px;
-      font-family: "DM Mono", monospace; font-weight: 500; text-transform: uppercase; letter-spacing: .16em; line-height: 1.1; transform: rotate(-3.5deg);
-      -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300'><filter id='d'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' seed='4'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -9 5.9'/></filter><rect width='100%' height='100%' filter='url(%23d)'/></svg>");
-              mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300'><filter id='d'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' seed='4'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -9 5.9'/></filter><rect width='100%' height='100%' filter='url(%23d)'/></svg>"); }
-    .stamp-land { animation: stamp .5s var(--ease-out) .35s both; }
-    @keyframes stamp { 0% { opacity: 0; transform: scale(1.9) rotate(-11deg); } 60% { opacity: .95; transform: scale(.96) rotate(-3deg); } 100% { opacity: 1; transform: scale(1) rotate(-3.5deg); } }
-    .tag { display: inline-flex; align-items: center; gap: .3rem; border: 1.5px solid currentColor; border-radius: 3px; padding: .05rem .4rem; font-family: "DM Mono", monospace;
-      font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; line-height: 1.5; }
+    /* status: a solid badge (was a rubber stamp) */
+    .stamp { display: inline-flex; align-items: center; gap: .7rem; padding: .5rem 1rem; border: 1.5px solid color-mix(in srgb, currentColor 30%, transparent);
+      background: color-mix(in srgb, currentColor 8%, white); border-radius: 12px; font-weight: 650; letter-spacing: .02em; line-height: 1.15; transform: none !important; }
+    .stamp > span { font-family: "Geist Mono", monospace; font-weight: 500; letter-spacing: .04em !important; opacity: .85; border-left-width: 1.5px !important; }
+    .stamp-land { animation: pop .45s var(--ease-out) .15s both; }
+    @keyframes pop { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: none; } }
+    .tag { display: inline-flex; align-items: center; gap: .35rem; border: 1px solid color-mix(in srgb, currentColor 24%, transparent); background-color: color-mix(in srgb, currentColor 8%, white);
+      border-radius: 9999px; padding: .1rem .55rem; font-family: Geist, sans-serif; font-weight: 550; font-size: 11.5px; letter-spacing: 0; white-space: nowrap; line-height: 1.5; }
+    .tag.dot::before { content: ""; width: 6px; height: 6px; border-radius: 9999px; background: currentColor; }
 
     /* proof ladder (assurance A0-A4) */
     .ladder { display: inline-flex; align-items: center; gap: .5rem; white-space: nowrap; }
     .ladder .bars { display: inline-flex; gap: 2px; align-items: flex-end; }
-    .ladder .bars i { width: 5px; border-radius: 1px; background: var(--rule); }
+    .ladder .bars i { width: 5px; border-radius: 1.5px; background: #E2E8F0; }
     .ladder .bars i:nth-child(1) { height: 6px; } .ladder .bars i:nth-child(2) { height: 8px; } .ladder .bars i:nth-child(3) { height: 10px; }
     .ladder .bars i:nth-child(4) { height: 12px; } .ladder .bars i:nth-child(5) { height: 14px; }
     .ladder .bars i.on { background: currentColor; }
-    .ladder b { font-family: "DM Mono", monospace; font-weight: 500; font-size: 11px; }
+    .ladder b { font-family: "Geist Mono", monospace; font-weight: 500; font-size: 11px; }
     .ladder span { font-size: 12px; color: var(--ink-soft); }
 
-    /* live ledger spine */
+    /* live run timeline */
     #stages li { position: relative; }
-    #stages li::before { content: ""; position: absolute; left: 26.5px; top: 0; bottom: 0; width: 1.5px; background: #D5CCBA; }
+    #stages li::before { content: ""; position: absolute; left: 26.5px; top: 0; bottom: 0; width: 1.5px; background: #E2E8F0; }
     #stages li:first-child::before { top: 18px; } #stages li:last-child::before { bottom: calc(100% - 18px); }
-    #stages .icon { position: relative; z-index: 1; background: var(--sheet); }
-    .ink-dot { width: 12px; height: 12px; border-radius: 9999px; background: var(--seal); box-shadow: 0 0 0 0 rgba(166,58,28,.5); animation: ink 1.4s ease-out infinite; }
-    @keyframes ink { to { box-shadow: 0 0 0 9px rgba(166,58,28,0); } }
+    #stages .icon { position: relative; z-index: 1; background: var(--card); }
+    .ink-dot { width: 12px; height: 12px; border-radius: 9999px; background: var(--accent); box-shadow: 0 0 0 0 rgba(41,80,211,.45); animation: ink 1.4s ease-out infinite; }
+    @keyframes ink { to { box-shadow: 0 0 0 9px rgba(41,80,211,0); } }
 
     /* load choreography */
-    .reveal > * { animation: rise .55s var(--ease-out) both; }
-    .reveal > *:nth-child(2) { animation-delay: .06s; } .reveal > *:nth-child(3) { animation-delay: .12s; } .reveal > *:nth-child(4) { animation-delay: .18s; }
-    .reveal > *:nth-child(5) { animation-delay: .24s; } .reveal > *:nth-child(6) { animation-delay: .3s; } .reveal > *:nth-child(n+7) { animation-delay: .36s; }
-    @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-    .fade-in { animation: rise .35s var(--ease-out) both; }
+    .reveal > * { animation: rise .5s var(--ease-out) both; }
+    .reveal > *:nth-child(2) { animation-delay: .05s; } .reveal > *:nth-child(3) { animation-delay: .1s; } .reveal > *:nth-child(4) { animation-delay: .15s; }
+    .reveal > *:nth-child(5) { animation-delay: .2s; } .reveal > *:nth-child(6) { animation-delay: .25s; } .reveal > *:nth-child(n+7) { animation-delay: .3s; }
+    @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+    .fade-in { animation: rise .3s var(--ease-out) both; }
     .spin { animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
+    .hover-lift { transition: transform .18s var(--ease-out), box-shadow .18s var(--ease-out), border-color .18s; }
+    .hover-lift:hover { transform: translateY(-2px); box-shadow: 0 8px 24px -10px rgba(15,23,42,.18); }
 
     /* controls */
-    input:not([type=checkbox]):not([type=file]), select, textarea { background: var(--sheet); border-color: #D5CCBA !important; transition: border-color .15s, box-shadow .15s; }
-    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--seal) !important; box-shadow: 0 0 0 3px rgba(166,58,28,.15); }
-    input[type=checkbox] { accent-color: var(--seal); width: 1rem; height: 1rem; }
-    input[type=file]::file-selector-button { font: inherit; font-size: 12px; border: 1px solid #CCC2AE; background: var(--paper); border-radius: 4px; padding: .3rem .7rem; margin-right: .6rem; cursor: pointer; }
+    input:not([type=checkbox]):not([type=file]):not([type=radio]), select, textarea { background: #fff; border-color: #D9DEE5 !important; border-radius: 8px !important; transition: border-color .15s, box-shadow .15s; }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent) !important; box-shadow: 0 0 0 3px rgba(41,80,211,.15); }
+    input[type=checkbox] { accent-color: var(--accent); width: 1rem; height: 1rem; }
+    input[type=file]::file-selector-button { font: inherit; font-size: 12px; font-weight: 500; border: 1px solid #D9DEE5; background: #F8FAFC; border-radius: 6px; padding: .35rem .75rem; margin-right: .6rem; cursor: pointer; }
+    main a.rounded-md, main button.rounded-md { border-radius: 8px; }
     a, button, summary, [onclick], label:has(input[type=checkbox]) { cursor: pointer; }
     button, a { transition: background-color .15s, color .15s, border-color .15s, transform .15s, box-shadow .15s; }
     button:not(:disabled):active { transform: translateY(1px); }
-    :focus-visible { outline: 2px solid var(--seal); outline-offset: 2px; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     details > summary { list-style: none; } details > summary::-webkit-details-marker { display: none; }
-    ::selection { background: #F6D9CE; }
+    ::selection { background: #DCE7FE; }
 
+    /* sidebar */
+    .side-link { display: flex; align-items: center; gap: .7rem; padding: .5rem .7rem; border-radius: 8px; font-size: 14px; font-weight: 500; color: #475569; }
+    .side-link:hover { background: #F1F5F9; color: var(--ink); }
+    .side-link[aria-current] { background: #EEF4FF; color: var(--accent); }
+    .side-link[aria-current] svg { color: var(--accent); }
+    .side-link svg { color: #94A3B8; }
 
     /* ---- responsive ---- */
     .no-scrollbar { scrollbar-width: none; } .no-scrollbar::-webkit-scrollbar { display: none; }
     .fade-r { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); }
-    @media (min-width: 1536px) { .fade-r { -webkit-mask-image: none; mask-image: none; } }
     @media (max-width: 639px) {
       /* iOS zooms into inputs under 16px */
       input:not([type=checkbox]):not([type=file]):not([type=radio]), select, textarea { font-size: 16px !important; }
@@ -123,8 +122,7 @@
       .rtable tr { padding: .8rem 1rem; }
       .rtable td { padding: .12rem 0 !important; text-align: left !important; white-space: normal !important; }
       .rtable td.inline-sm { display: inline-block; width: auto; margin-right: .5rem; vertical-align: middle; }
-      .rtable td[data-label]::before { content: attr(data-label); display: block; font-family: "DM Mono", monospace; font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-soft); margin: .35rem 0 .05rem; }
-      .stamp { letter-spacing: .12em; }
+      .rtable td[data-label]::before { content: attr(data-label); display: block; font-size: 10.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-soft); margin: .35rem 0 .05rem; }
     }
     @media (hover: none) { .hover-lift:hover { transform: none; } }
 
@@ -135,122 +133,158 @@
 </head>
 <body class="min-h-screen">
   {% set landing = path == '/' or path.startswith('/company/') %}
-  {% set vendor_page = path.startswith('/apply') or path.startswith('/status') or path == '/bill' or path.startswith('/bill?') or path.startswith('/vendor') %}
-  {% macro seal(size=34, light=false) -%}
-    <svg width="{{ size }}" height="{{ size }}" viewBox="0 0 40 40" aria-hidden="true">
-      <circle cx="20" cy="20" r="18.5" fill="none" stroke="#BD4826" stroke-width="1.5"/>
-      <circle cx="20" cy="20" r="15" fill="#A63A1C"/>
-      <circle cx="20" cy="20" r="12.6" fill="none" stroke="#F6D9CE" stroke-width=".6" stroke-dasharray="1.2 1.6"/>
-      <text x="20" y="24.6" text-anchor="middle" font-family="Newsreader, Georgia, serif" font-style="italic" font-size="13" fill="#FFFDF7">va</text>
+  {% set vendor_page = path.startswith('/apply') or path.startswith('/status') or path == '/bill' or path.startswith('/bill?') or (path.startswith('/vendor') and not path.startswith('/vendors')) %}
+  {% macro seal(size=32, light=false) -%}
+    <svg width="{{ size }}" height="{{ size }}" viewBox="0 0 32 32" aria-hidden="true" class="shrink-0">
+      <rect width="32" height="32" rx="8" fill="#2950D3"/>
+      <path d="M16 6.8l7 2.9v5.6c0 4.4-3 7.7-7 9.1-4-1.4-7-4.7-7-9.1V9.7z" fill="none" stroke="#fff" stroke-width="1.9" stroke-linejoin="round"/>
+      <path d="M12.6 15.6l2.4 2.4 4.5-4.6" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
   {%- endmacro %}
-  {% if landing %}
-  <header class="border-b border-slate-200 bg-white/70 backdrop-blur">
-    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 flex items-center gap-3">
-      <a href="/" title="Home" class="flex items-center gap-3">
-        {{ seal(32) }}
-        <span class="leading-tight"><span class="block font-display text-lg">Vendor Assurance</span><span class="block kicker !text-[10px]">{{ BUYER.legal_name }}</span></span>
-      </a>
-    </div>
-  </header>
-  {% elif vendor_page %}
-  <header class="border-b border-slate-200 bg-white/70 backdrop-blur">
-    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 sm:py-3.5 flex items-center gap-3">
-      <a href="/" title="Home" class="flex items-center gap-3 min-w-0">
-        {{ seal(30) }}
-        <span class="leading-tight min-w-0">
-          <span class="block font-display text-[17px] sm:text-lg">Vendor Assurance</span>
-          <span class="block kicker !text-[10px]">Supplier portal</span>
+  {% macro brand(sub) -%}
+    <a href="/" title="Home" class="flex items-center gap-2.5 min-w-0">
+      {{ seal(32) }}
+      <span class="leading-tight min-w-0">
+        <span class="block text-[15px] font-semibold tracking-tight whitespace-nowrap">Vendor Assurance</span>
+        <span class="block text-[11.5px] text-slate-500 truncate">{{ sub }}</span>
+      </span>
+    </a>
+  {%- endmacro %}
+  {% set NAV_ICONS = {
+    '/console': '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
+    '/bills': '<path d="M5 3h14v18l-2.3-1.5L14.3 21 12 19.5 9.7 21l-2.4-1.5L5 21z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
+    '/vendors': '<path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16"/><path d="M16 9h2a2 2 0 0 1 2 2v10"/><path d="M3 21h18M8 7h4M8 11h4M8 15h4"/>',
+    '/invites': '<path d="M21.5 2.5 11 13"/><path d="M21.5 2.5 15 21l-4-8-8-4z"/>',
+    '/outbox': '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 6.5 8.5 6 8.5-6"/>',
+    '/check': '<path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><circle cx="11.5" cy="11.5" r="3.5"/><path d="m14 14 3 3"/>',
+    '/assumptions': '<path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="M9 12l2 2 4-4"/>',
+    '/system': '<path d="M22 12h-4l-3 8L9 4l-3 8H2"/>',
+  } %}
+  {% macro nav_icon(href) -%}<svg class="h-[18px] w-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{{ NAV_ICONS.get(href, '') | safe }}</svg>{%- endmacro %}
+  {% set ROLE_TONE = {'sponsor': ('bg-amber-100 text-amber-800', 'text-amber-700'), 'maker': ('bg-indigo-100 text-indigo-700', 'text-indigo-600'), 'checker': ('bg-emerald-100 text-emerald-700', 'text-emerald-700')} %}
+  {% macro avatar(e, size='h-8 w-8 text-[11.5px]') -%}
+    <span class="{{ size }} {{ ROLE_TONE[e.role][0] }} shrink-0 inline-flex items-center justify-center rounded-full font-semibold" aria-hidden="true">{{ e.name.split()[0][0] }}{{ e.name.split()[-1][0] }}</span>
+  {%- endmacro %}
+  {% macro persona(menu_cls, compact=false) -%}
+    <details class="persona relative min-w-0 {{ '' if compact else 'w-full' }}">
+      <summary class="flex items-center gap-2.5 rounded-lg {{ 'p-1 hover:bg-slate-100' if compact else 'w-full border border-slate-200 bg-white hover:bg-slate-50 p-2' }} select-none" aria-label="Acting as {{ actor.name }}, {{ ROLE_LABEL[actor.role] }}. Change person">
+        {{ avatar(actor, 'h-8 w-8 text-[11.5px]' if compact else 'h-9 w-9 text-[12px]') }}
+        <span class="leading-tight text-left min-w-0 flex-1 {{ 'hidden sm:block' if compact }}">
+          <span class="block text-[13.5px] font-semibold truncate">{{ actor.name }}</span>
+          <span class="block text-[11.5px] text-slate-500 truncate">{{ ROLE_LABEL[actor.role] }}</span>
         </span>
-      </a>
-      {% if vendor_account %}
-      <div class="ml-auto flex items-center gap-3 min-w-0">
-        <a href="/vendor" class="hidden sm:block text-right leading-tight min-w-0"><span class="block text-[13px] font-medium truncate max-w-[16rem]">{{ vendor_account.company_name }}</span><span class="block text-[11px] text-slate-500 truncate max-w-[16rem]">{{ vendor_account.email }}</span></a>
-        <a href="/vendor" class="sm:hidden text-xs underline">My account</a>
-        <form method="post" action="/vendor/logout"><button class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs hover:border-slate-500">Log out</button></form>
-      </div>
-      {% else %}
-      <a href="/" class="ml-auto shrink-0 py-2 text-xs text-slate-500 hover:text-slate-800 underline decoration-dotted underline-offset-4">← Home</a>
-      {% endif %}
-    </div>
-  </header>
-  {% else %}
-  <header class="guilloche text-white">
-    <div class="max-w-7xl 2xl:max-w-[88rem] mx-auto px-4 sm:px-6 lg:px-8 pt-2.5 2xl:py-3 flex flex-wrap 2xl:flex-nowrap items-center gap-x-4 2xl:gap-x-8 gap-y-1">
-      <a href="/" title="Home" class="flex items-center gap-2.5 sm:gap-3 shrink-0">
-        {{ seal(34) }}
-        <span class="leading-tight">
-          <span class="block font-display text-[17px] sm:text-[19px] whitespace-nowrap">Vendor Assurance</span>
-          <span class="hidden sm:block mono text-[10px] tracking-[.18em] uppercase text-slate-400">Onboarding register</span>
-        </span>
-      </a>
-      <nav id="mainnav" class="order-last 2xl:order-none w-full 2xl:w-auto -mx-4 px-4 sm:mx-0 sm:px-0 flex flex-nowrap overflow-x-auto no-scrollbar fade-r text-[13.5px]" aria-label="Main">
-        {% for href, label in [('/console', 'Dashboard'), ('/bills', 'Bills'), ('/vendors', 'Vendors'), ('/invites', 'Invites'), ('/outbox', 'Outbox'), ('/check', 'Document check'), ('/assumptions', 'What is verified'), ('/system', 'System')] if actor and (actor.role in ('maker', 'checker') or href not in ('/outbox', '/check', '/system')) %}
-          {% set on = path == href or (href != '/console' and path.startswith(href ~ '/')) %}
-          <a href="{{ href }}" class="shrink-0 whitespace-nowrap px-3 py-3 2xl:py-2 border-b-2 {{ 'border-indigo-400 text-white' if on else 'border-transparent text-slate-300 hover:text-white' }}" {{ 'aria-current=page' if on }}>{{ label }}</a>
-        {% endfor %}
-      </nav>
-      {% if actor %}
-      {% set ROLE_TONE = {'sponsor': ('bg-amber-100 text-amber-800', 'text-amber-700'), 'maker': ('bg-violet-100 text-violet-700', 'text-violet-600'), 'checker': ('bg-emerald-100 text-emerald-700', 'text-emerald-700')} %}
-      {% macro avatar(e, size='h-8 w-8 text-[11px]') -%}
-        {%- set tone = {'sponsor': 'bg-amber-100 text-amber-800', 'maker': 'bg-violet-100 text-violet-700', 'checker': 'bg-emerald-100 text-emerald-700'}[e.role] -%}
-        <span class="{{ size }} {{ tone }} shrink-0 inline-flex items-center justify-center rounded-full mono font-medium" aria-hidden="true">{{ e.name.split()[0][0] }}{{ e.name.split()[-1][0] }}</span>
-      {%- endmacro %}
-      <details id="persona" class="ml-auto relative min-w-0">
-        <summary class="flex items-center gap-2.5 rounded-lg border border-slate-700 bg-slate-800/80 hover:bg-slate-800 pl-1.5 pr-2.5 py-1.5 select-none" aria-label="Acting as {{ actor.name }}, {{ ROLE_LABEL[actor.role] }}. Change person">
-          {{ avatar(actor) }}
-          <span class="leading-tight text-left min-w-0">
-            <span class="hidden sm:block mono text-[9.5px] tracking-[.16em] uppercase text-slate-400">Acting as</span>
-            <span class="block text-[13.5px] font-medium truncate"><span class="sm:hidden">{{ actor.name.split()[0] }}</span><span class="hidden sm:inline">{{ actor.name }}</span><span class="hidden sm:inline font-normal text-slate-300"> · {{ ROLE_LABEL[actor.role] }}</span></span>
-          </span>
-          <svg class="h-3.5 w-3.5 text-slate-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
-        </summary>
-        <form method="post" action="/act-as" class="absolute right-0 top-full mt-2 z-50 w-[23rem] max-w-[calc(100vw-2rem)] rounded-xl border border-slate-300 bg-white text-slate-900 shadow-[0_12px_40px_rgba(28,27,24,.28)] overflow-hidden fade-in">
-          <div class="px-4 pt-3.5 pb-3 border-b border-slate-200 bg-slate-50">
-            <div class="kicker !text-[10px]">Switch person · demo</div>
-            <p class="text-[12.5px] text-slate-600 mt-1 leading-snug">{% if staff %}Logged in as <b>{{ staff.name }}</b>. {% endif %}For the demo you can act as anyone without logging out, to see what each person is allowed to do. In production each person logs in as themselves.</p>
-          </div>
-          <ul class="divide-y divide-slate-100">
-            {% for e in employees %}
-            {% set me = e.id == actor.id %}
-            <li>
-              <button name="employee_id" value="{{ e.id }}" class="w-full text-left flex gap-3 px-4 py-3 {{ 'bg-indigo-50/60' if me else 'hover:bg-slate-50' }}" {{ 'aria-current=true' if me }}>
-                {{ avatar(e, 'h-9 w-9 text-[12px] mt-0.5') }}
-                <span class="flex-1 min-w-0">
-                  <span class="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span class="text-[14px] font-medium">{{ e.name }}</span>
-                    <span class="tag {{ ROLE_TONE[e.role][1] }} !text-[9.5px]">{{ ROLE_LABEL[e.role] }}</span>
-                    {% if me %}<span class="ml-auto inline-flex items-center gap-1 text-[11px] text-indigo-700 font-medium"><svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.2 4.2L19 7"/></svg>you</span>{% endif %}
-                  </span>
-                  <span class="block text-[11.5px] text-slate-500 mt-0.5">{{ e.department }}</span>
-                  <span class="block text-[12.5px] text-slate-700 mt-1 leading-snug">{{ ROLE_HINT[e.role] }}</span>
+        <svg class="h-4 w-4 text-slate-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 15 5 5 5-5M7 9l5-5 5 5"/></svg>
+      </summary>
+      <form method="post" action="/act-as" class="absolute {{ menu_cls }} z-50 w-[23rem] max-w-[calc(100vw-2rem)] rounded-xl border border-slate-200 bg-white text-slate-900 shadow-pop overflow-hidden fade-in">
+        <div class="px-4 pt-3.5 pb-3 border-b border-slate-100 bg-slate-50">
+          <div class="text-[13px] font-semibold">Switch person <span class="ml-1 rounded-full bg-slate-200 px-1.5 py-0.5 text-[10.5px] font-medium text-slate-600">demo</span></div>
+          <p class="text-[12.5px] text-slate-600 mt-1 leading-snug">{% if staff %}Logged in as <b>{{ staff.name }}</b>. {% endif %}Act as anyone without logging out, to see what each person is allowed to do. In production each person logs in as themselves.</p>
+        </div>
+        <ul class="p-1.5">
+          {% for e in employees %}
+          {% set me = e.id == actor.id %}
+          <li>
+            <button name="employee_id" value="{{ e.id }}" class="w-full text-left flex gap-3 rounded-lg px-3 py-2.5 {{ 'bg-indigo-50' if me else 'hover:bg-slate-50' }}" {{ 'aria-current=true' if me }}>
+              {{ avatar(e, 'h-9 w-9 text-[12px] mt-0.5') }}
+              <span class="flex-1 min-w-0">
+                <span class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span class="text-[14px] font-semibold">{{ e.name }}</span>
+                  <span class="tag {{ ROLE_TONE[e.role][1] }}">{{ ROLE_LABEL[e.role] }}</span>
+                  {% if me %}<span class="ml-auto inline-flex items-center gap-1 text-[11.5px] text-indigo-700 font-semibold"><svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.2 4.2L19 7"/></svg>you</span>{% endif %}
                 </span>
-              </button>
-            </li>
-            {% endfor %}
-          </ul>
-        </form>
-      </details>
-      <form method="post" action="/company/logout" class="shrink-0"><button class="rounded-md border border-slate-700 bg-slate-800/80 hover:bg-slate-800 px-3 py-2 text-[12.5px] text-slate-200" title="{{ ('Logged in as ' ~ staff.name) if staff else '' }}">Log out</button></form>
-      <script>
-        document.addEventListener('click', e => { const d = document.getElementById('persona'); if (d && d.open && !d.contains(e.target)) d.open = false; });
-        document.addEventListener('keydown', e => { const d = document.getElementById('persona'); if (e.key === 'Escape' && d && d.open) { d.open = false; d.querySelector('summary').focus(); } });
-      </script>
+                <span class="block text-[11.5px] text-slate-500 mt-0.5">{{ e.department }}</span>
+                <span class="block text-[12.5px] text-slate-600 mt-1 leading-snug">{{ ROLE_HINT[e.role] }}</span>
+              </span>
+            </button>
+          </li>
+          {% endfor %}
+        </ul>
+      </form>
+    </details>
+  {%- endmacro %}
+
+  {% if landing or vendor_page %}
+  <header class="sticky top-0 z-40 border-b border-slate-200 bg-white/85 backdrop-blur">
+    <div class="{{ 'max-w-5xl' if vendor_page else 'max-w-6xl' }} mx-auto px-4 sm:px-6 h-16 flex items-center gap-3">
+      {{ brand('Supplier portal' if vendor_page else BUYER.legal_name) }}
+      {% if vendor_page and vendor_account %}
+      <div class="ml-auto flex items-center gap-3 min-w-0">
+        <a href="/vendor" class="hidden sm:flex items-center gap-2.5 rounded-lg px-2 py-1 hover:bg-slate-100 min-w-0">
+          <span class="h-8 w-8 shrink-0 rounded-full bg-indigo-100 text-indigo-700 text-[11.5px] font-semibold inline-flex items-center justify-center">{% set w = vendor_account.company_name.split() or ['?'] %}{{ w[0][0] }}{{ w[1][0] if w | length > 1 else '' }}</span>
+          <span class="text-left leading-tight min-w-0"><span class="block text-[13px] font-semibold truncate max-w-[15rem]">{{ vendor_account.company_name }}</span><span class="block text-[11.5px] text-slate-500 truncate max-w-[15rem]">{{ vendor_account.email }}</span></span>
+        </a>
+        <a href="/vendor" class="sm:hidden text-[13px] font-medium text-indigo-700">My account</a>
+        <form method="post" action="/vendor/logout"><button class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[13px] font-medium text-slate-700 hover:bg-slate-50">Log out</button></form>
+      </div>
+      {% elif vendor_page %}
+      <a href="/" class="ml-auto shrink-0 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900">← Home</a>
       {% endif %}
     </div>
-    <div class="seal-rule"></div>
+  </header>
+  <main class="{{ 'max-w-5xl' if vendor_page else 'max-w-6xl' }} mx-auto px-4 sm:px-6 py-6 sm:py-10">
+    {{ self.content() }}
+  </main>
+  <footer class="{{ 'max-w-5xl' if vendor_page else 'max-w-6xl' }} mx-auto px-4 sm:px-6 pb-10 text-[12px] text-slate-400 text-center">Demo · fictional vendors · government lookups simulated</footer>
+
+  {% else %}
+  {% set NAV = [('Workspace', [('/console', 'Dashboard'), ('/bills', 'Bills'), ('/vendors', 'Vendors'), ('/invites', 'Invites')]),
+                ('Review tools', [('/outbox', 'Outbox'), ('/check', 'Document check'), ('/system', 'System')]),
+                ('About', [('/assumptions', 'What is verified')])] %}
+  {% set reviewer = actor and actor.role in ('maker', 'checker') %}
+  {# desktop sidebar #}
+  <aside class="hidden lg:flex fixed inset-y-0 left-0 z-30 w-64 flex-col border-r border-slate-200 bg-white">
+    <div class="h-16 px-5 flex items-center border-b border-slate-100">{{ brand(BUYER.legal_name) }}</div>
+    <nav class="flex-1 overflow-y-auto px-3 py-4 space-y-5" aria-label="Main">
+      {% for group, items in NAV %}
+      {% set shown = items if reviewer or group != 'Review tools' else [] %}
+      {% if actor and shown %}
+      <div>
+        <div class="px-3 mb-1.5 text-[11px] font-semibold uppercase tracking-[.06em] text-slate-400">{{ group }}</div>
+        {% for href, label in shown %}
+        {% set on = path == href or (href != '/console' and path.startswith(href ~ '/')) or (href == '/console' and path.startswith('/runs/')) %}
+        <a href="{{ href }}" class="side-link" {{ 'aria-current=page' if on }}>{{ nav_icon(href) }}{{ label }}</a>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% endfor %}
+    </nav>
+    {% if actor %}
+    <div class="p-3 border-t border-slate-100 space-y-2">
+      <div class="px-1 text-[11px] font-semibold uppercase tracking-[.06em] text-slate-400">Acting as</div>
+      {{ persona('left-0 bottom-full mb-2') }}
+      <form method="post" action="/company/logout"><button class="side-link w-full" title="{{ ('Logged in as ' ~ staff.name) if staff else '' }}"><svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>Log out</button></form>
+    </div>
+    {% endif %}
+  </aside>
+  {# mobile / tablet top bar #}
+  <header class="lg:hidden sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur">
+    <div class="px-4 sm:px-6 h-14 flex items-center gap-3">
+      {{ brand(BUYER.legal_name) }}
+      {% if actor %}
+      <div class="ml-auto flex items-center gap-1.5">
+        {{ persona('right-0 top-full mt-2', compact=true) }}
+        <form method="post" action="/company/logout"><button class="whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[13px] font-medium text-slate-600 hover:bg-slate-100">Log out</button></form>
+      </div>
+      {% endif %}
+    </div>
+    <nav id="mainnav" class="px-2 sm:px-4 flex flex-nowrap overflow-x-auto no-scrollbar fade-r text-[13.5px]" aria-label="Main">
+      {% for group, items in NAV %}{% for href, label in items if actor and (reviewer or group != 'Review tools') %}
+        {% set on = path == href or (href != '/console' and path.startswith(href ~ '/')) or (href == '/console' and path.startswith('/runs/')) %}
+        <a href="{{ href }}" class="shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-2.5 border-b-2 font-medium {{ 'border-indigo-600 text-indigo-700' if on else 'border-transparent text-slate-500 hover:text-slate-900' }}" {{ 'aria-current=page' if on }}>{{ label }}</a>
+      {% endfor %}{% endfor %}
+    </nav>
   </header>
   <script>{ const n = document.getElementById('mainnav'), a = n && n.querySelector('[aria-current]'); if (a && a.offsetLeft + a.offsetWidth > n.clientWidth) n.scrollLeft = a.offsetLeft - 16; }</script>
+  <div class="lg:pl-64">
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 py-6 sm:py-8">
+      {% block content %}{% endblock %}
+    </main>
+    <footer class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 pb-10 text-[12px] text-slate-400">Demo · fictional vendors · government lookups simulated</footer>
+  </div>
   {% endif %}
-  <main class="{{ 'max-w-5xl' if vendor_page else 'max-w-7xl 2xl:max-w-[88rem]' }} mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-    {% block content %}{% endblock %}
-  </main>
-  <footer class="{{ 'max-w-5xl' if vendor_page else 'max-w-7xl 2xl:max-w-[88rem]' }} mx-auto px-4 sm:px-6 lg:px-8 pb-10 text-xs text-slate-500 flex items-center gap-3">
-    <span class="hidden sm:block h-px flex-1 bg-slate-300"></span>
-    <span class="text-center whitespace-nowrap">Demo · fictional vendors · government lookups simulated</span>
-    <span class="hidden sm:block h-px flex-1 bg-slate-300"></span>
-  </footer>
   <script>
+    document.addEventListener('click', e => document.querySelectorAll('details.persona[open]').forEach(d => { if (!d.contains(e.target)) d.open = false; }));
+    document.addEventListener('keydown', e => { if (e.key !== 'Escape') return; document.querySelectorAll('details.persona[open]').forEach(d => { d.open = false; d.querySelector('summary').focus(); }); });
     /* Show / hide button on every password field (spacing and flex sizing move to the wrapper). */
     document.querySelectorAll('input[type=password]').forEach(inp => {
       const wrap = document.createElement('span');

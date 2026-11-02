@@ -4,13 +4,14 @@
 {% block content %}
 <div class="reveal max-w-6xl mx-auto">
   <div class="text-center max-w-2xl mx-auto pt-2 sm:pt-6">
-    <div class="kicker">Vendor onboarding &amp; bills</div>
-    <h1 class="text-[34px] sm:text-[48px] leading-[1.05] mt-2">Who are <em class="text-indigo-600">you?</em></h1>
+    <div class="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[560px] overflow-hidden" aria-hidden="true"><div class="absolute inset-0 bg-[radial-gradient(55%_65%_at_50%_0%,rgba(41,80,211,.14),transparent_70%)]"></div><div class="absolute inset-0 opacity-60 [background-image:linear-gradient(#E2E8F0_1px,transparent_1px),linear-gradient(90deg,#E2E8F0_1px,transparent_1px)] [background-size:44px_44px] [mask-image:radial-gradient(60%_70%_at_50%_0%,#000,transparent_75%)]"></div></div>
+    <span class="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-white px-3 py-1 text-[12.5px] font-medium text-indigo-700 shadow-sm"><span class="h-1.5 w-1.5 rounded-full bg-indigo-600"></span>Vendor onboarding &amp; bills</span>
+    <h1 class="hero text-[36px] sm:text-[56px] leading-[1.05] tracking-tight mt-4">Who are <em class="text-indigo-600">you?</em></h1>
     <p class="text-slate-600 text-[15px] mt-3">Suppliers register, prove who they are and send their bills. The company checks every document, every number and every bill before anyone is paid.</p>
   </div>
 
   <div class="mt-8 sm:mt-12 grid md:grid-cols-2 gap-5 sm:gap-6">
-    <section class="relative bg-white rounded-xl border p-6 sm:p-8 flex flex-col">
+    <section class="relative bg-white rounded-xl border p-6 sm:p-8 flex flex-col hover-lift">
       <span class="absolute -top-3 left-6 rounded-t-md border border-b-0 border-slate-200 bg-white px-3 pt-1 pb-0.5 kicker !text-[10px] !text-slate-700">Company</span>
       <div class="flex items-center gap-3">
         <span class="h-11 w-11 rounded-full bg-slate-900 text-white grid place-items-center">{{ icon('shield', 'h-5 w-5') }}</span>
@@ -22,15 +23,15 @@
         <li class="flex gap-2.5"><span class="text-emerald-600 mt-0.5">{{ icon('check', 'h-4 w-4') }}</span>Confirm work you asked for, approve vendors and bills</li>
       </ul>
       {% if staff %}
-        <a href="/console" class="mt-7 inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 text-white font-medium px-5 py-3 hover:bg-slate-800 shadow-[3px_3px_0_rgba(28,27,24,.18)]">Open the console {{ icon('arrow') }}</a>
+        <a href="/console" class="mt-7 inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 text-white font-medium px-5 py-3 hover:bg-slate-800 shadow-sm">Open the console {{ icon('arrow') }}</a>
         <p class="mt-2 text-xs text-slate-500 text-center truncate">Logged in as {{ staff.name }} · {{ ROLE_LABEL[staff.role] }}</p>
       {% else %}
-        <a href="/company/login" class="mt-7 inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 text-white font-medium px-5 py-3 hover:bg-slate-800 shadow-[3px_3px_0_rgba(28,27,24,.18)]">Employee log in {{ icon('arrow') }}</a>
+        <a href="/company/login" class="mt-7 inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 text-white font-medium px-5 py-3 hover:bg-slate-800 shadow-sm">Employee log in {{ icon('arrow') }}</a>
       {% endif %}
       <p class="mt-3 text-xs text-slate-500">Employees log in with their work email (in production: the company's single sign-on). Demo logins are listed on the login page.</p>
     </section>
 
-    <section class="relative bg-white rounded-xl border p-6 sm:p-8 flex flex-col ring-1 ring-indigo-100">
+    <section class="relative bg-white rounded-xl border p-6 sm:p-8 flex flex-col ring-1 ring-indigo-100 hover-lift">
       <span class="absolute -top-3 left-6 rounded-t-md border border-b-0 border-slate-200 bg-white px-3 pt-1 pb-0.5 kicker !text-[10px] !text-indigo-700">Supplier portal</span>
       <div class="flex items-center gap-3">
         <span class="h-11 w-11 rounded-full bg-indigo-600 text-white grid place-items-center">{{ icon('doc', 'h-5 w-5') }}</span>
@@ -42,11 +43,11 @@
         <li class="flex gap-2.5"><span class="text-indigo-600 mt-0.5">{{ icon('check', 'h-4 w-4') }}</span>Track your registration and send your bills</li>
       </ul>
       {% if vendor_account %}
-        <a href="/vendor" class="mt-7 inline-flex items-center justify-center gap-2 rounded-md bg-indigo-600 text-white font-medium px-5 py-3 hover:bg-indigo-700 shadow-[3px_3px_0_rgba(28,27,24,.18)]">Go to my account {{ icon('arrow') }}</a>
+        <a href="/vendor" class="mt-7 inline-flex items-center justify-center gap-2 rounded-md bg-indigo-600 text-white font-medium px-5 py-3 hover:bg-indigo-700 shadow-sm">Go to my account {{ icon('arrow') }}</a>
         <p class="mt-2 text-xs text-slate-500 text-center truncate">Signed in as {{ vendor_account.company_name }}</p>
       {% else %}
         <div class="mt-7 grid sm:grid-cols-2 gap-3">
-          <a href="/vendor/register" class="inline-flex items-center justify-center gap-2 rounded-md bg-indigo-600 text-white font-medium px-5 py-3 hover:bg-indigo-700 shadow-[3px_3px_0_rgba(28,27,24,.18)]">Create an account</a>
+          <a href="/vendor/register" class="inline-flex items-center justify-center gap-2 rounded-md bg-indigo-600 text-white font-medium px-5 py-3 hover:bg-indigo-700 shadow-sm">Create an account</a>
           <a href="/vendor/login" class="inline-flex items-center justify-center gap-2 rounded-md border border-slate-300 bg-white font-medium px-5 py-3 hover:border-slate-500">Log in</a>
         </div>
       {% endif %}

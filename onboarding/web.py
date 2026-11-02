@@ -86,7 +86,8 @@ templates.env.filters["dt"] = _fmt_dt
 templates.env.filters["sigdate"] = lambda v: (f"{v[6:8]}/{v[4:6]}/{v[:4]} {v[8:10]}:{v[10:12]}" if isinstance(v, str) and len(v) >= 12 and v[:12].isdigit() else v)
 templates.env.filters["mask"] = lambda value, name="": _mask(name, value)
 templates.env.globals.update(STATUS_LABEL=STATUS_LABEL, LEVEL_NAMES=LEVEL_NAMES, SLOT_TITLE=SLOT_TITLE, SLOT_LABEL=SLOT_LABEL,
-                             ROLE_LABEL=ROLE_LABEL, ROLE_HINT=ROLE_HINT, inr=inr, money=money, BUYER=BUYER, BUSINESS_TYPES=V.BUSINESS_TYPES, mask_pan=V.mask_pan, mask_account=V.mask_account)
+                             ROLE_LABEL=ROLE_LABEL, ROLE_HINT=ROLE_HINT, inr=inr, money=money, BUYER=BUYER, BUSINESS_TYPES=V.BUSINESS_TYPES, mask_pan=V.mask_pan, mask_account=V.mask_account,
+                             tone=lambda s: sum(map(ord, s or "")) % 6)
 
 
 # --- shared helpers ------------------------------------------------------------------------------
@@ -246,7 +247,9 @@ async def dashboard(request: Request):
         q = dict(rows=_rows(select(Run, Application).join(Application, Application.id == Run.application_id).order_by(Run.id.desc()).limit(200)),
                  invites=_all(select(Invite)),
                  docs=_rows(select(Document.run_id, Document.read["origin"].as_string())),  # just where each reading came from
-                 bills=_all(select(Bill)))
+                 bills=_all(select(Bill)),
+                 acted=_rows(select(HumanAction.run_id, HumanAction.action)),
+                 open_vbills=_all(select(VendorBill).where(VendorBill.status.in_(("awaiting_confirmation", "for_review", "vendor_fix", "ready_for_approval")))))
         if actor and not full:
             q["vbills"] = _all(select(VendorBill).where(VendorBill.engaged_employee_id == actor.id, VendorBill.status == "awaiting_confirmation"))
         r = await _reads(**q)
@@ -279,7 +282,47 @@ async def dashboard(request: Request):
             to_confirm = sum(1 for r in runs if r["bill"] and r["bill"].engaged_employee_id == actor.id and r["bill"].confirmation == "awaiting"
                              and r["app"].current_status not in ("REJECTED", "ACTIVE"))
             to_confirm += len(r["vbills"])
-        return await render(request, s, "dashboard.html", runs=runs, counts=counts, stats=stats, catalog=demo_catalog(), full=full, to_confirm=to_confirm)
+        todo = _todo(actor, runs, sponsors, emps, r["acted"], r["open_vbills"])
+        return await render(request, s, "dashboard.html", runs=runs, counts=counts, stats=stats, catalog=demo_catalog(), full=full,
+                            to_confirm=to_confirm, todo=todo)
+
+
+_TODO_VERB = {"activate": "Activate vendor", "review_approve": "Review and decide", "ask_vendor": "Review and decide", "review_reject": "Review and decide",
+              "confirm_reject": "Confirm the rejection", "override_reject": "Confirm the rejection",
+              "confirm_engagement": "Confirm you engaged them", "deny_engagement": "Confirm you engaged them"}
+_TODO_BILL_VERB = {"confirm_engagement": "Confirm the work was done", "deny_engagement": "Confirm the work was done",
+                   "approve_payment": "Approve the bill", "ask_vendor": "Approve the bill", "reject_bill": "Approve the bill"}
+
+
+def _todo(actor, runs, invites, emps, acted, vbills) -> list[dict]:
+    """What this person can act on right now, using the same rules as the buttons (segregation of duties,
+    high risk to the Finance controller): the latest run of each application, and open vendor bills."""
+    from onboarding.bills import allowed_bill_actions
+
+    if not actor:
+        return []
+    done = {(run_id, a) for run_id, a in acted}
+    latest: dict[int, dict] = {}
+    for x in runs:  # newest first
+        latest.setdefault(x["app"].id, x)
+    names = {x["app"].id: x["app"].legal_name for x in runs}
+    out = []
+    for x in latest.values():
+        run, app, b = x["run"], x["app"], x["bill"]
+        if app.current_status == "REJECTED" and any((run.id, a) in done for a in ("confirm_reject", "review_reject", "override_reject")):
+            continue  # already decided
+        acts = _allowed_actions(run, app, invites.get(app.invite_id), actor, b, emps.get(b.engaged_employee_id) if b else None)
+        open_ = [a for a, v in acts.items() if not v["blocked"]]
+        if open_:
+            out.append(dict(href=f"/runs/{run.id}", ref=app.ref, name=app.legal_name, verb=_TODO_VERB.get(open_[0], "Open"),
+                            status=app.current_status, risk=run.risk_tier, fraud=x["fraud"], since=run.finished_at or run.started_at))
+    for b in vbills:
+        acts = allowed_bill_actions(b, actor, emps.get(b.engaged_employee_id))
+        open_ = [a for a, v in acts.items() if not v["blocked"]]
+        if open_:
+            out.append(dict(href=f"/bills/{b.id}", ref=b.ref, name=names.get(b.application_id, b.vendor_id), detail=f"Invoice {b.invoice_number}", verb=_TODO_BILL_VERB.get(open_[0], "Open"),
+                            status="BILL", risk=b.risk_tier, fraud=b.fraud, since=getattr(b, "created_at", None), amount=b.amount))
+    return out
 
 
 @router.post("/act-as")

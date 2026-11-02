@@ -170,6 +170,10 @@ def flows(tmp_path_factory):
 
             for p in ("/", "/outbox", "/assumptions", "/system", "/check?sample=genuine", "/invites"):
                 out[p] = await c.get(p)
+            for who in ("maker", "checker", "Rahul Desai"):  # each person's "Needs your action" queue
+                await as_(who)
+                page = (await c.get("/console")).text
+                out[f"todo_{who}"] = page.split("Needs your action", 1)[1].split("Where applications stand", 1)[0]
         await dbm.engine().dispose()
 
     asyncio.run(go())
@@ -270,3 +274,10 @@ def test_bill_first_denied_engagement_goes_to_finance_and_vendor_learns_nothing(
     assert flows["brindavan_maker_approve"] == 403
     assert "says they didn't engage this vendor" in flows["brindavan_after"]
     assert "didn't engage" not in flows["brindavan_status"] and "Waiting for our team to confirm the work" in flows["brindavan_status"]
+
+
+def test_action_queue_follows_the_same_rules_as_the_buttons(flows):
+    maker, checker, rahul = flows["todo_maker"], flows["todo_checker"], flows["todo_Rahul Desai"]
+    assert "Review and decide" in maker                        # the unsolicited application waits for a reviewer
+    assert "Kaveri" not in checker                             # its rejection was already confirmed
+    assert "Activate vendor" not in rahul and "Review and decide" not in rahul  # a requester never approves

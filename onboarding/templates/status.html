@@ -21,7 +21,7 @@
     <div class="mt-6 rounded-xl border p-4 sm:p-5 {{ label[2] }}">
       <div class="font-display text-2xl">{{ label[0] }}</div>
       <div class="text-sm text-slate-600 mt-1">{{ label[1] }}</div>
-      {% if st == 'PENDING_VENDOR' %}<a href="/apply/{{ token }}" class="block sm:inline-block text-center mt-4 rounded-md bg-indigo-600 text-white text-sm font-medium px-5 py-2.5 hover:bg-indigo-700 shadow-[3px_3px_0_rgba(28,27,24,.18)]">Update my submission</a>{% endif %}
+      {% if st == 'PENDING_VENDOR' %}<a href="/apply/{{ token }}" class="block sm:inline-block text-center mt-4 rounded-md bg-indigo-600 text-white text-sm font-medium px-5 py-2.5 hover:bg-indigo-700 shadow-sm">Update my submission</a>{% endif %}
       {% if st == 'IN_PROGRESS' %}<script>setTimeout(() => location.reload(), 3000)</script>{% endif %}
     </div>
 

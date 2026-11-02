@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import status_badge %}
+{% from "_macros.html" import status_badge, monogram, empty %}
 {% block title %}Vendors{% endblock %}
 {% block content %}
 <div class="reveal">
@@ -12,16 +12,16 @@
     <section class="bg-white rounded-xl border p-4 sm:p-5">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="min-w-0">
-          <div class="font-medium text-[16px]">{{ a.company_name }}</div>
-          <div class="text-xs text-slate-500 mt-0.5 break-all">{% if full %}{{ a.contact_name }} · {{ a.email }} · {% endif %}account since {{ a.created_at | dt }}</div>
+          <div class="flex items-center gap-3 min-w-0">{{ monogram(a.company_name, "h-10 w-10 text-[13px]") }}<div class="min-w-0"><div class="font-semibold text-[15.5px]">{{ a.company_name }}</div>
+          <div class="text-xs text-slate-500 mt-0.5 break-all">{% if full %}{{ a.contact_name }} · {{ a.email }} · {% endif %}account since {{ a.created_at | dt }}</div></div></div>
         </div>
-        {% if row.active %}<div class="text-right"><div class="kicker !text-[9.5px]">Vendor ID</div><div class="mono text-lg">{{ row.active.vendor.vendor_id }}</div></div>{% endif %}
+        {% if row.active %}<div class="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5"><span class="text-[11.5px] font-medium text-emerald-700">Vendor ID</span><span class="mono text-[14px] font-medium text-emerald-900">{{ row.active.vendor.vendor_id }}</span></div>{% endif %}
       </div>
       <div class="mt-3 flex flex-wrap gap-2 text-sm">
         {% for inv in row.pending_invites %}<span class="tag text-violet-600">invited by {{ inv.sponsor.name }} · not submitted</span>{% endfor %}
         {% for r in row.regs %}
           {% set mine = full or (actor and ((r.invite and r.invite.sponsor_id == actor.id) or (r.bill and r.bill.engaged_employee_id == actor.id))) %}
-          <{{ 'a href=/runs/' ~ r.run.id if mine else 'span' }} class="inline-flex items-center gap-2 rounded-md border border-slate-200 px-2.5 py-1.5 {{ 'hover:border-slate-400' if mine }}"><span class="mono text-[12px]">{{ r.app.ref }}</span>{{ status_badge(r.app.current_status) }}<span class="text-xs text-slate-500">{{ 'invited' if r.invite else ('bill-first' if r.bill else 'unsolicited') }}</span></{{ 'a' if mine else 'span' }}>
+          <{{ 'a href=/runs/' ~ r.run.id if mine else 'span' }} class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/60 px-2.5 py-1.5 {{ 'hover:border-indigo-300 hover:bg-white' if mine }}"><span class="mono text-[12px]">{{ r.app.ref }}</span>{{ status_badge(r.app.current_status) }}<span class="text-xs text-slate-500">{{ 'invited' if r.invite else ('bill-first' if r.bill else 'unsolicited') }}</span></{{ 'a' if mine else 'span' }}>
         {% endfor %}
         {% if not row.regs and not row.pending_invites %}<span class="text-xs text-slate-500">Account created; no registration yet.</span>{% endif %}
       </div>
@@ -33,7 +33,7 @@
       {% endif %}
     </section>
   {% else %}
-    <p class="text-sm text-slate-500">No vendor accounts yet. Vendors create one from the home page ("I'm a vendor or supplier").</p>
+    <section class="bg-white rounded-xl border">{{ empty("building", "No vendor accounts yet", "Vendors create one from the home page (\"I'm a vendor or supplier\").") }}</section>
   {% endfor %}
   </div>
 </div>

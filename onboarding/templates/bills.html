@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import tier_chip %}
+{% from "_macros.html" import tier_chip, monogram, empty %}
 {% block title %}Bills{% endblock %}
 {% block content %}
 {% set TONE = {'approved': 'text-emerald-700', 'rejected': 'text-rose-600', 'vendor_fix': 'text-amber-700', 'for_review': 'text-violet-600',
@@ -19,7 +19,7 @@
       {% for b, vm in rows %}
         <tr class="hover:bg-slate-50 cursor-pointer" onclick="location.href='/bills/{{ b.id }}'">
           <td class="pl-5 pr-2 py-3 whitespace-nowrap"><a href="/bills/{{ b.id }}" class="mono text-[12.5px] hover:text-indigo-700">{{ b.ref }}</a></td>
-          <td class="px-2 py-3 font-medium" data-label="Vendor">{{ vm.legal_name }} <span class="mono text-[11px] text-slate-500 font-normal">{{ vm.vendor_id }}</span>{% if b.fraud and full %} <span class="tag text-indigo-600 !text-[9px]">fraud class</span>{% endif %}</td>
+          <td class="px-2 py-3 font-medium" data-label="Vendor"><span class="inline-flex items-center gap-2.5">{{ monogram(vm.legal_name, "h-7 w-7 text-[10.5px]") }}{{ vm.legal_name }}</span> <span class="mono text-[11px] text-slate-500 font-normal">{{ vm.vendor_id }}</span>{% if b.fraud and full %} <span class="tag text-indigo-600 !text-[9px]">fraud class</span>{% endif %}</td>
           <td class="px-2 py-3 mono text-[12px]" data-label="Invoice">{{ b.invoice_number }}</td>
           <td class="px-2 py-3 text-right whitespace-nowrap" data-label="Amount">{{ inr(money(b.amount)) }}</td>
           <td class="inline-sm px-2 py-3"><span class="tag {{ TONE.get(b.status, '') }}">{{ B.STATUS_TEXT.get(b.status, b.status) }}</span></td>
@@ -30,7 +30,7 @@
       </tbody>
     </table>
     </div>
-    {% else %}<p class="p-6 text-sm text-slate-500">No bills from active vendors yet. An active vendor sends them from the supplier portal.</p>{% endif %}
+    {% else %}{{ empty("receipt", "No bills from active vendors yet", "An active vendor sends them from the supplier portal; each is checked, then confirmed and approved here.") }}{% endif %}
   </section>
 
   <section class="mt-6 bg-white rounded-xl border">
@@ -39,14 +39,14 @@
     <ul class="divide-y divide-slate-100">
       {% for r in regs %}{% set f = r.run.form if r.run else {} %}
       <li><a href="/runs/{{ r.run.id if r.run else '' }}#bill" class="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 sm:px-5 py-3 hover:bg-slate-50 text-sm">
-        <span class="mono text-[12px] text-slate-500 w-20">{{ r.app.ref }}</span>
+        {{ monogram(r.app.legal_name, "h-8 w-8 text-[11px]") }}<span class="mono text-[12px] text-slate-500 w-20">{{ r.app.ref }}</span>
         <span class="flex-1 min-w-[12rem] font-medium">{{ r.app.legal_name }} <span class="mono text-[11.5px] text-slate-500 font-normal">{{ f.bill_invoice_number }}</span></span>
-        <span>{{ inr(money(f.bill_amount)) }}</span>
+        <span class="font-semibold tabular-nums">{{ inr(money(f.bill_amount)) }}</span>
         <span class="text-xs text-slate-500">{{ r.emp.name if r.emp else r.bill.engaged_by_text }} · {{ {'confirmed': 'confirmed', 'denied': 'denies', 'awaiting': 'not confirmed yet'}[r.bill.confirmation] }}</span>
       </a></li>
       {% endfor %}
     </ul>
-    {% else %}<p class="p-6 text-sm text-slate-500">None yet.</p>{% endif %}
+    {% else %}{{ empty("doc", "None yet", "Vendors who did work before registering send their bill with the registration.") }}{% endif %}
   </section>
 </div>
 {% endblock %}

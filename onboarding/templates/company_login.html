@@ -13,7 +13,7 @@
     <input type="hidden" name="next" value="{{ next }}">
     <label class="block">Work email<input name="email" type="email" required value="{{ email }}" autocomplete="username" class="mt-1 w-full rounded-md border px-3 py-2.5"></label>
     <label class="block">Password<input name="password" type="password" required autocomplete="current-password" class="mt-1 w-full rounded-md border px-3 py-2.5"></label>
-    <button class="w-full rounded-md bg-slate-900 text-white font-medium py-3 hover:bg-slate-800 shadow-[3px_3px_0_rgba(28,27,24,.18)]">Log in</button>
+    <button class="w-full rounded-md bg-slate-900 text-white font-medium py-3 hover:bg-slate-800 shadow-sm">Log in</button>
   </form>
 
   <section class="mt-5 rounded-xl border border-dashed border-slate-300 bg-white/60 p-4 text-sm">
@@ -27,7 +27,7 @@
       </li>
       {% endfor %}
     </ul>
-    <p class="mt-2 text-xs text-slate-500">After logging in, "Acting as" (top right) lets the demo switch person without logging out. In production each person logs in as themselves, through the company's single sign-on.</p>
+    <p class="mt-2 text-xs text-slate-500">After logging in, "Acting as" (bottom of the sidebar; top right on a phone) lets the demo switch person without logging out. In production each person logs in as themselves, through the company's single sign-on.</p>
   </section>
   <p class="mt-5 text-sm text-center"><a href="/" class="text-slate-500 underline decoration-dotted underline-offset-4">← Back to the start</a></p>
 </div>

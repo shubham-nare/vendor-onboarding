@@ -136,7 +136,7 @@
 
     <div class="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-4">
       <p class="text-xs text-slate-500 max-w-md">By submitting you confirm these details are correct. We check them against your documents and official sources; you'll hear back on this page.</p>
-      <button type="submit" class="w-full sm:w-auto shrink-0 rounded-md bg-indigo-600 text-white font-medium px-6 py-3 hover:bg-indigo-700 shadow-[3px_3px_0_rgba(28,27,24,.18)]">{{ 'Resubmit' if prev else ('Register and submit bill' if is_bill else 'Submit for verification') }}</button>
+      <button type="submit" class="w-full sm:w-auto shrink-0 rounded-md bg-indigo-600 text-white font-medium px-6 py-3 hover:bg-indigo-700 shadow-sm">{{ 'Resubmit' if prev else ('Register and submit bill' if is_bill else 'Submit for verification') }}</button>
     </div>
   </form>
 </div>

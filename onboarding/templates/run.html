@@ -80,11 +80,13 @@
     {% set tone = {'APPROVED': 'text-emerald-600', 'PENDING_VENDOR': 'text-amber-600', 'PENDING_REVIEW': 'text-violet-600', 'REJECTED': 'text-rose-600'}.get(run.status, 'text-slate-600') %}
     {% set word = {'APPROVED': 'Approved', 'PENDING_VENDOR': 'Vendor to fix', 'PENDING_REVIEW': 'For review', 'REJECTED': 'Rejected'}.get(run.status, run.status) %}
     <section class="bg-white rounded-xl border overflow-hidden">
-      <div class="px-4 sm:px-6 pt-6 pb-5 flex flex-wrap items-center gap-x-6 gap-y-4 border-b border-slate-200 bg-[repeating-linear-gradient(0deg,transparent_0_27px,#EFE9DC_27px_28px)]">
-        <span class="stamp stamp-land {{ tone }} text-[19px] sm:text-[26px] max-w-full">{{ word }}<span class="text-[10px] tracking-[.12em] border-l-2 border-current pl-2.5 leading-tight">{{ app.ref }}<br>{{ run.finished_at | dt }}</span></span>
+      {% set hero = {'APPROVED': ('bg-emerald-50/70', 'bg-emerald-600', 'check'), 'PENDING_VENDOR': ('bg-amber-50/70', 'bg-amber-500', 'clock'),
+                     'PENDING_REVIEW': ('bg-violet-50/70', 'bg-violet-600', 'users'), 'REJECTED': ('bg-rose-50/70', 'bg-rose-600', 'x')}.get(run.status, ('bg-slate-50', 'bg-slate-500', 'doc')) %}
+      <div class="px-4 sm:px-6 py-5 flex flex-wrap items-center gap-x-5 gap-y-3 border-b border-slate-100 {{ hero[0] }}">
+        <span class="stamp-land h-14 w-14 shrink-0 rounded-2xl grid place-items-center text-white {{ hero[1] }} shadow-sm" aria-hidden="true">{{ icon(hero[2], 'h-7 w-7') }}</span>
         <div class="flex-1 min-w-[12rem]">
-          <div class="kicker">Decision</div>
-          <div class="font-display text-[22px] sm:text-[26px] leading-tight">{{ STATUS_LABEL.get(run.status, run.status) }}</div>
+          <div class="text-[12px] font-medium text-slate-500">Decision · <span class="mono">{{ app.ref }}</span> · {{ run.finished_at | dt }}</div>
+          <div class="mt-0.5 text-[22px] sm:text-[26px] font-semibold tracking-tight leading-tight {{ tone | replace('600', '700') }}">{{ STATUS_LABEL.get(run.status, run.status) }}</div>
           <div class="mt-1.5 flex flex-wrap items-center gap-3">{% if full %}{{ tier_chip(run.risk_tier) }}{% endif %}
             {% if summary.fraud and full %}<span class="tag text-white bg-rose-600 !border-rose-600">fraud-class signal</span>{% endif %}
             {% if app.current_status != run.status and latest %}<span class="text-sm text-slate-600">Now: {{ status_badge(app.current_status) }}</span>{% endif %}</div>
@@ -191,7 +193,7 @@
               {% if a.needs_comment %}<input name="comment" aria-label="{{ 'Message to the vendor' if key == 'ask_vendor' else 'Reason' }}" class="flex-1 min-w-0 basis-full sm:basis-auto sm:min-w-[14rem] rounded-md border px-3 py-2.5 sm:py-2 text-sm" placeholder="{{ 'Message to the vendor' if key == 'ask_vendor' else ('What do you know about this bill? (audit trail)' if key == 'deny_engagement' else 'Reason (goes on the audit trail)') }}" {{ 'disabled' if a.blocked }}>
               {% else %}<div class="flex-1 basis-full sm:basis-auto sm:min-w-[14rem] text-sm text-slate-600">{{ {'activate': 'Adds the vendor to the vendor master as active and sends the vendor their ID.',
                    'confirm_engagement': 'You asked this vendor for the work on the bill. You become its requester, so someone else approves it.'}.get(key, 'Sends the held message to the vendor and closes the application.') }}</div>{% endif %}
-              <button class="w-full sm:w-auto rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium text-white {{ btn }} disabled:bg-slate-300 disabled:text-slate-600 disabled:cursor-not-allowed shadow-[2px_2px_0_rgba(28,27,24,.15)]" {{ 'disabled' if a.blocked }}>{{ a.label }}</button>
+              <button class="w-full sm:w-auto rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium text-white {{ btn }} disabled:bg-slate-300 disabled:text-slate-600 disabled:cursor-not-allowed shadow-sm" {{ 'disabled' if a.blocked }}>{{ a.label }}</button>
             </div>
             {% if a.blocked %}<div class="mt-2 text-xs text-rose-600 flex items-start gap-1.5">{{ icon('lock', 'h-3.5 w-3.5 shrink-0 mt-px') }} <span>{{ a.blocked }}</span></div>{% endif %}
           </form>
@@ -248,7 +250,7 @@
             <dt class="text-slate-500">How it was made</dt><dd>{{ (r.document_form or '—') | replace('_', ' ') | lower }}</dd>
             <dt class="text-slate-500">Reading</dt><dd class="mono text-[11.5px] break-words">{% if r.origin == 'live' %}live · {{ r.model }} · {{ r.seconds }}s{% elif r.origin %}<span class="text-amber-700">{{ 'saved reading (AI unavailable)' if r.origin == 'cache-fallback' else ('saved reading' if r.origin == 'cache' else 'AI unavailable') }}</span>{% endif %}</dd>
           </dl>
-          {% if r.document_form_evidence %}<p class="mt-2.5 font-display italic text-[14px] text-slate-600 border-l-2 border-slate-200 pl-3">“{{ r.document_form_evidence }}”</p>{% endif %}
+          {% if r.document_form_evidence %}<p class="mt-2.5 italic text-[13.5px] text-slate-600 border-l-2 border-slate-200 pl-3">“{{ r.document_form_evidence }}”</p>{% endif %}
           {% set sigs = au.signals or [] %}
           {% if sigs %}
           <ul class="mt-3 space-y-2">

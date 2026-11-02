@@ -21,7 +21,7 @@
     <label class="block">Work email<input name="email" type="email" required value="{{ values.get('email', '') }}" autocomplete="email" class="mt-1 w-full rounded-md border px-3 py-2.5"></label>
     <label class="block">Password<input name="password" type="password" required minlength="{{ 8 if mode == 'register' else 1 }}" autocomplete="{{ 'new-password' if mode == 'register' else 'current-password' }}" class="mt-1 w-full rounded-md border px-3 py-2.5">
       {% if mode == 'register' %}<span class="block text-xs text-slate-500 mt-1">At least 8 characters. Stored only as a salted hash.</span>{% endif %}</label>
-    <button class="w-full rounded-md bg-indigo-600 text-white font-medium py-3 hover:bg-indigo-700 shadow-[3px_3px_0_rgba(28,27,24,.18)]">{{ 'Create account' if mode == 'register' else 'Log in' }}</button>
+    <button class="w-full rounded-md bg-indigo-600 text-white font-medium py-3 hover:bg-indigo-700 shadow-sm">{{ 'Create account' if mode == 'register' else 'Log in' }}</button>
   </form>
   <p class="mt-4 text-sm text-center text-slate-600">
     {% if mode == 'register' %}Already have an account? <a class="text-indigo-700 underline" href="/vendor/login?next={{ next | urlencode }}">Log in</a>
