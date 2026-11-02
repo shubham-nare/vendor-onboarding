@@ -107,6 +107,25 @@ async def friendly_errors(request: Request, exc: HTTPException):
     return HTMLResponse(body, status_code=exc.status_code)
 
 
+@app.exception_handler(Exception)
+async def database_unreachable(request: Request, exc: Exception):
+    """The database couldn't be reached even after a retry (no internet, DNS down, Neon waking up).
+    Say so plainly instead of a bare "Internal Server Error"; a page view reloads itself."""
+    if not is_dropped_connection(exc):
+        return HTMLResponse("Internal Server Error", status_code=500)
+    if request.method != "GET" or "text/html" not in request.headers.get("accept", ""):
+        return JSONResponse({"error": "Can't reach the database right now. Please try again."}, status_code=503)
+    body = """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="refresh" content="5"><title>Reconnecting…</title>
+<script src="https://cdn.tailwindcss.com"></script></head><body class="bg-slate-50 font-sans">
+<div class="max-w-xl mx-4 sm:mx-auto mt-24 bg-white border rounded-xl p-8 shadow-sm">
+<p class="text-xs uppercase tracking-wide text-slate-500">Reconnecting</p>
+<p class="mt-2 text-lg text-slate-800">Can't reach the database right now.</p>
+<p class="mt-2 text-sm text-slate-600">Usually a brief internet or DNS hiccup. This page tries again every 5 seconds; nothing you entered was lost.</p>
+<div class="mt-6 text-sm"><a class="text-indigo-700 underline" href="">Try now</a></div></div></body></html>"""
+    return HTMLResponse(body, status_code=503, headers={"Retry-After": "5"})
+
+
 @app.get("/healthz")
 async def healthz():
     """Liveness for the uptime pinger. Deliberately does not touch the database."""
