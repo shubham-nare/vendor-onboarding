@@ -161,9 +161,10 @@ SHINDE = {  # proprietorship: legal name = owner, trade name = business
 
 # The buying company (us). Bills must be addressed to it; its state decides CGST+SGST vs IGST.
 BUYER = {
-    "legal_name": "Vardhan Engineering Private Limited",
-    "pan": "AAKCV3382N",
-    "gstin": gstin("27", "AAKCV3382N"),
+    "legal_name": "Shaubham Nare Pvt. Ltd.",
+    "short_name": "Shaubham Nare",
+    "pan": "AAKCS3382N",
+    "gstin": gstin("27", "AAKCS3382N"),
     "address": "Gat No. 418, Chakan Industrial Area Phase I, Pune, Maharashtra, 410501",
     "state": "Maharashtra",
 }
@@ -430,7 +431,7 @@ SCENARIOS: dict[str, dict] = {
             "bill_mode": True, "bill_invoice_number": "BCS/26-27/0877", "bill_invoice_date": "2026-10-24",
             "bill_amount": "98472.00",  # digits swapped: the invoice says 94,872.00
             "bill_description": "Breakdown repair of the Plant 2 control-room AC (compressor replaced)",
-            "bill_engaged_by": "rahul.desai@vardhan.example.com", "bill_po": ""},
+            "bill_engaged_by": "rahul.desai@shaubhamnare.example.com", "bill_po": ""},
         "documents": {
             "gst_certificate": gst_cert(BRINDAVAN),
             "pan_card": pan_card(BRINDAVAN["legal_name"], BRINDAVAN["pan"], date_label="Date of Incorporation/Formation", date=BRINDAVAN["incorporated"]),

@@ -12,7 +12,7 @@
     <label class="block">Invoice date<input name="invoice_date" type="date" value="{{ values.get('invoice_date', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
     <label class="block">Total amount, incl. GST (&#8377;)<input name="amount" required inputmode="decimal" value="{{ values.get('amount', '') }}" class="mt-1 w-full rounded-md border px-3 py-2 mono"></label>
     <label class="block md:col-span-3">What was the work?<input name="description" required value="{{ values.get('description', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
-    <label class="block md:col-span-2">Who at {{ BUYER.legal_name.split(' Private')[0] }} asked for it?<input name="engaged_by" required value="{{ values.get('engaged_by', '') }}" placeholder="Their name or work email" class="mt-1 w-full rounded-md border px-3 py-2">
+    <label class="block md:col-span-2">Who at {{ BUYER.short_name }} asked for it?<input name="engaged_by" required value="{{ values.get('engaged_by', '') }}" placeholder="Their name or work email" class="mt-1 w-full rounded-md border px-3 py-2">
       <span class="block text-xs text-slate-500 mt-1">They confirm the work before the bill is approved.</span></label>
     <label class="block">PO number <span class="text-slate-400">(if any)</span><input name="po_number" value="{{ values.get('po_number', '') }}" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase"></label>
   </div>

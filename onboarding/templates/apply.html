@@ -127,7 +127,7 @@
         <label class="block">Invoice date<input name="bill_invoice_date" type="date" value="{{ v.get('bill_invoice_date', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
         <label class="block">Total amount, incl. GST (&#8377;)<input name="bill_amount" inputmode="decimal" value="{{ v.get('bill_amount', '') }}" class="mt-1 w-full rounded-md border px-3 py-2 mono" placeholder="e.g. 125670.00"></label>
         <label class="block md:col-span-3">What was the work?<input name="bill_description" value="{{ v.get('bill_description', '') }}" class="mt-1 w-full rounded-md border px-3 py-2" placeholder="What you did, where and when"></label>
-        <label class="block md:col-span-2">Who at {{ BUYER.legal_name.split(' Private')[0] }} engaged you?<input name="bill_engaged_by" value="{{ v.get('bill_engaged_by', '') }}" class="mt-1 w-full rounded-md border px-3 py-2" placeholder="Their name or work email">
+        <label class="block md:col-span-2">Who at {{ BUYER.short_name }} engaged you?<input name="bill_engaged_by" value="{{ v.get('bill_engaged_by', '') }}" class="mt-1 w-full rounded-md border px-3 py-2" placeholder="Their name or work email">
           <span class="block text-xs text-slate-500 mt-1">We'll ask them to confirm the work. Bills nobody here can confirm aren't paid.</span></label>
         <label class="block">PO number <span class="text-slate-400">(if you have one)</span><input name="bill_po" value="{{ v.get('bill_po', '') }}" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase"></label>
       </div>

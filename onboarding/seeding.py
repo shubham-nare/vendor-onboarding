@@ -15,16 +15,16 @@ from onboarding import auth
 from onboarding.models import Base, Blocklist, Employee, Invite, SimRegistry, StaffLogin, VendorAccount, VendorMaster, now
 
 EMPLOYEES = [
-    dict(name="Priya Nair", department="Operations, Plant 2", role="sponsor", email="priya.nair@vardhan.example.com"),
-    dict(name="Rahul Desai", department="Plant Head, Pune", role="sponsor", email="rahul.desai@vardhan.example.com"),
-    dict(name="Arjun Mehta", department="Procurement", role="maker", email="arjun.mehta@vardhan.example.com"),
-    dict(name="Kavita Rao", department="Finance", role="checker", email="kavita.rao@vardhan.example.com"),
+    dict(name="Priya Nair", department="Operations, Plant 2", role="sponsor", email="priya.nair@shaubhamnare.example.com"),
+    dict(name="Rahul Desai", department="Plant Head, Pune", role="sponsor", email="rahul.desai@shaubhamnare.example.com"),
+    dict(name="Arjun Mehta", department="Procurement", role="maker", email="arjun.mehta@shaubhamnare.example.com"),
+    dict(name="Kavita Rao", department="Finance", role="checker", email="kavita.rao@shaubhamnare.example.com"),
 ]
 
 # Demo logins (fictional people, shown on the login pages so anyone reviewing the demo can sign in).
 # Every employee logs in with their own email; one vendor account is ready, with no registration yet.
 DEMO_PASSWORD = os.environ.get("DEMO_PASSWORD", "vardhan-demo-26")
-DEMO_COMPANY_EMAIL = "arjun.mehta@vardhan.example.com"
+DEMO_COMPANY_EMAIL = "arjun.mehta@shaubhamnare.example.com"
 DEMO_VENDOR = dict(email=dd.KESARI["contact"]["email"], company_name=dd.KESARI["legal_name"], contact_name=dd.KESARI["contact"]["name"])
 
 INVITES = {  # scenario_key -> (sponsor, company, reason, category, band, high)
@@ -131,7 +131,10 @@ async def ensure_demo_logins(s: AsyncSession) -> None:
     """Give every seeded employee a console login and create the demo vendor account, if missing.
     Called by seed() and at app start (so a fresh deploy can always be logged into)."""
     have = {sl.employee_id for sl in (await s.execute(select(StaffLogin))).scalars()}
+    seeded_email = {d["name"]: d["email"] for d in EMPLOYEES}
     for e in (await s.execute(select(Employee))).scalars():
+        if e.name in seeded_email and e.email != seeded_email[e.name]:
+            e.email = seeded_email[e.name]  # the demo company was renamed: keep logins on the current domain
         if e.id not in have:
             s.add(StaffLogin(employee_id=e.id, password_hash=auth.hash_password(DEMO_PASSWORD)))
     if not (await s.execute(select(VendorAccount).where(VendorAccount.email == DEMO_VENDOR["email"]))).scalar_one_or_none():
