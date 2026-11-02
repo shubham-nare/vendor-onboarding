@@ -1,6 +1,6 @@
 # Product evolution: from Vendor Onboarding to Vendor Intelligence
 
-**Status:** proposal for review. Nothing in this document is built yet unless it says **(exists)**.
+**Status:** proposal approved (Option A, 3 Nov 2026). **Milestone 1a and the M1b simulation are built and tested**: see section 13. Everything else here is still a proposal unless it says **(exists)**.
 **Written:** 3 Nov 2026, after reading the whole repository (`onboarding/`, `tests/`, `scripts/`, `docs/HOW_IT_WORKS.md`, `../docs/PRODUCT.md`, `../docs/PLAN.md`).
 **Rule for this document:** every capability is marked **Now** (buildable with what exists), **Simulated** (buildable, but only against the simulated registries, and labelled so) or **Needs integration** (needs a paid or contracted data source, a scheduler or a second organisation).
 
@@ -410,3 +410,57 @@ For each milestone: state the product problem; update this document; list affect
 2. Is PAN the right primary key for a vendor in your view? Foreign vendors without a PAN are currently out of scope and go to the manual path.
 3. Should a **declared** shared address or email ever appear on the dashboard, or only inside Vendor 360? The proposal shows it only in Vendor 360.
 4. For the stricter-policy simulation, which gate matters most to a buyer: "bank account must be A4" or "GSTIN must be A3 (signed certificate)"?
+
+---
+
+## 13. Implementation status (milestone 1)
+
+Built on 3 Nov 2026, after review. Decisions taken in review:
+- **Identity:** an internally generated, immutable `vendor_id` (`VND-0001`). PAN is the matching attribute for Indian vendors, with several GSTINs allowed per PAN. Shared identifiers create relationships to investigate, never merges. The model allows non-Indian vendors (country, no PAN). Sensitive identifiers use keyed HMACs for matching and encryption where the original must be shown again.
+- **Dashboard:** only actionable relationships are surfaced (shared bank account, reused document, identity conflict), and only where an existing rule already raised the alert. Ordinary address, email and phone overlaps stay inside Vendor 360.
+- **Counterfactual:** the hypothetical policy is "the bank account must be confirmed at source (A4)". A SIMULATED SOURCE never confers A4. A missing GST signature is never treated as tampering.
+
+### 13.1 What exists now
+
+| Capability | Where | Tested by |
+|---|---|---|
+| New tables, additive only (no existing table changed) | `onboarding/intel/models.py` | all of `tests/test_intel.py` |
+| Identity: VND ids, PAN matching, no merges on shared data, vendor-master records as vendors | `intel/project.py` (`resolve_vendor`, `ensure_master_vendors`) | `test_vendor_identity_pan_matches_and_ids_are_ours`, `test_shared_bank_account_is_a_relationship_not_a_merge` |
+| Keyed HMAC matching keys, AES-GCM encrypted originals; Finance decrypts an active vendor's account | `intel/crypto.py`, `web.vendor_profile` | `test_sensitive_identifiers_are_hmacd_and_encrypted` |
+| Immutable evidence items; versioned fact observations with basis and history | `intel/project.py` | `test_fact_history_keeps_earlier_observations` |
+| Evidence graph in Postgres: typed edges with status, basis, rule, evidence and valid_from/valid_to | `graph_nodes`, `graph_edges` | `test_every_relationship_and_flag_has_provenance`, `test_identity_conflict_is_unresolved_and_flagged` |
+| Risk flags from existing rules only, each with a reviewer action; closed by the person's decision | `risk_events`, `project_decision` | `test_human_decisions_close_flags_and_activate` |
+| Decision snapshots (encrypted exact input) and the replay check; older runs rebuilt from stored data | `intel/snapshot.py`, `pipeline.run_pipeline` | `test_decisions_replay_exactly` |
+| Domain events recorded per processed run and decision | `domain_events` | `test_projection_is_idempotent` |
+| Vendor 360 (next actions, identity, fact history with "in doubt" notes, relationship map, risk flags, applications and decisions, evidence register); vendor directory; dashboard relationship alerts; "Open vendor profile" on runs | `templates/vendor360.html`, `vendors_dir.html`, `web.py` | `test_pages_and_navigation`, `test_requesters_see_only_their_vendors_and_less` |
+| Next best actions: deterministic, each with why (rule, fact or relationship, plus evidence) and who may act | `intel/vendor360.next_actions` | `test_pages_and_navigation` |
+| Counterfactual simulation (bank-at-A4 policy, confirm a warning, clear a failed check); refused unless the replay is exact; writes only `simulation_runs` | `intel/simulate.py`, `POST /runs/{id}/simulate` | `test_simulation_*` (4 tests) |
+
+On the real (Neon) data, the startup catch-up projected the 9 existing checks and 2 decisions. 8 of 9 decisions replay exactly. Check #8 (the Kesari bill) is correctly refused: its stored AI reading addresses the bill to the company's old GSTIN, the 3 Nov rename changed the company GSTIN, and so today's rules give a different result.
+
+### 13.2 Where the build differs from sections 4–9 (deliberately)
+
+- **One package, `onboarding/intel/`**, with modules per concern (`project.py` for identity, evidence, graph and risk; `snapshot.py` and `simulate.py` for the decision side; `vendor360.py` for the read side). That's simpler than four top-level packages at this size; the logical separation is the same.
+- **Inferred vendor-to-vendor relationships are derived when read** (two current edges reaching the same bank account or file), not stored as edges. Each still shows both sides' provenance. Storing them would need a sync step for no benefit at this scale.
+- **Domain events are written when processed**, right after the run's own commit, not inside it. The projection is idempotent and the startup backfill re-processes anything missed, so nothing is lost. A true outbox inside the pipeline transaction comes with the worker in M4.
+- **The printable report view was not built** (Option A); Vendor 360 is the explainable report for now.
+- **Onboarding changes, all behaviour-preserving:**
+  - Context gathering moved into `pipeline.gather_context` (with options used only when rebuilding old decisions).
+  - The rules take a frozen evaluation time, `ctx.as_of`, so invite-expiry and bill-age checks replay exactly.
+  - The pipeline saves one extra row (the snapshot) in its final commit.
+  - The supplier-accounts list moved from `/vendors` to `/supplier-accounts`.
+  - All 122 earlier tests still pass.
+- **Performance:** a projection makes many small queries. On Render next to Neon this is milliseconds; over a slow laptop link the startup catch-up of 11 items took several minutes, in the background, while pages kept working.
+
+### 13.3 Not built yet (unchanged plan)
+
+- Alembic and the insert-only triggers.
+- Risk-flag lifecycle actions (acknowledge or dismiss without a decision).
+- Human merge and split.
+- The bank change request workflow.
+- Freshness badges beyond the IFSC re-check date.
+- The AI investigation assistant.
+- Monitoring jobs.
+- Tenants with row-level security.
+- The Trust Passport.
+

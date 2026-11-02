@@ -695,6 +695,29 @@ The dashboard's **Try a scenario** list starts each case through a fresh invite 
 
 ---
 
+## 23b. Vendor Intelligence: one vendor, its evidence, its relationships, what to do next
+
+Onboarding decides on one **application**. Vendor Intelligence connects everything about one **vendor** (a legal entity) across applications. It never changes an onboarding decision: it reads finished checks and people's decisions, and writes only its own tables (design: `docs/PRODUCT_EVOLUTION.md`).
+
+- **Vendor ID.** Every vendor gets our own permanent ID, `VND-0001`. An application joins the vendor holding the same PAN; several GSTINs under one PAN stay one vendor. Existing vendor-master records (for example V-0042 Deccan Office Supplies) are vendors too.
+- **Never merged on shared details.** A shared bank account, address, email, phone or document file creates a **relationship to check**, not a merge. Only a person could merge two vendors (not built yet).
+- **Evidence and fact history.** Each check records evidence items: the submitted form, each document by fingerprint, each source answer and the decisive rule results. Evidence is never edited afterwards. Each fact (PAN, GSTIN, bank account, …) gets a dated observation at its A0–A4 level, with its basis (live source, **SIMULATED SOURCE**, document, digital signature…). A later check supersedes an observation without deleting it, so the history stays. A fact shows **"in doubt despite its level"** when an unresolved relationship or an open flag contradicts it.
+- **Relationships.** Typed links (has PAN, is paid into, submitted, conflicts with PAN…), each with a status (**verified**, **declared**, **inferred** or **unresolved**), the evidence or rule behind it, and when it started and stopped. Only a shared bank account, the same document file and an identity conflict are "needs a reviewer". Shared addresses, emails and phones are shown for context only.
+- **Risk flags.** Raised only where an onboarding rule already raised the alert: shared bank account (`R-RISK-02`), reused document (`R-RISK-04`), identity conflict (`R-XD-03`), blocklist (`R-RISK-01`), duplicate registration (`R-RISK-03`). Each says what the reviewer should do. A flag closes when a person decides (activate, approve, reject or confirm the rejection), or when a resubmission no longer triggers the rule.
+- **What to do next.** Worked out from the rules, the evidence and the relationships. Each item says why (with the rule and the evidence) and who may act, using the same segregation-of-duties rules as the buttons. Example: "Confirm the bank account at source to reach A4": in this build the penny-drop is a SIMULATED SOURCE, so this needs a real provider.
+- **Privacy.** PAN, bank account, email, phone and address are matched by a keyed fingerprint (HMAC). The originals are stored encrypted (AES-GCM), and only Finance sees an active vendor's full account number. GSTINs stay visible: they are public business data. Requesters see only vendors they asked for, without identity details, evidence, relationships or flags.
+- **Replayable decisions.** Every new check saves its complete decision input, encrypted. Older checks are rebuilt from stored data. Replaying a saved input through today's rules must give exactly the recorded decision (status, risk tier, every rule, every fact level); if not, simulation is switched off for that check.
+- **"What would change the decision?"** On a check, the Procurement reviewer or Finance controller can simulate:
+  - a hypothetical policy that the bank account must be confirmed at source (A4);
+  - confirming a warning;
+  - clearing a failed check.
+
+  The same rules run on a copy of the saved input. The result shows the actual vs simulated status, which rules changed, and which rules now decide. Nothing real changes; each simulation is logged.
+
+Screens: **Vendors** (directory) → **Vendor 360** (`/vendors/VND-…`); **Relationship alerts** on the dashboard; **Open vendor profile** on every check. The old list of supplier portal logins is now **Supplier accounts** (`/supplier-accounts`).
+
+---
+
 ## 24. Known limits and the production path
 
 - **Plug in the real sources** (GSTN, PAN, penny-drop, MCA, Udyam) through a KYB provider. The adapters already share one shape, and facts would then reach A4.
