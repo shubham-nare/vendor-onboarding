@@ -159,6 +159,7 @@
     '/check': '<path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><circle cx="11.5" cy="11.5" r="3.5"/><path d="m14 14 3 3"/>',
     '/assumptions': '<path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="M9 12l2 2 4-4"/>',
     '/system': '<path d="M22 12h-4l-3 8L9 4l-3 8H2"/>',
+    '/supplier-accounts': '<circle cx="9" cy="8" r="4"/><path d="M2 21v-1a6 6 0 0 1 12 0v1"/><path d="M16 11h6M19 8v6"/>',
   } %}
   {% macro nav_icon(href) -%}<svg class="h-[18px] w-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{{ NAV_ICONS.get(href, '') | safe }}</svg>{%- endmacro %}
   {% set ROLE_TONE = {'sponsor': ('bg-amber-100 text-amber-800', 'text-amber-700'), 'maker': ('bg-indigo-100 text-indigo-700', 'text-indigo-600'), 'checker': ('bg-emerald-100 text-emerald-700', 'text-emerald-700')} %}
@@ -227,8 +228,8 @@
   <footer class="{{ 'max-w-5xl' if vendor_page else 'max-w-6xl' }} mx-auto px-4 sm:px-6 pb-10 text-[12px] text-slate-400 text-center">Demo · fictional vendors · government lookups simulated</footer>
 
   {% else %}
-  {% set NAV = [('Workspace', [('/console', 'Dashboard'), ('/bills', 'Bills'), ('/vendors', 'Vendors'), ('/invites', 'Invites')]),
-                ('Review tools', [('/outbox', 'Outbox'), ('/check', 'Document check'), ('/system', 'System')]),
+  {% set NAV = [('Workspace', [('/console', 'Dashboard'), ('/vendors', 'Vendors'), ('/bills', 'Bills'), ('/invites', 'Invites')]),
+                ('Review tools', [('/outbox', 'Outbox'), ('/check', 'Document check'), ('/supplier-accounts', 'Supplier accounts'), ('/system', 'System')]),
                 ('About', [('/assumptions', 'What is verified')])] %}
   {% set reviewer = actor and actor.role in ('maker', 'checker') %}
   {# desktop sidebar #}

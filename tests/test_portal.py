@@ -130,7 +130,7 @@ def flows(tmp_path_factory):
                 seen[who] = dict(bills=(await staff.get("/bills")).text, bill=await staff.get(f"/bills/{bid2}"), run=await staff.get(f"/runs/{run_id}"),
                                  events=(await staff.get(f"/runs/{run_id}/events")).status_code, file=(await staff.get(f"/files/{sha}")).status_code,
                                  outbox=(await staff.get("/outbox")).status_code, console=(await staff.get("/console")).text,
-                                 vendors=(await staff.get("/vendors")).text)
+                                 vendors=(await staff.get("/supplier-accounts")).text)
             out["seen"] = seen
             staff.cookies.set("actor", "2")
             out["rahul_action"] = (await staff.post(f"/bills/{bid2}/action", data={"action": "confirm_engagement"})).status_code
@@ -139,7 +139,7 @@ def flows(tmp_path_factory):
             await other.post("/vendor/register", data={"company_name": "Someone Else", "contact_name": "A B", "email": "a@else.example.com", "password": PW})
             out["other_bill"] = (await other.get(f"/vendor/bills/{bid}")).status_code
             out["bills_list"] = (await staff.get("/bills")).text
-            out["vendors_list"] = (await staff.get("/vendors")).text
+            out["vendors_list"] = (await staff.get("/supplier-accounts")).text
             v.cookies.set("vendor_session", "1.1.forged")
             out["forged"] = (await v.get("/vendor")).headers.get("location", "")
             v.cookies.clear()

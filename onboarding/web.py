@@ -250,6 +250,9 @@ async def dashboard(request: Request):
                  bills=_all(select(Bill)),
                  acted=_rows(select(HumanAction.run_id, HumanAction.action)),
                  open_vbills=_all(select(VendorBill).where(VendorBill.status.in_(("awaiting_confirmation", "for_review", "vendor_fix", "ready_for_approval")))))
+        if full:
+            q["alerts"] = _rows(select(RiskEvent, Vendor).join(Vendor, Vendor.id == RiskEvent.vendor_pk).where(RiskEvent.status == "open").order_by(RiskEvent.opened_at))
+            q["vnames"] = _rows(select(Vendor.id, Vendor.vendor_id, Vendor.display_name))
         if actor and not full:
             q["vbills"] = _all(select(VendorBill).where(VendorBill.engaged_employee_id == actor.id, VendorBill.status == "awaiting_confirmation"))
         r = await _reads(**q)
@@ -283,8 +286,11 @@ async def dashboard(request: Request):
                              and r["app"].current_status not in ("REJECTED", "ACTIVE"))
             to_confirm += len(r["vbills"])
         todo = _todo(actor, runs, sponsors, emps, r["acted"], r["open_vbills"])
+        vnames = {pk: (vid, name) for pk, vid, name in r.get("vnames", [])}
+        alerts = [dict(ev=ev, vendor=vend, related=vnames.get(ev.related_vendor_pk)) for ev, vend in r.get("alerts", [])]
+        alerts.sort(key=lambda a: a["ev"].severity != "fraud")
         return await render(request, s, "dashboard.html", runs=runs, counts=counts, stats=stats, catalog=demo_catalog(), full=full,
-                            to_confirm=to_confirm, todo=todo)
+                            to_confirm=to_confirm, todo=todo, alerts=alerts)
 
 
 _TODO_VERB = {"activate": "Activate vendor", "review_approve": "Review and decide", "ask_vendor": "Review and decide", "review_reject": "Review and decide",
@@ -675,6 +681,7 @@ async def run_view(request: Request, run_id: int):
                           .where(HumanAction.run_id.in_(app_runs)).order_by(HumanAction.id)),
             history=_all(select(Run).where(Run.application_id == app.id).order_by(Run.id)),
             vendor=_all(select(VendorMaster).where(VendorMaster.source_run_id.in_(app_runs)).order_by(VendorMaster.id).limit(1)),
+            profile=_rows(select(Vendor.vendor_id).join(VendorApplication, VendorApplication.vendor_pk == Vendor.id).where(VendorApplication.application_id == app.id)),
         )
         events = [_event_dict(e, full) for e in r["events"]]
         docs = sorted(r["docs"], key=lambda d: SLOTS.index(d.slot) if d.slot in SLOTS else 99)
@@ -682,7 +689,7 @@ async def run_view(request: Request, run_id: int):
         history = r["history"]
         latest = history[-1].id == run.id
         return await render(request, s, "run.html", run=run, app=app, invite=inv, sponsor=sponsor, bill=bill, bill_emp=bill_emp, full=full,
-                            fact_issues=_fact_issues(r["rules"]) if full else {},
+                            fact_issues=_fact_issues(r["rules"]) if full else {}, profile_id=(r["profile"] or [[None]])[0][0],
                             rights=_decision_rights(run, app, inv, bill, bill_emp, list(emps.values())) if latest else [],
                             vendor_token=inv.token if inv else (bill.token if bill else ""), events=events, stages=stages_for(run.form), docs=docs,
                             rules=r["rules"], facts=r["facts"], vendor_msg=msgs.get("vendor"),
@@ -933,8 +940,11 @@ async def run_action(request: Request, run_id: int, action: str = Form(...), com
             app.current_status = "REJECTED"
             s.add(Message(run_id=run.id, audience="vendor", subject=f"Your vendor registration (Ref {app.ref}): unable to proceed", state="sent",
                           body=f"{hi}\n\nThank you for your interest. After review, we're unable to proceed with your registration at this time.\n\nVendor Onboarding Team"))
-        s.add(HumanAction(run_id=run.id, employee_id=actor.id, action=action, comment=comment))
+        ha = HumanAction(run_id=run.id, employee_id=actor.id, action=action, comment=comment)
+        s.add(ha)
         await s.commit()
+    from onboarding.intel.project import on_decision
+    await on_decision(ha.id)   # Vendor Intelligence: evidence of the decision, closes the risk flags it addressed; never raises
     return RedirectResponse(f"/runs/{run_id}#actions", status_code=303)
 
 
@@ -1026,3 +1036,121 @@ async def reset(request: Request, passcode: str = Form(...)):
     from onboarding.seeding import seed
     await seed(reset=True, dispose=False)
     return RedirectResponse("/system?done=reset", status_code=303)
+
+
+# --- Vendor Intelligence: vendor directory and Vendor 360 ------------------------------------------------------------
+from sqlalchemy import or_  # noqa: E402
+from sqlalchemy.orm import aliased  # noqa: E402
+
+from onboarding.intel import vendor360 as V360  # noqa: E402
+from onboarding.intel.crypto import decrypt  # noqa: E402
+from onboarding.intel.models import (DecisionSnapshot, EvidenceItem, FactObservation, GraphEdge, GraphNode, RiskEvent, Vendor,  # noqa: E402
+                                     VendorApplication, VendorIdentifier)
+
+
+async def _none(_s) -> list:
+    return []
+
+
+def _owned_app_ids(actor, apps, invites: dict, bills: dict) -> set[int]:
+    return {a.id for a in apps if access.owns_application(actor, invites.get(a.invite_id), bills.get(a.id))}
+
+
+@router.get("/vendors", response_class=HTMLResponse)
+async def vendor_directory(request: Request, q: str = ""):
+    """Every canonical vendor: one row per legal entity, however many applications it made."""
+    async with read_sessions()() as s:
+        actor = await _actor(request, s)
+        full = access.full_view(actor)
+        r = await _reads(vendors=_all(select(Vendor).order_by(Vendor.id)),
+                         links=_rows(select(VendorApplication.vendor_pk, Application).join(Application, Application.id == VendorApplication.application_id)),
+                         pans=_rows(select(VendorIdentifier.vendor_pk, VendorIdentifier.display).where(VendorIdentifier.kind == "PAN", VendorIdentifier.status == "current")),
+                         risks=_rows(select(RiskEvent.vendor_pk, RiskEvent.related_vendor_pk, RiskEvent.severity).where(RiskEvent.status == "open")),
+                         invites=_all(select(Invite)), bills=_all(select(Bill)))
+        apps_by_v: dict[int, list] = {}
+        for vpk, app in r["links"]:
+            apps_by_v.setdefault(vpk, []).append(app)
+        owned = _owned_app_ids(actor, [a for _, a in r["links"]], {i.id: i for i in r["invites"]}, {b.application_id: b for b in r["bills"]}) if not full else set()
+        pan = dict(r["pans"])
+        flags: dict[int, list] = {}
+        for vpk, rel, sev in r["risks"]:
+            flags.setdefault(vpk, []).append(sev)
+            if rel:
+                flags.setdefault(rel, []).append("linked")
+        rows = []
+        for v in r["vendors"]:
+            apps = sorted(apps_by_v.get(v.id, []), key=lambda a: a.id)
+            if not full and not any(a.id in owned for a in apps):
+                continue
+            if q and q.lower() not in f"{v.display_name} {v.vendor_id} {v.erp_vendor_id}".lower():
+                continue
+            rows.append(dict(v=v, apps=apps, pan=pan.get(v.id, "") if full else "", flags=flags.get(v.id, []) if full else []))
+        return await render(request, s, "vendors_dir.html", rows=rows, full=full, q=q, STATUS_TEXT=V360.STATUS_TEXT)
+
+
+@router.get("/vendors/{vendor_key}", response_class=HTMLResponse)
+async def vendor_profile(request: Request, vendor_key: str):
+    """Vendor 360: who the vendor is, what proves it, who it's connected to, what's risky and what to do next."""
+    async with read_sessions()() as s:
+        actor = await _actor(request, s)
+        full = access.full_view(actor)
+        found = (await _reads(v=_all(select(Vendor).where(Vendor.vendor_id == vendor_key))))["v"]
+        if not found:
+            raise HTTPException(404, "No such vendor")
+        v = found[0]
+        src, dst = aliased(GraphNode), aliased(GraphNode)
+        r = await _reads(
+            apps=_all(select(Application).join(VendorApplication, VendorApplication.application_id == Application.id)
+                      .where(VendorApplication.vendor_pk == v.id).order_by(Application.id)),
+            runs=_all(select(Run).join(VendorApplication, VendorApplication.application_id == Run.application_id)
+                      .where(VendorApplication.vendor_pk == v.id).order_by(Run.id)),
+            idents=_all(select(VendorIdentifier).where(VendorIdentifier.vendor_pk == v.id).order_by(VendorIdentifier.id)),
+            obs=_all(select(FactObservation).where(FactObservation.vendor_pk == v.id)),
+            my_edges=_rows(select(GraphEdge, dst).join(src, src.id == GraphEdge.src_id).join(dst, dst.id == GraphEdge.dst_id)
+                           .where(src.kind == "VENDOR", src.vendor_pk == v.id).order_by(GraphEdge.id)),
+            risks=_all(select(RiskEvent).where(or_(RiskEvent.vendor_pk == v.id, RiskEvent.related_vendor_pk == v.id)).order_by(RiskEvent.opened_at)),
+            evidence=_all(select(EvidenceItem).where(EvidenceItem.vendor_pk == v.id).order_by(EvidenceItem.id)),
+            actions=_rows(select(HumanAction, Employee).join(Employee, Employee.id == HumanAction.employee_id).join(Run, Run.id == HumanAction.run_id)
+                          .join(VendorApplication, VendorApplication.application_id == Run.application_id)
+                          .where(VendorApplication.vendor_pk == v.id).order_by(HumanAction.id)),
+            snaps=_rows(select(DecisionSnapshot.run_id, DecisionSnapshot.replay_ok, DecisionSnapshot.reconstructed)
+                        .join(Run, Run.id == DecisionSnapshot.run_id).join(VendorApplication, VendorApplication.application_id == Run.application_id)
+                        .where(VendorApplication.vendor_pk == v.id)),
+            invites=_all(select(Invite)), bills=_all(select(Bill)), allv=_all(select(Vendor)))
+        invites, bills = {i.id: i for i in r["invites"]}, {b.application_id: b for b in r["bills"]}
+        owned = _owned_app_ids(actor, r["apps"], invites, bills)
+        if not full and not owned:
+            raise access.forbid("This vendor's profile")
+        dst_ids = [n.id for _, n in r["my_edges"]]
+        r2 = await _reads(shared=_rows(select(GraphEdge, src, dst).join(src, src.id == GraphEdge.src_id).join(dst, dst.id == GraphEdge.dst_id)
+                                       .where(GraphEdge.dst_id.in_(dst_ids), src.kind == "VENDOR", src.vendor_pk != v.id)) if dst_ids and full else _none)
+        vendors_by_pk = {x.id: x for x in r["allv"]}
+        conns = V360.connections(r["my_edges"], r2["shared"], vendors_by_pk, r["risks"]) if full else []
+        other_ev_ids = [i["theirs"].evidence_item_id for c in conns for i in c["shared"] if i["theirs"].evidence_item_id]
+        other_ev = (await _reads(e=_all(select(EvidenceItem).where(EvidenceItem.id.in_(other_ev_ids))) if other_ev_ids else _none))["e"]
+        evidence = {e.id: e for e in [*r["evidence"], *other_ev]}
+        runs_by_app: dict[int, list] = {}
+        for run in r["runs"]:
+            runs_by_app.setdefault(run.application_id, []).append(run)
+        emps = await _employees(s)
+        apps, rights_by_app = [], {}
+        for a in r["apps"]:
+            rs = runs_by_app.get(a.id, [])
+            latest = rs[-1] if rs else None
+            inv, bill = invites.get(a.invite_id), bills.get(a.id)
+            if latest is not None:
+                bill_emp = next((e for e in emps if bill and e.id == bill.engaged_employee_id), None)
+                rights_by_app[a.id] = _decision_rights(latest, a, inv, bill, bill_emp, emps)
+            apps.append(dict(app=a, runs=rs, latest=latest, invite=inv, bill=bill, owned=a.id in owned,
+                             sponsor=next((e for e in emps if inv and e.id == inv.sponsor_id), None)))
+        facts = V360.fact_history(r["obs"])
+        risks = r["risks"] if full else []
+        nba = V360.next_actions(v, [a for a in apps if full or a["owned"]], risks, facts if full else [], rights_by_app, evidence)
+        full_bank = {}
+        if access.sees_full_bank(actor) and v.status == "active":   # Finance releases payments: the real number, decrypted on demand
+            full_bank = {i.id: decrypt(i.value_enc) for i in r["idents"] if i.kind == "BANK_ACCOUNT" and i.value_enc}
+        doubts = V360.fact_doubts(v, r["my_edges"], risks) if full else {}
+        return await render(request, s, "vendor360.html", v=v, apps=apps, idents=r["idents"], facts=facts, conns=conns, risks=risks, doubts=doubts,
+                            evidence=evidence, actions=r["actions"] if full else [], nba=nba, full=full, vendors_by_pk=vendors_by_pk,
+                            lay=V360.layout(v, r["my_edges"], conns) if full else None, my_edges=r["my_edges"] if full else [],
+                            snaps={rid: (ok, rec) for rid, ok, rec in r["snaps"]}, full_bank=full_bank, V360=V360)

@@ -24,6 +24,7 @@
       {% else %}<span class="text-rose-600 font-medium">No invite from an employee: unsolicited application</span>{% endif %}
     </div>
   </div>
+  {% if profile_id %}<a href="/vendors/{{ profile_id }}" class="order-first sm:order-none inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-slate-700 hover:border-indigo-300 hover:text-indigo-700 shadow-card">{{ icon('building', 'h-3.5 w-3.5') }} Open vendor profile <span class="mono font-normal text-slate-500">{{ profile_id }}</span></a>{% endif %}
   {% if history | length > 1 %}
   <nav class="flex flex-wrap items-center gap-1.5 text-xs" aria-label="Submissions">
     {% for h in history %}

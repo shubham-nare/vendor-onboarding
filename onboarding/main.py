@@ -36,9 +36,20 @@ async def lifespan(_app: FastAPI):
         if n:
             log.warning("marked %s unfinished run(s) as interrupted", n)
         asyncio.get_running_loop().create_task(db.warm_pool())  # in the background: startup isn't held up
+        from onboarding.intel.project import backfill
+        asyncio.get_running_loop().create_task(_intel_backfill(backfill))  # Vendor Intelligence catches up on older runs
     except Exception as e:  # the app still starts; /readyz and /system show the problem
         log.error("startup database step failed: %s", type(e).__name__)
     yield
+
+
+async def _intel_backfill(fn) -> None:
+    try:
+        n = await fn()
+        if n["runs"] or n["decisions"]:
+            log.info("vendor intelligence: projected %s run(s), %s decision(s)", n["runs"], n["decisions"])
+    except Exception:
+        log.exception("vendor intelligence backfill failed (pages still work; it retries on the next start)")
 
 
 app = FastAPI(title="Vendor onboarding", lifespan=lifespan)
@@ -46,7 +57,7 @@ app.mount("/static", StaticFiles(directory=__file__.rsplit("main.py", 1)[0] + "s
 
 
 # Company pages (the console) need an employee login; vendor pages have their own login (portal.py).
-COMPANY_AREAS = {"console", "act-as", "invites", "runs", "files", "outbox", "check", "assumptions", "system", "demo", "bills", "vendors"}
+COMPANY_AREAS = {"console", "act-as", "invites", "runs", "files", "outbox", "check", "assumptions", "system", "demo", "bills", "vendors", "supplier-accounts"}
 
 
 @app.middleware("http")

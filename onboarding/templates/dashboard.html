@@ -111,6 +111,30 @@
   </section>
 </div>
 
+{% if full and alerts %}
+<section class="bg-white border rounded-xl overflow-hidden">
+  <div class="px-4 sm:px-5 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
+    <div>
+      <h2 class="text-[16px]">Relationship alerts <span class="ml-1.5 inline-flex items-center justify-center rounded-full bg-rose-600 text-white text-[11.5px] font-semibold h-5 min-w-[20px] px-1.5 align-middle">{{ alerts | length }}</span></h2>
+      <p class="text-[12.5px] text-slate-500 mt-0.5">Shared bank accounts, reused documents and identity conflicts that an onboarding rule flagged. A shared detail is a question for a reviewer, not proof of fraud.</p>
+    </div>
+    <a href="/vendors" class="text-[12.5px] font-medium text-indigo-700 hover:underline">All vendors</a>
+  </div>
+  <ul class="divide-y divide-slate-100">
+    {% for a in alerts %}
+    <li><a href="/vendors/{{ a.vendor.vendor_id }}#risk" class="group flex items-center gap-3 px-4 sm:px-5 py-3 hover:bg-slate-50">
+      <span class="h-8 w-8 shrink-0 rounded-lg grid place-items-center {{ 'bg-rose-50 text-rose-600' if a.ev.severity == 'fraud' else 'bg-amber-50 text-amber-600' }}">{{ icon('flag') }}</span>
+      <span class="flex-1 min-w-0">
+        <span class="block text-[14px] font-medium truncate">{{ a.vendor.display_name }}{% if a.related %} <span class="font-normal text-slate-500">↔ {{ a.related[1] }}</span>{% endif %}</span>
+        <span class="block text-[12px] text-slate-500 truncate">{{ a.ev.title }} · rule {{ a.ev.rule_id }}</span>
+      </span>
+      <span class="hidden sm:inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-slate-700 group-hover:border-indigo-300 group-hover:text-indigo-700">Open vendor {{ icon('chev', 'h-3.5 w-3.5') }}</span>
+    </a></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
 <div class="grid xl:grid-cols-[1fr_340px] 2xl:grid-cols-[1fr_380px] gap-4 sm:gap-6">
   <section class="bg-white rounded-xl border min-w-0 self-start overflow-hidden">
     <div class="px-4 sm:px-5 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">

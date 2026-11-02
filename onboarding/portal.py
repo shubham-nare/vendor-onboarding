@@ -428,7 +428,7 @@ async def bill_action(request: Request, bill_id: int, action: str = Form(...), c
     return RedirectResponse(f"/bills/{bill_id}#actions", status_code=303)
 
 
-@router.get("/vendors", response_class=HTMLResponse)
+@router.get("/supplier-accounts", response_class=HTMLResponse)
 async def vendors_list(request: Request):
     async with read_sessions()() as s:
         accts = (await s.execute(select(VendorAccount).order_by(VendorAccount.id.desc()))).scalars().all()

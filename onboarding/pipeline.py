@@ -112,14 +112,7 @@ async def run_pipeline(run_id: int, *, prefer_cache: bool = False, pace: float =
         form = run.form
 
         # S0 invite
-        invite = await s.get(Invite, app.invite_id) if app.invite_id else None
-        inv = None
-        if invite:
-            await s.refresh(invite, ["sponsor"])
-            first_app = (await s.execute(select(Application.id).where(Application.invite_id == invite.id).order_by(Application.id))).scalars().first()
-            inv = dict(status=invite.status, company_name=invite.company_name, expires_at=invite.expires_at.replace(tzinfo=invite.expires_at.tzinfo or timezone.utc),
-                       application_id=first_app, sponsor=f"{invite.sponsor.name} ({invite.sponsor.department})", reason=invite.business_reason,
-                       high_spend=invite.high_spend, spend_band=invite.spend_band)
+        inv = await invite_context(s, app)
         no_invite = (f"No invite: registered with a bill for work already done (engaged by {form.get('bill_engaged_by') or 'nobody named'})"
                      if form.get("bill_mode") else "No invite: unsolicited application")
         await ev.emit("invite", "done", f"Requested by {inv['sponsor']}: {inv['reason']}" if inv else no_invite,
@@ -158,40 +151,8 @@ async def run_pipeline(run_id: int, *, prefer_cache: bool = False, pace: float =
         await s.commit()
 
         # S5-S8 inputs: live IFSC + simulated registries + internal data
-        ifsc_task = asyncio.create_task(S.ifsc_lookup(form.get("ifsc", "")))
-        srcs = {"gst": await S.gst_status(s, form.get("gstin", "")), "pan": await S.pan_status(s, form.get("pan", "")),
-                "bank": await S.penny_drop(s, form.get("bank_account", ""), form.get("ifsc", ""))}
-        if form.get("cin"):
-            srcs["cin"] = await S.cin_status(s, form["cin"])
-        srcs["ifsc"] = await ifsc_task
-        pan, gstin, acct = form.get("pan", "").upper(), form.get("gstin", "").upper(), form.get("bank_account", "")
-        master = [dict(vendor_id=m.vendor_id, legal_name=m.legal_name, pan=m.pan, gstin=m.gstin, account=m.account, ifsc=m.ifsc, status=m.status)
-                  for m in (await s.execute(select(VendorMaster).where(or_(VendorMaster.pan == pan, VendorMaster.gstin == gstin, VendorMaster.account == acct)))).scalars()]
-        block = [dict(reason=b.reason) for b in (await s.execute(select(Blocklist).where(or_(Blocklist.pan == pan, Blocklist.gstin == gstin,
-                                                                                         (Blocklist.account == acct) & (Blocklist.account != ""))))).scalars()]
-        shas = [d.sha256 for d in docs_rows]
-        reused = []
-        if shas:
-            q = select(Document.sha256, Document.filename, Application.ref, Run.form).join(Run, Run.id == Document.run_id).join(Application, Application.id == Run.application_id)
-            for sha, fn, ref, other_form in (await s.execute(q.where(Document.sha256.in_(shas), Application.id != app.id))).all():
-                if (other_form or {}).get("pan", "").upper() != pan:
-                    reused.append({"file": fn, "other_application": ref})
-
-        bill_ctx = None
-        if form.get("bill_mode"):
-            bill = (await s.execute(select(Bill).where(Bill.application_id == app.id))).scalar_one_or_none()
-            emp = await s.get(Employee, bill.engaged_employee_id) if bill and bill.engaged_employee_id else None
-            dups = []
-            number = "".join(ch for ch in form.get("bill_invoice_number", "").upper() if ch.isalnum())
-            if number:
-                q = select(Run.form, Application.ref).join(Application, Application.id == Run.application_id).where(Run.application_id != app.id)
-                for other_form, ref in (await s.execute(q)).all():
-                    of = other_form or {}
-                    if of.get("bill_mode") and of.get("gstin", "").upper() == gstin and "".join(ch for ch in of.get("bill_invoice_number", "").upper() if ch.isalnum()) == number:
-                        dups.append({"ref": ref})
-            bill_ctx = {"engaged_employee": emp.name if emp else None, "engaged_department": emp.department if emp else "", "duplicates": dups}
-        ctx = Context(form=form, docs=infos, invite=inv, application_id=app.id, sources=srcs, master=master, blocklist=block, reused_files=reused,
-                      bill=bill_ctx)
+        ctx = await gather_context(s, app, form, docs_rows, infos, inv, as_of=now())
+        srcs = ctx.sources
         rules = evaluate(ctx)
         dec = D.decide(rules, ctx, ref=app.ref)
 
@@ -233,12 +194,82 @@ async def run_pipeline(run_id: int, *, prefer_cache: bool = False, pace: float =
         run.summary = {"cards": dec.cards, "fraud": dec.fraud, "facts": [f.__dict__ for f in dec.facts], "diff": await _diff(s, run, rules)}
         run.state, run.finished_at = "done", now()
         app.current_status, app.legal_name = dec.status, form.get("legal_name", app.legal_name)
+        # Vendor Intelligence: the exact decision input, encrypted, so the decision can be replayed later.
+        # Never allowed to break a run: a missing snapshot only means simulation is unavailable for it.
+        try:
+            from onboarding.intel.snapshot import snapshot_row
+            s.add(snapshot_row(run, ctx, rules, dec, reconstructed=False))
+        except Exception:  # pragma: no cover - logged, never fatal
+            import logging
+            logging.getLogger("onboarding.intel").exception("decision snapshot for run %s not saved", run_id)
         if pace:
             await asyncio.sleep(pace)
         # results, "done" and the final event land in one commit: a viewer never sees one without the other
         await ev.emit("decision", "done", f"{STATUS_TEXT.get(dec.status, dec.status)} (risk tier: {dec.risk_tier})",
                       {"status": dec.status, "reason_codes": dec.reason_codes, "cards": dec.cards})
         return dec
+
+
+async def invite_context(s: AsyncSession, app: Application) -> dict | None:
+    """The invite as the rules see it (None for bill-first and unsolicited applications)."""
+    invite = await s.get(Invite, app.invite_id) if app.invite_id else None
+    if not invite:
+        return None
+    await s.refresh(invite, ["sponsor"])
+    first_app = (await s.execute(select(Application.id).where(Application.invite_id == invite.id).order_by(Application.id))).scalars().first()
+    return dict(status=invite.status, company_name=invite.company_name, expires_at=invite.expires_at.replace(tzinfo=invite.expires_at.tzinfo or timezone.utc),
+                application_id=first_app, sponsor=f"{invite.sponsor.name} ({invite.sponsor.department})", reason=invite.business_reason,
+                high_spend=invite.high_spend, spend_band=invite.spend_band)
+
+
+async def gather_context(s: AsyncSession, app: Application, form: dict, docs_rows, infos: dict, inv: dict | None, *, as_of: datetime,
+                         sources: dict | None = None, before_run_id: int | None = None) -> Context:
+    """Everything the rules need besides the documents: source answers, vendor master, blocklist, reused files, bill
+    duplicates. `sources` and `before_run_id` are only for rebuilding an old decision (Vendor Intelligence): given answers,
+    and only data that existed before that run."""
+    if sources is None:
+        ifsc_task = asyncio.create_task(S.ifsc_lookup(form.get("ifsc", "")))
+        srcs = {"gst": await S.gst_status(s, form.get("gstin", "")), "pan": await S.pan_status(s, form.get("pan", "")),
+                "bank": await S.penny_drop(s, form.get("bank_account", ""), form.get("ifsc", ""))}
+        if form.get("cin"):
+            srcs["cin"] = await S.cin_status(s, form["cin"])
+        srcs["ifsc"] = await ifsc_task
+    else:
+        srcs = sources
+    pan, gstin, acct = form.get("pan", "").upper(), form.get("gstin", "").upper(), form.get("bank_account", "")
+    master = [dict(vendor_id=m.vendor_id, legal_name=m.legal_name, pan=m.pan, gstin=m.gstin, account=m.account, ifsc=m.ifsc, status=m.status)
+              for m in (await s.execute(select(VendorMaster).where(or_(VendorMaster.pan == pan, VendorMaster.gstin == gstin, VendorMaster.account == acct)))).scalars()
+              if before_run_id is None or m.source_run_id is None or m.source_run_id < before_run_id]
+    block = [dict(reason=b.reason) for b in (await s.execute(select(Blocklist).where(or_(Blocklist.pan == pan, Blocklist.gstin == gstin,
+                                                                                     (Blocklist.account == acct) & (Blocklist.account != ""))))).scalars()]
+    shas = [d.sha256 for d in docs_rows]
+    reused = []
+    if shas:
+        q = select(Document.sha256, Document.filename, Application.ref, Run.form).join(Run, Run.id == Document.run_id).join(Application, Application.id == Run.application_id)
+        q = q.where(Document.sha256.in_(shas), Application.id != app.id)
+        if before_run_id is not None:
+            q = q.where(Run.id < before_run_id)
+        for sha, fn, ref, other_form in (await s.execute(q)).all():
+            if (other_form or {}).get("pan", "").upper() != pan:
+                reused.append({"file": fn, "other_application": ref})
+
+    bill_ctx = None
+    if form.get("bill_mode"):
+        bill = (await s.execute(select(Bill).where(Bill.application_id == app.id))).scalar_one_or_none()
+        emp = await s.get(Employee, bill.engaged_employee_id) if bill and bill.engaged_employee_id else None
+        dups = []
+        number = "".join(ch for ch in form.get("bill_invoice_number", "").upper() if ch.isalnum())
+        if number:
+            q = select(Run.form, Application.ref).join(Application, Application.id == Run.application_id).where(Run.application_id != app.id)
+            if before_run_id is not None:
+                q = q.where(Run.id < before_run_id)
+            for other_form, ref in (await s.execute(q)).all():
+                of = other_form or {}
+                if of.get("bill_mode") and of.get("gstin", "").upper() == gstin and "".join(ch for ch in of.get("bill_invoice_number", "").upper() if ch.isalnum()) == number:
+                    dups.append({"ref": ref})
+        bill_ctx = {"engaged_employee": emp.name if emp else None, "engaged_department": emp.department if emp else "", "duplicates": dups}
+    return Context(form=form, docs=infos, invite=inv, application_id=app.id, sources=srcs, master=master, blocklist=block, reused_files=reused,
+                   bill=bill_ctx, as_of=as_of)
 
 
 async def mark_failed(run_id: int, error: str) -> None:

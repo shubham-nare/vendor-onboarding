@@ -267,3 +267,7 @@ class VendorBill(Base):
     submissions: Mapped[int] = mapped_column(Integer, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+# Vendor Intelligence tables live in their own module; importing it registers them with Base.metadata (create_all).
+from onboarding.intel import models as _intel_models  # noqa: E402,F401

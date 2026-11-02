@@ -85,9 +85,16 @@ class Context:
     blocklist: list[dict] = field(default_factory=list)    # matching blocklist rows
     reused_files: list[dict] = field(default_factory=list)  # same file in another vendor's application
     bill: dict | None = None              # bill-first registration: {engaged_employee, engaged_department, duplicates}
+    as_of: datetime | None = None         # when the rules are evaluated (frozen, so a saved decision replays exactly)
 
 
 # --- helpers ----------------------------------------------------------------------------
+def _now(ctx: "Context") -> datetime:
+    """When the rules are evaluated: frozen in ctx.as_of (stored times without a zone are UTC), else now."""
+    t = ctx.as_of or datetime.now(timezone.utc)
+    return t if t.tzinfo else t.replace(tzinfo=timezone.utc)
+
+
 def fld(d: DocInfo | None, name: str) -> FieldReading | None:
     if not d or not d.read:
         return None
@@ -164,7 +171,7 @@ def evaluate(ctx: Context) -> list[R]:
         add(R("R-INV-01", "invite", FAIL, "Application did not come through an employee's invite", "REVIEW",
               internal="Unsolicited application: no valid invite token. Never auto-approved.", fraud=True))
     else:
-        expired = inv.get("expires_at") and inv["expires_at"] < datetime.now(timezone.utc)
+        expired = inv.get("expires_at") and inv["expires_at"] < _now(ctx)
         other_app = inv.get("application_id") and ctx.application_id and inv["application_id"] != ctx.application_id
         if inv.get("status") in ("revoked",) or expired or other_app:
             why = "expired" if expired else ("already used by another application" if other_app else inv.get("status"))
@@ -621,7 +628,7 @@ def _bill_rules(add, ctx: Context, inv_doc: DocInfo | None) -> None:
     dtxt, _ = val(inv_doc, "invoice_date")
     d = _parse_any_date(dtxt) or _parse_any_date(f.get("bill_invoice_date"))
     if d:
-        age = (datetime.now() - d).days
+        age = (_now(ctx).astimezone().replace(tzinfo=None) - d).days
         if age < 0:
             add(R("R-BILL-07", "bill", FAIL, f"The bill is dated in the future ({d:%d %b %Y})", "VENDOR",
                   vendor_text=f"Your bill is dated {d:%d %b %Y}, which is in the future. Please check the invoice date."))
