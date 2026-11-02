@@ -301,6 +301,56 @@
       </p>
     </section>
 
+    {% if done and actor and actor.role in ('maker', 'checker') %}
+    <!-- counterfactual simulation -->
+    <section id="simulate" class="bg-white rounded-xl border overflow-hidden">
+      <div class="px-4 sm:px-6 py-4 border-b border-slate-100">
+        <h2 class="text-xl">What would change the decision?</h2>
+        <p class="text-[12.5px] text-slate-500 mt-0.5">Runs the same rules on a copy of this check's saved input. Nothing real changes: not the application, not the decision, not the audit trail. Each simulation is logged.</p>
+      </div>
+      {% if not snap %}
+        <p class="px-4 sm:px-6 py-4 text-[13px] text-slate-500">This check has no saved decision input yet, so it can't be simulated.</p>
+      {% elif not snap[0] %}
+        <p class="px-4 sm:px-6 py-4 text-[13px] text-slate-600 flex items-start gap-2">{{ icon('lock', 'h-4 w-4 shrink-0 mt-0.5 text-slate-400') }}<span>Simulation is off for this check: its saved input doesn't reproduce the original decision exactly{% if snap[1] %} ({{ snap[1] }}){% endif %}. A what-if on a decision we can't reproduce would be fiction.</span></p>
+      {% else %}
+      {% set warns = rules | selectattr('result', 'equalto', 'WARN') | list %}
+      {% set fails = rules | selectattr('result', 'equalto', 'FAIL') | list %}
+      <div class="p-4 sm:p-6 grid md:grid-cols-3 gap-3">
+        <form data-sim method="post" action="/runs/{{ run.id }}/simulate" class="rounded-lg border border-slate-200 p-3.5 flex flex-col">
+          <input type="hidden" name="scenario" value="policy_bank_a4">
+          <div class="text-[13.5px] font-semibold">Require the bank account at A4</div>
+          <p class="mt-1 text-[12.5px] text-slate-500 flex-1">Hypothetical policy: the account must be confirmed at source. A SIMULATED SOURCE never confers A4.</p>
+          <button class="mt-3 rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-indigo-700 hover:bg-indigo-50">Simulate</button>
+        </form>
+        <form data-sim method="post" action="/runs/{{ run.id }}/simulate" class="rounded-lg border border-slate-200 p-3.5 flex flex-col">
+          <input type="hidden" name="scenario" value="confirm_warning">
+          <div class="text-[13.5px] font-semibold">A reviewer confirms a warning</div>
+          {% if warns %}<select name="rule_id" aria-label="Warning to confirm" class="mt-2 rounded-lg border px-2 py-1.5 text-[12.5px]">{% for w in warns %}<option value="{{ w.rule_id }}">{{ w.rule_id }} · {{ w.title[:60] }}</option>{% endfor %}</select>
+          <button class="mt-3 rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-indigo-700 hover:bg-indigo-50">Simulate</button>
+          {% else %}<p class="mt-1 text-[12.5px] text-slate-500">No warnings in this check.</p>{% endif %}
+        </form>
+        <form data-sim method="post" action="/runs/{{ run.id }}/simulate" class="rounded-lg border border-slate-200 p-3.5 flex flex-col">
+          <input type="hidden" name="scenario" value="clear_flag">
+          <div class="text-[13.5px] font-semibold">A reviewer clears a failed check</div>
+          {% if fails %}<select name="rule_id" aria-label="Failed check to clear" class="mt-2 rounded-lg border px-2 py-1.5 text-[12.5px]">{% for f in fails %}<option value="{{ f.rule_id }}">{{ f.rule_id }} · {{ f.title[:60] }}</option>{% endfor %}</select>
+          <button class="mt-3 rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-indigo-700 hover:bg-indigo-50">Simulate</button>
+          {% else %}<p class="mt-1 text-[12.5px] text-slate-500">No failed checks.</p>{% endif %}
+        </form>
+      </div>
+      <div id="simresult" class="px-4 sm:px-6 pb-5" aria-live="polite"></div>
+      <script>
+        document.querySelectorAll('form[data-sim]').forEach(f => f.addEventListener('submit', async e => {
+          e.preventDefault();
+          const out = document.getElementById('simresult');
+          out.innerHTML = '<p class="text-[13px] text-slate-500">Simulating…</p>';
+          try { const r = await fetch(f.action, {method: 'POST', body: new FormData(f)}); out.innerHTML = await r.text(); }
+          catch (err) { out.innerHTML = '<p class="text-[13px] text-rose-700">Could not run the simulation. Try again.</p>'; }
+        }));
+      </script>
+      {% endif %}
+    </section>
+    {% endif %}
+
     <!-- documents -->
     <section>
       <div class="flex flex-wrap items-baseline justify-between gap-2"><h2 class="text-xl">Documents</h2><span class="kicker !text-[10px]">what the AI saw · what the file itself shows</span></div>

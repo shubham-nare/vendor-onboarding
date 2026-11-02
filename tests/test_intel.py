@@ -34,7 +34,9 @@ def intel(tmp_path_factory):
     from onboarding.intel.project import backfill, on_run_completed
     from onboarding.intel.snapshot import reconstruct
     from onboarding.main import app
-    from onboarding.models import Application, Employee, Run
+    from onboarding.intel.models import SimulationRun
+    from onboarding.models import Application, Employee, HumanAction, Message, Run, RuleResult
+    from onboarding.models import Fact as RunFact
     from onboarding.pipeline import sessions
     from onboarding.seeding import DEMO_COMPANY_EMAIL, DEMO_PASSWORD, seed
     from scripts.run_scenario import run_one
@@ -112,6 +114,31 @@ def intel(tmp_path_factory):
             out["priya_dir"] = (await c.get("/vendors")).text
             c.cookies.set("actor", str(emp["Rahul Desai"]))         # requested Rangoli
             out["rahul_rangoli"] = (await c.get(f"/vendors/{rangoli}")).text
+            # counterfactuals: same rules, a copy of the saved input, nothing real touched
+            real = (Run, RuleResult, RunFact, Message, HumanAction, RiskEvent, EvidenceItem, DecisionSnapshot, Application, VendorApplication)
+            async def real_counts():
+                async with sessions()() as s2:
+                    n = {m.__tablename__: (await s2.execute(select(func.count()).select_from(m))).scalar() for m in real}
+                    n["statuses"] = sorted((await s2.execute(select(Application.id, Application.current_status))).all())
+                    n["run_status"] = sorted((await s2.execute(select(Run.id, Run.status))).all())
+                    return n
+            before = await real_counts()
+            c.cookies.set("actor", str(emp["checker"]))
+            out["sim_policy"] = (await c.post(f"/runs/{parents['happy_nilgiri']}/simulate", data={"scenario": "policy_bank_a4"})).text
+            out["sim_clear"] = (await c.post(f"/runs/{parents['shared_bank_rangoli']}/simulate", data={"scenario": "clear_flag", "rule_id": "R-SRC-BANK"})).text
+            out["sim_clear_conflict"] = (await c.post(f"/runs/{parents['borrowed_gstin_kaveri']}/simulate", data={"scenario": "clear_flag", "rule_id": "R-XD-03"})).text
+            out["sim_bad_rule"] = (await c.post(f"/runs/{parents['happy_nilgiri']}/simulate", data={"scenario": "clear_flag", "rule_id": "R-XD-03"})).text
+            out["sim_panel"] = (await c.get(f"/runs/{parents['shared_bank_rangoli']}")).text
+            out["real_unchanged"] = (before == await real_counts())
+            async with sessions()() as s2:
+                out["sim_rows"] = (await s2.execute(select(func.count()).select_from(SimulationRun))).scalar()
+                snap = (await s2.execute(select(DecisionSnapshot).where(DecisionSnapshot.run_id == parents["proprietor_shinde"]))).scalar_one()
+                snap.replay_ok, snap.replay_note = False, "test: pretend it doesn't reproduce"
+                await s2.commit()
+            out["sim_refused"] = (await c.post(f"/runs/{parents['proprietor_shinde']}/simulate", data={"scenario": "policy_bank_a4"})).text
+            out["sim_refused_panel"] = (await c.get(f"/runs/{parents['proprietor_shinde']}")).text
+            c.cookies.set("actor", str(emp["Rahul Desai"]))
+            out["sim_requester"] = (await c.post(f"/runs/{parents['shared_bank_rangoli']}/simulate", data={"scenario": "policy_bank_a4"})).status_code
             # a person's decision closes the flags it addressed; activation makes the vendor active
             nil_run = parents["happy_nilgiri"]
             c.cookies.set("actor", str(emp["maker"]))
@@ -222,3 +249,29 @@ def test_human_decisions_close_flags_and_activate(intel):
     assert intel["nilgiri_after"] == "active"
     assert intel["kaveri_flags_after"] and all(st == "resolved" and "Rejection confirmed" in res for st, res in intel["kaveri_flags_after"])
     assert intel["decision_events"] == 2
+
+
+def test_simulation_bank_a4_policy_and_simulated_sources(intel):
+    page = intel["sim_policy"]
+    assert "nothing real was changed" in page
+    assert "Approved → Pending: internal review" in page and "R-POL-BANK-A4" in page
+    assert "SIMULATED SOURCE" in page and "can never confer A4" in page
+
+
+def test_simulation_explains_what_still_decides(intel):
+    page = intel["sim_clear"]                       # clearing the penny-drop doesn't clear the shared account
+    assert "No change: still Pending: internal review" in page and "R-RISK-02" in page
+    assert "Rejected →" in intel["sim_clear_conflict"]
+    assert "did not fail in this check" in intel["sim_bad_rule"]
+    assert "What would change the decision?" in intel["sim_panel"]
+
+
+def test_simulation_never_touches_real_data(intel):
+    assert intel["real_unchanged"] is True
+    assert intel["sim_rows"] == 4                   # the only thing written: one simulation record each
+
+
+def test_simulation_refused_when_replay_is_not_exact(intel):
+    assert "Simulation is off for this check" in intel["sim_refused"]
+    assert "Simulation is off for this check" in intel["sim_refused_panel"]
+    assert intel["sim_requester"] == 403

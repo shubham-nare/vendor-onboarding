@@ -682,6 +682,7 @@ async def run_view(request: Request, run_id: int):
             history=_all(select(Run).where(Run.application_id == app.id).order_by(Run.id)),
             vendor=_all(select(VendorMaster).where(VendorMaster.source_run_id.in_(app_runs)).order_by(VendorMaster.id).limit(1)),
             profile=_rows(select(Vendor.vendor_id).join(VendorApplication, VendorApplication.vendor_pk == Vendor.id).where(VendorApplication.application_id == app.id)),
+            snap=_rows(select(DecisionSnapshot.replay_ok, DecisionSnapshot.replay_note, DecisionSnapshot.reconstructed).where(DecisionSnapshot.run_id == run_id)),
         )
         events = [_event_dict(e, full) for e in r["events"]]
         docs = sorted(r["docs"], key=lambda d: SLOTS.index(d.slot) if d.slot in SLOTS else 99)
@@ -689,7 +690,7 @@ async def run_view(request: Request, run_id: int):
         history = r["history"]
         latest = history[-1].id == run.id
         return await render(request, s, "run.html", run=run, app=app, invite=inv, sponsor=sponsor, bill=bill, bill_emp=bill_emp, full=full,
-                            fact_issues=_fact_issues(r["rules"]) if full else {}, profile_id=(r["profile"] or [[None]])[0][0],
+                            fact_issues=_fact_issues(r["rules"]) if full else {}, profile_id=(r["profile"] or [[None]])[0][0], snap=(r["snap"] or [None])[0],
                             rights=_decision_rights(run, app, inv, bill, bill_emp, list(emps.values())) if latest else [],
                             vendor_token=inv.token if inv else (bill.token if bill else ""), events=events, stages=stages_for(run.form), docs=docs,
                             rules=r["rules"], facts=r["facts"], vendor_msg=msgs.get("vendor"),
@@ -1154,3 +1155,26 @@ async def vendor_profile(request: Request, vendor_key: str):
                             evidence=evidence, actions=r["actions"] if full else [], nba=nba, full=full, vendors_by_pk=vendors_by_pk,
                             lay=V360.layout(v, r["my_edges"], conns) if full else None, my_edges=r["my_edges"] if full else [],
                             snaps={rid: (ok, rec) for rid, ok, rec in r["snaps"]}, full_bank=full_bank, V360=V360)
+
+
+@router.post("/runs/{run_id}/simulate", response_class=HTMLResponse)
+async def simulate_run(request: Request, run_id: int, scenario: str = Form(...), rule_id: str = Form("")):
+    """A counterfactual on this check's saved decision input. Writes only a simulation_runs row."""
+    from onboarding.intel.models import SimulationRun
+    from onboarding.intel.simulate import SimulationRefused, simulate
+    async with sessions()() as s:
+        actor = await _actor(request, s)
+        if not actor or actor.role not in ("maker", "checker"):
+            raise HTTPException(403, "Simulations are for the Procurement reviewer and the Finance controller.")
+        run = await s.get(Run, run_id)
+        if run is None:
+            raise HTTPException(404, "No such run")
+        app = await s.get(Application, run.application_id)
+        snap = (await s.execute(select(DecisionSnapshot).where(DecisionSnapshot.run_id == run_id))).scalars().first()
+        try:
+            res, refused = simulate(snap, scenario, rule_id, ref=app.ref), ""
+        except SimulationRefused as e:
+            res, refused = None, str(e)
+        s.add(SimulationRun(run_id=run_id, actor_id=actor.id, scenario=scenario, params={"rule_id": rule_id}, result=res or {"refused": refused}))
+        await s.commit()
+    return templates.TemplateResponse(request, "_simulation.html", {"res": res, "refused": refused})
