@@ -53,12 +53,5 @@
       <p class="mt-3 text-xs text-slate-500">All vendors in this demo are fictional. Register with any email (nothing is sent), or use the demo vendor login.</p>
     </section>
   </div>
-
-  <ol class="mt-10 grid sm:grid-cols-4 gap-px bg-slate-200 rounded-xl overflow-hidden border border-slate-200 text-[13px]">
-    {% for t, d in [('Register', 'The vendor sends business details and documents.'), ('Checked', 'AI reads each document; rules check every number and source.'),
-                    ('Approved', 'A person activates the vendor; the requester can\'t approve it.'), ('Bills', 'Each bill is checked, confirmed by whoever asked for the work, then approved.')] %}
-    <li class="bg-white p-4"><span class="mono text-[11px] text-indigo-600">{{ '%02d' % loop.index }}</span><div class="font-medium mt-0.5">{{ t }}</div><div class="text-slate-500 mt-0.5 leading-snug">{{ d }}</div></li>
-    {% endfor %}
-  </ol>
 </div>
 {% endblock %}
