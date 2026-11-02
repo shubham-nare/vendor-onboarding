@@ -10,6 +10,7 @@ In production the company side would use the company's single sign-on instead.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import secrets
@@ -28,6 +29,26 @@ def hash_password(password: str) -> str:
     salt = secrets.token_bytes(16)
     digest = hashlib.scrypt(password.encode(), salt=salt, n=_N, r=_R, p=_P, dklen=32)
     return f"scrypt${_N}${_R}${_P}${salt.hex()}${digest.hex()}"
+
+
+async def hash_password_async(password: str) -> str:
+    """scrypt takes ~0.2 s of CPU and 16 MB: run it on a worker thread so the server keeps answering other requests."""
+    return await asyncio.to_thread(hash_password, password)
+
+
+_DUMMY = None
+
+
+async def verify_password_async(password: str, stored: str | None) -> bool:
+    """Like verify_password, off the event loop. With no stored hash (unknown email) it still does the same work,
+    so response time doesn't reveal which emails have accounts."""
+    global _DUMMY
+    if not stored:
+        if _DUMMY is None:
+            _DUMMY = await hash_password_async(secrets.token_hex(8))
+        await asyncio.to_thread(verify_password, password, _DUMMY)
+        return False
+    return await asyncio.to_thread(verify_password, password, stored)
 
 
 def verify_password(password: str, stored: str) -> bool:

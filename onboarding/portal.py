@@ -70,7 +70,7 @@ async def company_login(request: Request, email: str = Form(""), password: str =
     async with sessions()() as s:
         emp = (await s.execute(select(Employee).where(Employee.email == email))).scalars().first()
         login = (await s.execute(select(StaffLogin).where(StaffLogin.employee_id == emp.id))).scalar_one_or_none() if emp else None
-        if not login or not auth.verify_password(password, login.password_hash):
+        if not await auth.verify_password_async(password, login.password_hash if login else None):
             return await render(request, s, "company_login.html", next=nxt, email=email, demo=DEMO,
                                 error="That email and password don't match an employee login.")
         login.last_login_at = now()
@@ -132,7 +132,7 @@ async def register(request: Request, company_name: str = Form(""), contact_name:
             error = "An account with this email already exists. Log in instead."
         if error:
             return await render(request, s, "vendor_auth.html", mode="register", next=nxt, values=values, invite=await _invite_from_next(s, nxt), error=error)
-        acct = VendorAccount(email=email, password_hash=auth.hash_password(password), company_name=values["company_name"],
+        acct = VendorAccount(email=email, password_hash=await auth.hash_password_async(password), company_name=values["company_name"],
                              contact_name=values["contact_name"], last_login_at=now())
         s.add(acct)
         await s.commit()
@@ -151,7 +151,7 @@ async def login(request: Request, email: str = Form(""), password: str = Form(""
     email, nxt = email.strip().lower(), safe_next(next)
     async with sessions()() as s:
         acct = (await s.execute(select(VendorAccount).where(VendorAccount.email == email))).scalar_one_or_none()
-        if not acct or not auth.verify_password(password, acct.password_hash):
+        if not await auth.verify_password_async(password, acct.password_hash if acct else None):
             # same message either way: don't reveal which emails have accounts
             return await render(request, s, "vendor_auth.html", mode="login", next=nxt, values={"email": email}, invite=None,
                                 error="That email and password don't match.", demo=DEMO)

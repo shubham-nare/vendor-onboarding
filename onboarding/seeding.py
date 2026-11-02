@@ -136,7 +136,7 @@ async def ensure_demo_logins(s: AsyncSession) -> None:
         if e.name in seeded_email and e.email != seeded_email[e.name]:
             e.email = seeded_email[e.name]  # the demo company was renamed: keep logins on the current domain
         if e.id not in have:
-            s.add(StaffLogin(employee_id=e.id, password_hash=auth.hash_password(DEMO_PASSWORD)))
+            s.add(StaffLogin(employee_id=e.id, password_hash=await auth.hash_password_async(DEMO_PASSWORD)))
     if not (await s.execute(select(VendorAccount).where(VendorAccount.email == DEMO_VENDOR["email"]))).scalar_one_or_none():
-        s.add(VendorAccount(password_hash=auth.hash_password(DEMO_PASSWORD), **DEMO_VENDOR))
+        s.add(VendorAccount(password_hash=await auth.hash_password_async(DEMO_PASSWORD), **DEMO_VENDOR))
     await s.flush()
