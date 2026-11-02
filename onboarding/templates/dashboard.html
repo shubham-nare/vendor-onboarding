@@ -24,21 +24,21 @@
 
 {# key numbers #}
 <div class="grid grid-cols-2 md:grid-cols-3 2xl:grid-cols-6 gap-3 sm:gap-4">
-  {% for label, value, ic, chip, foot in [
-      ('Applications', stats.applications, 'building', 'bg-indigo-50 text-indigo-600', stats.runs ~ ' checking runs'),
-      ('Active / approved', counts.ACTIVE + counts.APPROVED, 'check', 'bg-emerald-50 text-emerald-600', stats.first_pass ~ ' approved first time'),
-      ('Waiting on vendor', counts.PENDING_VENDOR, 'clock', 'bg-amber-50 text-amber-600', 'Vendor has to fix something'),
-      ('Internal review', counts.PENDING_REVIEW, 'users', 'bg-violet-50 text-violet-600', 'A person decides'),
-      ('Rejected', counts.REJECTED, 'x', 'bg-rose-50 text-rose-600', 'Confirmed by a person'),
-      ('Fraud-class flags', stats.fraud, 'flag', 'bg-rose-50 text-rose-600', 'Borrowed IDs, fakes, edits') if full else ('Waiting for your OK', to_confirm, 'flag', 'bg-amber-50 text-amber-600', 'Work only you can confirm')] %}
-  <div class="bg-white border rounded-xl p-4 sm:p-5">
+  {% for label, value, ic, chip, foot, filt in [
+      ('Applications', stats.applications, 'building', 'bg-indigo-50 text-indigo-600', stats.runs ~ ' checking runs', 'all'),
+      ('Active / approved', counts.ACTIVE + counts.APPROVED, 'check', 'bg-emerald-50 text-emerald-600', stats.first_pass ~ ' approved first time', 'ok'),
+      ('Waiting on vendor', counts.PENDING_VENDOR, 'clock', 'bg-amber-50 text-amber-600', 'Vendor has to fix something', 'PENDING_VENDOR'),
+      ('Internal review', counts.PENDING_REVIEW, 'users', 'bg-violet-50 text-violet-600', 'A person decides', 'PENDING_REVIEW'),
+      ('Rejected', counts.REJECTED, 'x', 'bg-rose-50 text-rose-600', 'Confirmed by a person', 'REJECTED'),
+      ('Fraud-class flags', stats.fraud, 'flag', 'bg-rose-50 text-rose-600', 'Borrowed IDs, fakes, edits', 'fraud') if full else ('Waiting for your OK', to_confirm, 'flag', 'bg-amber-50 text-amber-600', 'Work only you can confirm', '')] %}
+  <{{ 'button type=button data-filter=' ~ filt if filt else 'div' }} class="kpi text-left bg-white border rounded-xl p-4 sm:p-5 {{ 'hover:border-indigo-300 hover:shadow-md transition aria-pressed:border-indigo-500 aria-pressed:ring-2 aria-pressed:ring-indigo-100' if filt }}" {{ 'aria-pressed=true' if filt == 'all' }} {% if filt %}title="Show these in Recent checks"{% endif %}>
     <div class="flex items-center justify-between gap-2">
       <span class="text-[13px] font-medium text-slate-500 truncate">{{ label }}</span>
       <span class="h-8 w-8 shrink-0 rounded-lg grid place-items-center {{ chip }}">{{ icon(ic) }}</span>
     </div>
     <div class="mt-2 text-[30px] sm:text-[34px] font-semibold tracking-tight leading-none tabular-nums">{{ value }}</div>
     <div class="mt-2 text-[12px] text-slate-400 truncate">{{ foot }}</div>
-  </div>
+  </{{ 'button' if filt else 'div' }}>
   {% endfor %}
 </div>
 
@@ -52,7 +52,7 @@
       </div>
     </div>
     {% if todo %}
-    <ul class="divide-y divide-slate-100 max-h-[22rem] overflow-y-auto">
+    <ul class="divide-y divide-slate-100">
       {% for t in todo %}
       <li><a href="{{ t.href }}" class="group flex items-center gap-3 px-4 sm:px-5 py-3 hover:bg-slate-50">
         {{ mono(t.name) }}
@@ -63,6 +63,7 @@
             {% if t.status == 'BILL' %}<span class="tag text-sky-700">{{ t.detail }}{{ ' · ' ~ inr(money(t.amount)) if t.amount }}</span>{% else %}{{ status_badge(t.status) }}{% endif %}
             {% if t.fraud and full %}<span class="tag text-rose-600">fraud class</span>{% endif %}
             {{ tier_chip(t.risk) }}
+            {% if t.waiting %}<span class="text-slate-400">{{ t.waiting }}</span>{% endif %}
           </span>
         </span>
         <span class="hidden sm:inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-slate-700 group-hover:border-indigo-300 group-hover:text-indigo-700">{{ t.verb }} {{ icon('chev', 'h-3.5 w-3.5') }}</span>
@@ -114,9 +115,12 @@
   <section class="bg-white rounded-xl border min-w-0 self-start overflow-hidden">
     <div class="px-4 sm:px-5 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
       <div>
-        <h2 class="text-[16px]">Recent checks</h2>
-        <p class="text-[12.5px] text-slate-500 mt-0.5">Newest first. Open one to see every reason.</p>
+        <h2 class="text-[16px]">Recent checks <span id="filtername" class="ml-1 text-[13px] font-medium text-indigo-700"></span></h2>
+        <p class="text-[12.5px] text-slate-500 mt-0.5">Newest first. Open one to see every reason. Click a number above to filter.</p>
       </div>
+      {% if runs %}<label class="relative w-full sm:w-64"><span class="sr-only">Search vendors</span>
+        <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="runsearch" type="search" placeholder="Search vendor or reference" class="w-full rounded-lg border pl-8 pr-3 py-2 text-[13px]"></label>{% endif %}
     </div>
     {% if not runs %}
       <div class="px-5 py-12 text-center">
@@ -127,7 +131,7 @@
     {% else %}
     <ul class="md:hidden divide-y divide-slate-100">
     {% for r in runs %}
-      <li><a href="/runs/{{ r.run.id }}" class="flex gap-3 px-4 py-3.5 active:bg-slate-50">
+      <li class="runrow" data-status="{{ r.app.current_status }}" data-fraud="{{ 1 if r.fraud and full else 0 }}" data-text="{{ (r.app.legal_name ~ ' ' ~ r.app.ref) | lower }}"><a href="/runs/{{ r.run.id }}" class="flex gap-3 px-4 py-3.5 active:bg-slate-50">
         {{ mono(r.app.legal_name) }}
         <span class="flex-1 min-w-0">
           <span class="flex items-center justify-between gap-3 text-[11.5px] text-slate-500">
@@ -153,7 +157,7 @@
       </thead>
       <tbody class="divide-y divide-slate-100">
       {% for r in runs %}
-        <tr class="group hover:bg-slate-50/80 cursor-pointer" onclick="location.href='/runs/{{ r.run.id }}'">
+        <tr class="runrow group hover:bg-slate-50/80 cursor-pointer" data-status="{{ r.app.current_status }}" data-fraud="{{ 1 if r.fraud and full else 0 }}" data-text="{{ (r.app.legal_name ~ ' ' ~ r.app.ref) | lower }}" onclick="location.href='/runs/{{ r.run.id }}'">
           <td class="pl-5 pr-2 py-3 min-w-[15rem]">
             <div class="flex items-center gap-3">
               {{ mono(r.app.legal_name) }}
@@ -176,6 +180,7 @@
       </tbody>
     </table>
     </div>
+    <p id="nomatch" class="hidden px-5 py-8 text-center text-[13px] text-slate-500">No checks match. <button type="button" id="clearfilter" class="font-medium text-indigo-700 hover:underline">Show all</button></p>
     {% endif %}
   </section>
 
@@ -204,4 +209,25 @@
   </section>
 </div>
 </div>
+<script>
+{ /* the numbers filter the list; the search narrows it further */
+  const rows = [...document.querySelectorAll('.runrow')], cards = [...document.querySelectorAll('.kpi[data-filter]')];
+  const label = document.getElementById('filtername'), search = document.getElementById('runsearch'), none = document.getElementById('nomatch');
+  let filt = 'all';
+  const NAMES = {all: '', ok: '· active / approved', PENDING_VENDOR: '· waiting on vendor', PENDING_REVIEW: '· internal review', REJECTED: '· rejected', fraud: '· fraud-class flags'};
+  const match = r => (filt === 'all' || (filt === 'ok' ? ['ACTIVE', 'APPROVED'].includes(r.dataset.status) : filt === 'fraud' ? r.dataset.fraud === '1' : r.dataset.status === filt))
+                     && (!search || !search.value || r.dataset.text.includes(search.value.trim().toLowerCase()));
+  const apply = () => {
+    let shown = 0;
+    rows.forEach(r => { const ok = match(r); r.hidden = !ok; if (ok && r.offsetParent !== null) shown++; });
+    cards.forEach(c => c.setAttribute('aria-pressed', String(c.dataset.filter === filt)));
+    if (label) label.textContent = NAMES[filt] || '';
+    if (none) none.classList.toggle('hidden', rows.some(r => !r.hidden));
+  };
+  cards.forEach(c => c.addEventListener('click', () => { filt = (filt === c.dataset.filter ? 'all' : c.dataset.filter); apply();
+    document.getElementById('nomatch')?.closest('section')?.scrollIntoView({behavior: 'smooth', block: 'start'}); }));
+  search && search.addEventListener('input', apply);
+  document.getElementById('clearfilter')?.addEventListener('click', () => { filt = 'all'; if (search) search.value = ''; apply(); });
+}
+</script>
 {% endblock %}

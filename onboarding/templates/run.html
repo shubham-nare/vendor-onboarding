@@ -15,7 +15,7 @@
 
 <div class="flex flex-wrap items-end justify-between gap-4">
   <div class="min-w-0">
-    <div class="kicker"><a href="/console" class="hover:text-slate-900">Register</a> / <span class="text-slate-800">{{ app.ref }}</span> / run {{ run.id }}</div>
+    <div class="text-[13px] font-medium text-slate-500 flex items-center gap-1.5"><a href="/console" class="hover:text-slate-900">Dashboard</a> {{ icon('chev', 'h-3.5 w-3.5 text-slate-400') }} <span class="mono text-slate-800">{{ app.ref }}</span> {{ icon('chev', 'h-3.5 w-3.5 text-slate-400') }} <span>Check #{{ run.id }}</span></div>
     <h1 class="text-[28px] sm:text-[36px] leading-tight mt-1 break-words">{{ app.legal_name }}</h1>
     <div class="text-[14px] text-slate-600 mt-1 max-w-3xl">
       {% if invite %}Requested by <b class="text-slate-900 font-medium">{{ sponsor.name }}</b> <span class="text-slate-500">({{ sponsor.department }})</span>: {{ invite.business_reason }} <span class="mono text-[11.5px] text-slate-500 whitespace-nowrap">· spend {{ invite.spend_band }}</span>
@@ -38,9 +38,17 @@
 <div class="grid grid-cols-1 lg:grid-cols-[340px_1fr] xl:grid-cols-[360px_1fr] 2xl:grid-cols-[400px_1fr] gap-5 sm:gap-6 mt-6 sm:mt-7">
   <!-- live ledger -->
   <section class="bg-white rounded-xl border self-start lg:sticky lg:top-5 lg:max-h-[calc(100vh-2.5rem)] lg:overflow-y-auto min-w-0 {{ 'order-last lg:order-none' if done }}" aria-live="polite">
-    <div class="px-4 sm:px-5 py-3.5 border-b border-slate-200 flex items-center justify-between">
-      <h2 class="text-lg">Live run</h2>
-      <span id="runstate" class="tag {{ 'text-emerald-700' if done else 'text-indigo-600' }}">{{ 'finished' if done else run.state }}</span>
+    <div class="px-4 sm:px-5 py-3.5 border-b border-slate-200">
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg">Live run</h2>
+        <span id="runstate" class="tag dot {{ 'text-emerald-700' if done else 'text-indigo-600' }}">{{ 'finished' if done else run.state }}</span>
+      </div>
+      {% if done and run.finished_at and run.started_at %}
+      {% set live_reads = docs | selectattr('read') | map(attribute='read') | selectattr('origin', 'equalto', 'live') | list %}
+      <p class="mt-1 text-[12px] text-slate-500">Ran in {{ '%.1f' % (run.finished_at - run.started_at).total_seconds() }} s · {{ docs | length }} document{{ 's' if docs | length != 1 }} read by AI ({{ live_reads | length }} live) · {{ rules | length }} rules checked</p>
+      {% elif not done %}
+      <p class="mt-1 text-[12px] text-slate-500">Each step appears here as the server finishes it.</p>
+      {% endif %}
     </div>
     <ol id="stages">
       {% for key, label in stages %}
@@ -82,6 +90,7 @@
     <section class="bg-white rounded-xl border overflow-hidden">
       {% set hero = {'APPROVED': ('bg-emerald-50/70', 'bg-emerald-600', 'check'), 'PENDING_VENDOR': ('bg-amber-50/70', 'bg-amber-500', 'clock'),
                      'PENDING_REVIEW': ('bg-violet-50/70', 'bg-violet-600', 'users'), 'REJECTED': ('bg-rose-50/70', 'bg-rose-600', 'x')}.get(run.status, ('bg-slate-50', 'bg-slate-500', 'doc')) %}
+      {% if summary.fraud and full %}{% set hero = ('bg-rose-50', 'bg-rose-600', 'flag') %}{% set tone = 'text-rose-600' %}{% endif %}
       <div class="px-4 sm:px-6 py-5 flex flex-wrap items-center gap-x-5 gap-y-3 border-b border-slate-100 {{ hero[0] }}">
         <span class="stamp-land h-14 w-14 shrink-0 rounded-2xl grid place-items-center text-white {{ hero[1] }} shadow-sm" aria-hidden="true">{{ icon(hero[2], 'h-7 w-7') }}</span>
         <div class="flex-1 min-w-[12rem]">
@@ -90,6 +99,7 @@
           <div class="mt-1.5 flex flex-wrap items-center gap-3">{% if full %}{{ tier_chip(run.risk_tier) }}{% endif %}
             {% if summary.fraud and full %}<span class="tag text-white bg-rose-600 !border-rose-600">fraud-class signal</span>{% endif %}
             {% if app.current_status != run.status and latest %}<span class="text-sm text-slate-600">Now: {{ status_badge(app.current_status) }}</span>{% endif %}</div>
+          {% if summary.fraud and full %}<p class="mt-2 text-[13px] font-medium text-rose-800">Fraud-class signal. Verify the flagged facts with an independent source (for example, call the bank) before approving. The vendor has only been told the application is under review.</p>{% endif %}
         </div>
       </div>
       <div class="p-4 sm:p-6">
@@ -184,11 +194,37 @@
       {% elif app.current_status == 'REJECTED' %}
         <p class="mt-2 text-sm text-slate-600">Rejection confirmed; the vendor was told.</p>
       {% elif allowed %}
+        {% if rights %}
+        <div class="mt-4 rounded-lg border border-slate-200 bg-slate-50/60 p-3.5">
+          <div class="text-[12px] font-semibold text-slate-600">Who can decide this <span class="font-normal text-slate-500">· segregation of duties</span></div>
+          <ul class="mt-2.5 grid sm:grid-cols-2 gap-2">
+            {% for p in rights %}
+            {% set me = actor and p.emp.id == actor.id %}
+            <li class="flex items-start gap-2.5 rounded-md bg-white border {{ 'border-indigo-300 ring-1 ring-indigo-100' if me else 'border-slate-200' }} px-2.5 py-2">
+              <span class="h-7 w-7 mt-0.5 shrink-0 inline-flex items-center justify-center rounded-full text-[10.5px] font-semibold {{ {'sponsor': 'bg-amber-100 text-amber-800', 'maker': 'bg-indigo-100 text-indigo-700', 'checker': 'bg-emerald-100 text-emerald-700'}[p.emp.role] }}" aria-hidden="true">{{ p.emp.name.split()[0][0] }}{{ p.emp.name.split()[-1][0] }}</span>
+              <span class="min-w-0 text-[12.5px] leading-snug">
+                <span class="font-semibold text-slate-900">{{ p.emp.name }}</span>{% if me %} <span class="text-indigo-700 font-medium">(you)</span>{% endif %} <span class="text-slate-500">· {{ ROLE_LABEL[p.emp.role] }}</span>
+                {% if p.can %}<span class="block text-emerald-700">{{ icon('check', 'h-3.5 w-3.5 inline -mt-0.5') }} Can {{ p.can | join(', ') }}</span>{% endif %}
+                {% if p.why %}<span class="block text-slate-500">{{ icon('lock', 'h-3 w-3 inline -mt-0.5') }} {{ p.why }}</span>{% endif %}
+              </span>
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+        {% set risky = run.risk_tier == 'high' or summary.fraud %}
+        {% set ORDER = ['confirm_engagement', 'deny_engagement', 'ask_vendor', 'review_reject', 'confirm_reject', 'override_reject', 'review_approve', 'activate'] if risky
+                  else ['confirm_engagement', 'deny_engagement', 'activate', 'review_approve', 'confirm_reject', 'ask_vendor', 'override_reject', 'review_reject'] %}
         <div class="mt-4 grid gap-3">
-        {% for key, a in allowed.items() %}
-          {% set btn = 'bg-rose-600 hover:bg-rose-700' if key in ('confirm_reject', 'review_reject', 'deny_engagement') else ('bg-slate-800 hover:bg-slate-900' if key in ('override_reject', 'ask_vendor') else 'bg-emerald-600 hover:bg-emerald-700') %}
+        {% for key in ORDER if key in allowed %}
+          {% set a = allowed[key] %}
+          {% set approve = key in ('activate', 'review_approve') %}
+          {% set btn = 'bg-rose-600 hover:bg-rose-700' if key in ('confirm_reject', 'review_reject', 'deny_engagement') else ('bg-slate-800 hover:bg-slate-900' if key in ('override_reject', 'ask_vendor') else ('bg-white !text-emerald-700 border border-emerald-600 hover:bg-emerald-50' if approve and risky else 'bg-emerald-600 hover:bg-emerald-700')) %}
           <form method="post" action="/runs/{{ run.id }}/action" class="rounded-lg border {{ 'border-dashed border-slate-300 bg-slate-50' if a.blocked else 'border-slate-200' }} p-3.5">
             <input type="hidden" name="action" value="{{ key }}">
+            {% if approve and summary.fraud and not a.blocked %}
+            <label class="mb-2.5 flex items-start gap-2 text-[12.5px] text-rose-800"><input type="checkbox" required class="mt-0.5"> I verified the flagged facts with an independent source, and I take responsibility for approving.</label>
+            {% endif %}
             <div class="flex flex-wrap items-center gap-3">
               {% if a.needs_comment %}<input name="comment" aria-label="{{ 'Message to the vendor' if key == 'ask_vendor' else 'Reason' }}" class="flex-1 min-w-0 basis-full sm:basis-auto sm:min-w-[14rem] rounded-md border px-3 py-2.5 sm:py-2 text-sm" placeholder="{{ 'Message to the vendor' if key == 'ask_vendor' else ('What do you know about this bill? (audit trail)' if key == 'deny_engagement' else 'Reason (goes on the audit trail)') }}" {{ 'disabled' if a.blocked }}>
               {% else %}<div class="flex-1 basis-full sm:basis-auto sm:min-w-[14rem] text-sm text-slate-600">{{ {'activate': 'Adds the vendor to the vendor master as active and sends the vendor their ID.',
@@ -212,24 +248,56 @@
     <!-- assurance -->
     <section class="bg-white rounded-xl border">
       <div class="px-4 sm:px-6 py-4 border-b border-slate-200 flex flex-wrap items-baseline justify-between gap-2">
-        <h2 class="text-xl">How well each fact is proven</h2>
-        <a href="/assumptions#levels" class="text-xs text-indigo-700 underline underline-offset-4">what the levels mean</a>
+        <div>
+          <h2 class="text-xl">How well each fact is proven</h2>
+          <p class="text-[12.5px] text-slate-500 mt-0.5">The level says how strong the evidence is. "Problems" lists checks that put the fact in doubt, whatever its level.</p>
+        </div>
+        <a href="/assumptions#levels" class="text-xs text-indigo-700 underline underline-offset-4">more on levels</a>
       </div>
+      {# the scale, always visible #}
+      <ol class="grid grid-cols-5 border-b border-slate-100 text-[11px] leading-snug">
+        {% for lv, what in [('A0', 'Typed by the vendor only'), ('A1', 'A document shows it'), ('A2', 'The document looks genuine'), ('A3', 'Signed by the issuer, verified'), ('A4', 'Confirmed by the official source')] %}
+        <li class="px-2 sm:px-3 py-2.5 {{ 'border-l border-slate-100' if not loop.first }}">
+          <span class="ladder {{ {'A0': 'text-slate-400', 'A1': 'text-sky-800', 'A2': 'text-blue-800', 'A3': 'text-indigo-600', 'A4': 'text-emerald-600'}[lv] }}"><span class="bars" aria-hidden="true">{% for i in range(5) %}<i class="{{ 'on' if i <= (lv[1:] | int) }}"></i>{% endfor %}</span><b>{{ lv }}</b></span>
+          <span class="block mt-1 text-slate-500 hidden sm:block">{{ what }}</span>
+        </li>
+        {% endfor %}
+      </ol>
       <div class="overflow-x-auto">
       <table class="rtable w-full text-sm">
+        <thead class="text-left text-slate-500 bg-slate-50/70 border-b border-slate-100"><tr><th class="pl-6 pr-2 py-2">Fact</th><th class="px-2">Value</th><th class="px-2">Proof level</th><th class="px-2">Source</th><th class="pr-6 pl-2">Problems</th></tr></thead>
         <tbody class="divide-y divide-slate-100">
         {% for f in facts %}
-          <tr>
-            <td class="inline-sm pl-6 pr-2 py-3 w-36 text-slate-500 whitespace-nowrap">{{ f.name }}</td>
+          {% set note = (summary.facts or []) | selectattr('name', 'equalto', f.name) | map(attribute='note') | select | first %}
+          {% set issues = fact_issues.get(f.name, []) %}
+          {% set worst = issues[0].kind if issues else '' %}
+          <tr class="{{ 'bg-rose-50/50' if worst == 'conflict' else ('bg-amber-50/40' if worst else '') }}">
+            <td class="inline-sm pl-6 pr-2 py-3 w-32 font-medium text-slate-700 whitespace-nowrap">{{ f.name }}</td>
             <td class="inline-sm px-2 py-3 mono text-[12.5px] break-words">{{ f.value }}</td>
-            <td class="px-2 py-3">{{ level_chip(f.level) }}</td>
-            <td class="pr-6 pl-2 py-3 text-xs text-slate-500">{{ f.source }}{% if f.live %} <span class="tag text-emerald-700 !text-[9px] ml-1">live</span>{% endif %}
-              {% for sf in summary.facts or [] %}{% if sf.name == f.name and sf.note %}<div class="text-amber-700 mt-0.5">{{ sf.note }}</div>{% endif %}{% endfor %}</td>
+            <td class="px-2 py-3" data-label="Proof level">{{ level_chip(f.level) }}</td>
+            <td class="px-2 py-3 text-xs text-slate-500" data-label="Source">
+              {% if f.live %}<span class="tag dot text-emerald-700">Live source</span>
+              {% elif note and 'simulated' in note | lower %}<span class="tag dot text-amber-700" title="{{ note }}">Simulated</span>
+              {% else %}<span class="tag text-slate-500">Document only</span>{% endif %}
+              <div class="mt-1">{{ f.source }}</div>
+            </td>
+            <td class="pr-6 pl-2 py-3 text-[12.5px] min-w-[15rem] leading-snug" data-label="Problems">
+              {% for i in issues[:2] %}
+                <div class="flex items-start gap-1.5 {{ 'text-rose-700' if i.kind == 'conflict' else 'text-amber-800' }} {{ 'mt-1' if not loop.first }}">{{ icon('alert' if i.kind != 'conflict' else 'flag', 'h-3.5 w-3.5 shrink-0 mt-0.5') }}<span>{{ i.title }}</span></div>
+              {% else %}
+                <span class="inline-flex items-center gap-1 text-emerald-700">{{ icon('check', 'h-3.5 w-3.5') }} None found</span>
+              {% endfor %}
+              {% if issues | length > 2 %}<div class="mt-1 text-slate-500">+ {{ issues | length - 2 }} more below</div>{% endif %}
+            </td>
           </tr>
         {% endfor %}
         </tbody>
       </table>
       </div>
+      <p class="px-4 sm:px-6 py-3 border-t border-slate-100 text-[12px] text-slate-500 flex flex-wrap gap-x-4 gap-y-1">
+        <span><span class="tag dot text-emerald-700 mr-1">Live source</span>asked the real service during this check</span>
+        <span><span class="tag dot text-amber-700 mr-1">Simulated</span>a stand-in for a paid government API: it can never raise a fact to A4</span>
+      </p>
     </section>
 
     <!-- documents -->
@@ -243,7 +311,7 @@
           <span class="absolute -top-3 left-4 rounded-t-md border border-b-0 border-slate-200 bg-white px-3 pt-1 pb-0.5 kicker !text-[10px] !text-slate-700">{{ SLOT_TITLE.get(d.slot, d.slot) }}</span>
           <div class="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
             <a href="/files/{{ d.sha256 }}" target="_blank" class="inline-flex items-center gap-1.5 text-[13px] text-indigo-700 hover:underline mono break-all">{{ icon('doc', 'h-4 w-4 shrink-0') }}{{ d.filename }}</a>
-            {% if au.level %}<div class="sm:text-right shrink-0"><div class="kicker !text-[9px] mb-1">the file itself</div>{{ level_chip(au.level) }}</div>{% endif %}
+            {% if au.level %}<div class="sm:text-right shrink-0"><div class="kicker !text-[9px] mb-1">the file itself</div>{{ level_chip(au.level) }}{% if au.specimen %}<div class="mt-1"><span class="tag text-slate-500" title="One of this demo's own fictional documents: recognised by fingerprint, so visual judgements are skipped">demo specimen</span></div>{% endif %}</div>{% endif %}
           </div>
           <dl class="mt-3 text-[13px] grid grid-cols-[7.25rem_1fr] sm:grid-cols-[8rem_1fr] gap-x-2 gap-y-1">
             <dt class="text-slate-500">AI read it as</dt><dd class="font-medium">{{ (r.doc_type or 'unreadable') | replace('_', ' ') | lower }}</dd>
@@ -280,24 +348,27 @@
 
     {% endif %}
     <!-- messages -->
-    <section class="grid {{ 'md:grid-cols-[1.25fr_1fr]' if full }} gap-5">
+    <section class="space-y-4">
       <div class="bg-white rounded-xl border p-4 sm:p-6 min-w-0">
-        <div class="flex items-center justify-between gap-2"><h2 class="text-lg">Message to the vendor</h2>
-          {% if vendor_msg %}{% set ms = vendor_msg.state %}<span class="tag {{ 'text-emerald-700' if ms == 'sent' else 'text-amber-700' }}">{{ {'sent': 'sent', 'held': 'held for a person', 'draft': 'not sent'}[ms] }}</span>{% endif %}</div>
+        <div class="flex flex-wrap items-center justify-between gap-2"><h2 class="text-lg">Message to the vendor</h2>
+          {% if vendor_msg %}{% set ms = vendor_msg.state %}<span class="tag dot {{ 'text-emerald-700' if ms == 'sent' else 'text-amber-700' }}">{{ {'sent': 'sent', 'held': 'held for a person', 'draft': 'not sent'}[ms] }}</span>{% endif %}</div>
+        {% if vendor_msg and vendor_msg.state == 'held' and full %}<p class="mt-1 text-[12.5px] text-slate-500">Nothing reaches the vendor until a person takes the decision above.</p>{% endif %}
         {% if vendor_msg and (full or vendor_msg.state == 'sent') %}
-          <div class="mt-3 border-t border-dashed border-slate-300 pt-3">
-            <div class="mono text-[11px] text-slate-500">Subject: {{ vendor_msg.subject }}</div>
-            <pre class="mt-3 whitespace-pre-wrap break-words font-display text-[16px] leading-relaxed text-slate-800">{{ vendor_msg.body }}</pre>
+          <div class="mt-3 rounded-lg border border-slate-200 bg-slate-50/60 p-4">
+            <div class="text-[12px] text-slate-500"><span class="font-medium text-slate-600">Subject:</span> {{ vendor_msg.subject }}</div>
+            <pre class="mt-2.5 whitespace-pre-wrap break-words font-sans text-[14.5px] leading-relaxed text-slate-800">{{ vendor_msg.body }}</pre>
           </div>
         {% endif %}
         {% if all_vendor_msgs | length > 1 and full %}<p class="mt-3 text-xs text-slate-500">+ {{ all_vendor_msgs | length - 1 }} later message(s) in the <a class="underline" href="/outbox">outbox</a>.</p>{% endif %}
       </div>
-      {% if full %}
-      <div class="rounded-xl border border-slate-700 bg-slate-900 text-slate-100 p-4 sm:p-6 min-w-0">
-        <h2 class="text-lg text-white">Internal note</h2>
-        <div class="kicker !text-slate-400 !text-[10px]">for the reviewer only</div>
-        {% if internal %}<pre class="mt-3 whitespace-pre-wrap break-words text-[12px] leading-relaxed mono text-slate-200">{{ internal.body }}</pre>{% endif %}
-      </div>
+      {% if full and internal %}
+      <details class="bg-white rounded-xl border min-w-0 group">
+        <summary class="px-4 sm:px-6 py-4 flex items-center justify-between gap-2">
+          <span><span class="text-[15px] font-semibold">Internal note</span> <span class="text-[12.5px] text-slate-500">· plain-text summary for the audit file, reviewers only</span></span>
+          <span class="text-xs text-indigo-700 group-open:hidden">show</span><span class="text-xs text-indigo-700 hidden group-open:inline">hide</span>
+        </summary>
+        <pre class="px-4 sm:px-6 pb-5 whitespace-pre-wrap break-words text-[12px] leading-relaxed mono text-slate-700">{{ internal.body }}</pre>
+      </details>
       {% endif %}
     </section>
 

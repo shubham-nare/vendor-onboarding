@@ -18,8 +18,22 @@
                     'PENDING_REVIEW': ('Under review', 'No action is needed from you right now.', 'bg-slate-50 border-slate-200'),
                     'REJECTED': ('Registration closed', 'See the message below.', 'bg-slate-50 border-slate-200')}.get(st, ('Under review', '', 'bg-slate-50 border-slate-200')) %}
     {% if st == 'REJECTED' and not msgs %}{% set label = ('Under review', 'No action is needed from you right now.', 'bg-slate-50 border-slate-200') %}{% endif %}
-    <div class="mt-6 rounded-xl border p-4 sm:p-5 {{ label[2] }}">
-      <div class="font-display text-2xl">{{ label[0] }}</div>
+    {# where you are, in plain words: submitted -> checked -> decided -> active #}
+    {% set shown_st = 'PENDING_REVIEW' if (st == 'REJECTED' and not msgs) else st %}
+    {% set at = {'IN_PROGRESS': 1, 'PENDING_VENDOR': 1, 'PENDING_REVIEW': 2, 'APPROVED': 3, 'ACTIVE': 4, 'REJECTED': 2}.get(shown_st, 1) %}
+    <ol class="mt-6 grid grid-cols-4 gap-1.5" aria-label="Progress">
+      {% for step in ['Submitted', 'Documents checked', 'Our team decides', 'Active vendor'] %}
+      {% set i = loop.index0 %}
+      {% set state = 'done' if i < at or (i == at and shown_st == 'ACTIVE') else ('now' if i == at else 'todo') %}
+      {% set stuck = i == at and shown_st in ('PENDING_VENDOR', 'REJECTED') %}
+      <li>
+        <div class="h-1.5 rounded-full {{ 'bg-amber-400' if stuck and shown_st == 'PENDING_VENDOR' else ('bg-slate-400' if stuck else ('bg-emerald-500' if state == 'done' else ('bg-indigo-500' if state == 'now' else 'bg-slate-200'))) }}"></div>
+        <div class="mt-1.5 text-[11.5px] leading-tight {{ 'font-semibold text-slate-900' if state == 'now' else ('text-slate-600' if state == 'done' else 'text-slate-400') }}">{{ step }}</div>
+      </li>
+      {% endfor %}
+    </ol>
+    <div class="mt-4 rounded-xl border p-4 sm:p-5 {{ label[2] }}">
+      <div class="text-[20px] font-semibold tracking-tight">{{ label[0] }}</div>
       <div class="text-sm text-slate-600 mt-1">{{ label[1] }}</div>
       {% if st == 'PENDING_VENDOR' %}<a href="/apply/{{ token }}" class="block sm:inline-block text-center mt-4 rounded-md bg-indigo-600 text-white text-sm font-medium px-5 py-2.5 hover:bg-indigo-700 shadow-sm">Update my submission</a>{% endif %}
       {% if st == 'IN_PROGRESS' %}<script>setTimeout(() => location.reload(), 3000)</script>{% endif %}
@@ -38,12 +52,14 @@
     </div>
     {% endif %}
 
-    <h2 class="mt-10 text-2xl">Messages</h2>
+    <h2 class="mt-10 text-xl">Messages from us</h2>
     {% for m in msgs %}
-      <div class="mt-3 bg-white rounded-xl border p-4 sm:p-5">
-        <div class="text-xs text-slate-500">{{ m.created_at | dt }}</div>
-        <div class="mono text-[11.5px] text-slate-500 mt-1">Subject: {{ m.subject }}</div>
-        <pre class="mt-2 whitespace-pre-wrap break-words font-display text-[16px] leading-relaxed text-slate-800">{{ m.body }}</pre>
+      {% set earlier = run and m.run_id != run.id %}
+      <div class="mt-3 bg-white rounded-xl border p-4 sm:p-5 {{ 'opacity-70' if earlier }}">
+        <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500">{{ m.created_at | dt }}
+          {% if earlier %}<span class="tag text-slate-500">about your earlier submission{{ ': already dealt with' if st != 'PENDING_VENDOR' }}</span>{% elif loop.first %}<span class="tag dot text-indigo-600">latest</span>{% endif %}</div>
+        <div class="text-[13px] font-semibold text-slate-800 mt-1.5">{{ m.subject }}</div>
+        <pre class="mt-2 whitespace-pre-wrap break-words font-sans text-[14.5px] leading-relaxed text-slate-700">{{ m.body }}</pre>
       </div>
     {% else %}
       <p class="mt-2 text-sm text-slate-500">No messages yet.</p>

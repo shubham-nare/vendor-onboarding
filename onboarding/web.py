@@ -322,7 +322,29 @@ def _todo(actor, runs, invites, emps, acted, vbills) -> list[dict]:
         if open_:
             out.append(dict(href=f"/bills/{b.id}", ref=b.ref, name=names.get(b.application_id, b.vendor_id), detail=f"Invoice {b.invoice_number}", verb=_TODO_BILL_VERB.get(open_[0], "Open"),
                             status="BILL", risk=b.risk_tier, fraud=b.fraud, since=getattr(b, "created_at", None), amount=b.amount))
+    for t in out:
+        t["waiting"] = _waiting(t["since"])
+    # most urgent first: fraud signals, then high risk, then whatever has waited longest
+    out.sort(key=lambda t: (not t["fraud"], t["risk"] != "high", _utc(t["since"]) or now()))
     return out
+
+
+def _utc(dt):
+    if dt is None:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def _waiting(dt) -> str:
+    """'waiting 3 h' / 'waiting 2 days', for the action queue."""
+    if dt is None:
+        return ""
+    mins = max(0, int((now() - _utc(dt)).total_seconds() // 60))
+    if mins < 60:
+        return f"waiting {mins} min"
+    if mins < 48 * 60:
+        return f"waiting {mins // 60} h"
+    return f"waiting {mins // (24 * 60)} days"
 
 
 @router.post("/act-as")
@@ -658,12 +680,76 @@ async def run_view(request: Request, run_id: int):
         docs = sorted(r["docs"], key=lambda d: SLOTS.index(d.slot) if d.slot in SLOTS else 99)
         msgs = {m.audience: m for m in r["msgs"]}  # the latest message per audience
         history = r["history"]
+        latest = history[-1].id == run.id
         return await render(request, s, "run.html", run=run, app=app, invite=inv, sponsor=sponsor, bill=bill, bill_emp=bill_emp, full=full,
+                            fact_issues=_fact_issues(r["rules"]) if full else {},
+                            rights=_decision_rights(run, app, inv, bill, bill_emp, list(emps.values())) if latest else [],
                             vendor_token=inv.token if inv else (bill.token if bill else ""), events=events, stages=stages_for(run.form), docs=docs,
                             rules=r["rules"], facts=r["facts"], vendor_msg=msgs.get("vendor"),
                             all_vendor_msgs=[m for m in r["msgs"] if m.audience == "vendor"], internal=msgs.get("internal"),
-                            actions=r["actions"], history=history, latest=history[-1].id == run.id, vendor=(r["vendor"] or [None])[0],
+                            actions=r["actions"], history=history, latest=latest, vendor=(r["vendor"] or [None])[0],
                             allowed=_allowed_actions(run, app, inv, actor, bill, bill_emp), from_vendor=request.query_params.get("from") == "vendor")
+
+
+def _fact_of(rule: RuleResult) -> str | None:
+    """Which key fact a check is about, so a failed check shows next to the fact it puts in doubt."""
+    rid, t = rule.rule_id, f" {(rule.title or '').lower()}"
+    if "ifsc" in t:
+        return "Bank branch"
+    if rid in ("R-SRC-BANK", "R-BANK-01", "R-RISK-02", "R-NAME-03", "R-XD-04") or " account" in t or "cheque" in t:
+        return "Bank account"
+    if rid.startswith("R-MSME") or "udyam" in t:
+        return "MSME (Udyam)"
+    if rid in ("R-SRC-GST", "R-XD-01", "R-XD-03") or "gstin" in t:
+        return "GSTIN"
+    if rid in ("R-SRC-PAN", "R-SRC-PAN2", "R-XD-02") or " pan" in t:
+        return "PAN"
+    if rid.startswith("R-NAME") or " name" in t:
+        return "Legal name"
+    return None
+
+
+def _fact_issues(rules: list[RuleResult]) -> dict[str, list[dict]]:
+    """Failed or warning checks per fact, worst first: 'conflict' (a person must decide or it's rejected),
+    'fix' (the vendor must fix it) or 'warn'."""
+    out: dict[str, list[dict]] = {}
+    for r in rules:
+        if r.result not in ("FAIL", "WARN"):
+            continue
+        fact = _fact_of(r)
+        if not fact:
+            continue
+        kind = "warn" if r.result == "WARN" else ("fix" if r.outcome_if_fail == "VENDOR" else "conflict")
+        out.setdefault(fact, []).append(dict(rule=r.rule_id, title=r.title, kind=kind))
+    for v in out.values():
+        v.sort(key=lambda i: ("conflict", "fix", "warn").index(i["kind"]))
+    return out
+
+
+_RIGHT_VERB = {"activate": "activate", "review_approve": "approve", "ask_vendor": "ask the vendor", "review_reject": "reject",
+               "confirm_reject": "confirm the rejection", "override_reject": "send it to review", "confirm_engagement": "confirm the work",
+               "deny_engagement": "deny the work"}
+
+
+def _decision_rights(run, app, inv, bill, bill_emp, employees) -> list[dict]:
+    """For each employee: what they may decide on this application now, and why not (segregation of duties,
+    high risk to the Finance controller). Same function as the buttons, so the panel can't disagree with them."""
+    order = {"sponsor": 0, "maker": 1, "checker": 2}
+    out = []
+    for e in sorted(employees, key=lambda e: (order.get(e.role, 9), e.name)):
+        acts = _allowed_actions(run, app, inv, e, bill, bill_emp)
+        if not acts:
+            return []
+        can = [_RIGHT_VERB.get(a, a) for a, v in acts.items() if not v["blocked"]]
+        decisive = [v["blocked"] for a, v in acts.items() if v["blocked"] and a in ("activate", "review_approve", "review_reject", "confirm_reject")]
+        why = (decisive or [v["blocked"] for v in acts.values() if v["blocked"]] or [""])[0]
+        requester_id = inv.sponsor_id if inv else (bill.engaged_employee_id if bill else None)
+        if e.role == "sponsor" and e.id != requester_id and why.startswith("Segregation"):
+            why = "Requesters don't approve vendors: Procurement or Finance decides."
+        elif e.id == requester_id and why.startswith("Segregation"):
+            why = "Requested this vendor, so can't approve, activate or reject it."
+        out.append(dict(emp=e, can=can, why=why))
+    return out
 
 
 async def _guard_run(request: Request, s, run_id: int) -> bool:

@@ -108,6 +108,8 @@ def flows(tmp_path_factory):
 
             # Rangoli: review, fraud class -> maker can't approve; checker asks the vendor
             rid, tok = await submit("shared_bank_rangoli")
+            await as_("checker")
+            out["rangoli_page"] = (await c.get(f"/runs/{rid}")).text  # before anyone decides
             await as_("maker")
             out["rangoli_maker_approve"] = (await c.post(f"/runs/{rid}/action", data={"action": "review_approve", "comment": "looks fine"})).status_code
             await as_("checker")
@@ -281,3 +283,15 @@ def test_action_queue_follows_the_same_rules_as_the_buttons(flows):
     assert "Review and decide" in maker                        # the unsolicited application waits for a reviewer
     assert "Kaveri" not in checker                             # its rejection was already confirmed
     assert "Activate vendor" not in rahul and "Review and decide" not in rahul  # a requester never approves
+
+
+def test_fraud_case_shows_who_decides_and_where_the_doubt_is(flows):
+    import html
+    page = html.unescape(flows["rangoli_page"])
+    assert "Who can decide this" in page
+    assert "Requested this vendor, so can't approve" in page          # Rahul, the requester
+    assert "Requesters don't approve vendors" in page                 # Priya, another requester
+    assert "I verified the flagged facts" in page                     # approving a fraud signal needs a deliberate tick
+    facts = page.split("How well each fact is proven", 1)[1].split("Documents", 1)[0]
+    assert "already on file for another vendor" in facts              # the conflict sits next to the bank account
+    assert "Simulated" in facts and "Live source" in facts
