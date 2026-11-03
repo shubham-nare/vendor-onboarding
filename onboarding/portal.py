@@ -58,11 +58,17 @@ def _cookie(resp: RedirectResponse, request: Request, account_id: int, purpose: 
 DEMO = dict(password=DEMO_PASSWORD, company_email=DEMO_COMPANY_EMAIL, vendor=DEMO_VENDOR)
 
 
+def _demo() -> dict:
+    """Demo credentials for the login pages, or nothing at all outside demo mode."""
+    from onboarding.config import get_settings
+    return DEMO if get_settings().demo_tools else {}
+
+
 # --- company login ---------------------------------------------------------------------------------
 @router.get("/company/login", response_class=HTMLResponse)
 async def company_login_form(request: Request, next: str = ""):
     async with sessions()() as s:
-        return await render(request, s, "company_login.html", next=safe_next(next, "/console"), email="", error="", demo=DEMO)
+        return await render(request, s, "company_login.html", next=safe_next(next, "/console"), email="", error="", demo=_demo())
 
 
 @router.post("/company/login", response_class=HTMLResponse)
@@ -72,7 +78,7 @@ async def company_login(request: Request, email: str = Form(""), password: str =
         emp = (await s.execute(select(Employee).where(Employee.email == email))).scalars().first()
         login = (await s.execute(select(StaffLogin).where(StaffLogin.employee_id == emp.id))).scalar_one_or_none() if emp else None
         if not await auth.verify_password_async(password, login.password_hash if login else None):
-            return await render(request, s, "company_login.html", next=nxt, email=email, demo=DEMO,
+            return await render(request, s, "company_login.html", next=nxt, email=email, demo=_demo(),
                                 error="That email and password don't match an employee login.")
         login.last_login_at = now()
         await s.commit()
@@ -144,7 +150,7 @@ async def register(request: Request, company_name: str = Form(""), contact_name:
 async def login_form(request: Request, next: str = ""):
     async with sessions()() as s:
         nxt = safe_next(next)
-        return await render(request, s, "vendor_auth.html", mode="login", next=nxt, values={}, invite=await _invite_from_next(s, nxt), error="", demo=DEMO)
+        return await render(request, s, "vendor_auth.html", mode="login", next=nxt, values={}, invite=await _invite_from_next(s, nxt), error="", demo=_demo())
 
 
 @router.post("/vendor/login", response_class=HTMLResponse)
@@ -155,7 +161,7 @@ async def login(request: Request, email: str = Form(""), password: str = Form(""
         if not await auth.verify_password_async(password, acct.password_hash if acct else None):
             # same message either way: don't reveal which emails have accounts
             return await render(request, s, "vendor_auth.html", mode="login", next=nxt, values={"email": email}, invite=None,
-                                error="That email and password don't match.", demo=DEMO)
+                                error="That email and password don't match.", demo=_demo())
         acct.last_login_at = now()
         await s.commit()
         return _cookie(RedirectResponse(nxt, status_code=303), request, acct.id)

@@ -129,13 +129,17 @@ def test_without_demo_tools_the_console_is_the_logged_in_person(app_client, monk
     async def go():
         async with await _client(app_client) as c:
             login_page = (await c.get("/company/login")).text
+            public = [(await c.get(p)).text for p in ("/", "/vendor/login", "/vendor/register", "/bill")]
             await c.post("/company/login", data={"email": DEMO_COMPANY_EMAIL, "password": DEMO_PASSWORD})
             c.cookies.set("actor", "4")                       # trying to act as the Finance controller
             console = (await c.get("/console")).text
             act = await c.post("/act-as", data={"employee_id": "4"})
             demo = await c.get("/demo/happy_nilgiri")
-            return login_page, console, act, demo
-    login_page, console, act, demo = _run(go())
+            return login_page, public, console, act, demo
+    login_page, public, console, act, demo = _run(go())
+    for page in [login_page, *public]:
+        assert DEMO_PASSWORD not in page                       # never shipped to the browser, not even in a script
+        assert "fictional vendors" not in page and "lookups simulated" not in page and "Demo ·" not in page
     assert "one password for all" not in login_page.lower() and "Fill" not in login_page
     assert "Arjun" in console and "Welcome back, Kavita" not in console
     assert "Switch person" not in console and "Demo ·" not in console and "Try a scenario" not in console

@@ -28,13 +28,13 @@
       {% endfor %}
     </ul>
     <p class="mt-2 text-xs text-slate-500">After logging in, "Acting as" (bottom of the sidebar; top right on a phone) lets the demo switch person without logging out. In production each person logs in as themselves, through the company's single sign-on.</p>
-  </section>{% endif %}
+  </section>
+  <script>
+    document.querySelectorAll('.fill').forEach(b => b.addEventListener('click', () => {
+      const f = document.getElementById('login');
+      f.email.value = b.dataset.email; f.password.value = {{ demo.password | tojson }}; f.querySelector('button').focus();
+    }));
+  </script>{% endif %}
   <p class="mt-5 text-sm text-center"><a href="/" class="text-slate-500 underline decoration-dotted underline-offset-4">← Back to the start</a></p>
 </div>
-<script>
-  document.querySelectorAll('.fill').forEach(b => b.addEventListener('click', () => {
-    const f = document.getElementById('login');
-    f.email.value = b.dataset.email; f.password.value = {{ demo.password | tojson }}; f.querySelector('button').focus();
-  }));
-</script>
 {% endblock %}
