@@ -12,6 +12,8 @@ Errors here are logged and never reach the onboarding flow (see on_run_completed
 
 from __future__ import annotations
 
+from onboarding.countries import code_for
+
 import logging
 import uuid
 from datetime import timedelta
@@ -182,7 +184,7 @@ async def resolve_vendor(s, app: Application, form: dict) -> tuple[Vendor, str]:
         else:
             method = "new_vendor"
     if vendor is None:
-        country = "IN" if (form.get("country") or "India").lower() in ("india", "in") else (form.get("country") or "")[:2]
+        country = code_for(form.get("country")) or "XX"
         vendor = await _new_vendor(s, form.get("legal_name") or app.legal_name, form.get("business_type", ""), country)
     s.add(VendorApplication(vendor_pk=vendor.id, application_id=app.id, method=method))
     await s.flush()

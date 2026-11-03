@@ -45,24 +45,37 @@
   <form method="post" enctype="multipart/form-data" class="mt-6 space-y-6" action="{{ '/apply/' ~ token if token else ('/bill' if is_bill else '/apply') }}" onsubmit="this.querySelector('button[type=submit]').disabled=true; this.querySelector('button[type=submit]').textContent='Submitting…'">
     <input type="hidden" name="demo" value="{{ demo }}">
     {% if is_bill %}<input type="hidden" name="bill_mode" value="1">{% endif %}
-    <input type="hidden" name="country" value="{{ v.get('country', 'India') }}">
     <p class="text-[12.5px] text-slate-500">Fields marked <span class="text-rose-600 font-semibold">*</span> are required, and so are the documents.</p>
 
     <section class="bg-white rounded-xl border p-4 sm:p-5">
       <h2 class="text-xl flex items-baseline gap-3"><span class="mono text-[12px] text-indigo-600 tracking-widest">01</span>Business</h2>
       <div class="grid md:grid-cols-2 gap-4 mt-4 text-sm">
+        {% set cur_country = v.get('country') or 'India' %}
+        <label class="block md:col-span-2 md:max-w-[calc(50%-0.5rem)]">Country where the business is registered{{ REQ }}
+          <select name="country" id="country" required class="mt-1 w-full rounded-md border px-2 py-2" onchange="toggleType()">
+            {% for name in COUNTRIES %}<option {{ 'selected' if cur_country == name }}>{{ name }}</option>{% endfor %}
+            <option value="Other" {{ 'selected' if cur_country not in COUNTRIES }}>Another country</option>
+          </select>
+          <span class="mt-1 block text-xs text-slate-500">This sets which tax ID and bank code we ask for, and the format we check them against.</span></label>
         <label class="block">Type of business{{ REQ }}
           <select name="business_type" id="bt" required class="mt-1 w-full rounded-md border px-2 py-2" onchange="toggleType()">
             {% for code, label in BUSINESS_TYPES.items() %}<option value="{{ code }}" {{ 'selected' if v.get('business_type') == code }}>{{ label }}</option>{% endfor %}
           </select></label>
-        <label class="block">Legal name (as on your GST registration){{ REQ }}<input name="legal_name" required value="{{ v.get('legal_name', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
+        <label class="block">Legal name <span data-in>(as on your GST registration)</span><span data-intl>(as registered)</span>{{ REQ }}<input name="legal_name" required value="{{ v.get('legal_name', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
         <label class="block" data-show="PROPRIETORSHIP">Proprietor's name (as on PAN){{ REQ }}<input name="proprietor_name" data-req value="{{ v.get('proprietor_name', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
-        <label class="block">GSTIN{{ REQ }}<input name="gstin" data-gst value="{{ v.get('gstin', '') }}" maxlength="15" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase" placeholder="15 characters"></label>
-        <label class="block">PAN of the business{{ REQ }}<input name="pan" required value="{{ v.get('pan', '') }}" maxlength="10" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase" placeholder="10 characters"></label>
-        <label class="block" data-show="PVT_LTD PUBLIC_LTD">CIN (company registration number){{ REQ }}<input name="cin" data-req value="{{ v.get('cin', '') }}" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase"></label>
-        <label class="block" data-show="LLP">LLPIN{{ REQ }}<input name="llpin" data-req value="{{ v.get('llpin', '') }}" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase"></label>
+        <label class="block" data-in>GSTIN{{ REQ }}<input name="gstin" id="gstin" data-gst value="{{ v.get('gstin', '') }}" maxlength="15" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase placeholder:text-slate-400" placeholder="27ABCDE1234F1Z5">
+          <span class="mt-1 block text-xs text-slate-500">15 characters, exactly as on your GST certificate</span>
+          <span id="gstin-msg" class="block text-xs text-rose-700 empty:hidden" role="alert"></span></label>
+        <label class="block" data-in>PAN of the business{{ REQ }}<input name="pan" id="pan" data-req value="{{ v.get('pan', '') }}" maxlength="10" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase placeholder:text-slate-400" placeholder="ABCDE1234F">
+          <span class="mt-1 block text-xs text-slate-500">10 characters: 5 letters, 4 digits, 1 letter</span>
+          <span id="pan-msg" class="block text-xs text-amber-700 empty:hidden"></span></label>
+        <label class="block" data-intl><span id="tax-label">Tax ID</span>{{ REQ }}<input name="tax_id" id="tax_id" data-req value="{{ v.get('tax_id', '') }}" maxlength="20" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase placeholder:text-slate-400">
+          <span id="tax-hint" class="mt-1 block text-xs text-slate-500"></span>
+          <span id="tax-msg" class="block text-xs text-rose-700 empty:hidden" role="alert"></span></label>
+        <label class="block" data-in data-show="PVT_LTD PUBLIC_LTD">CIN (company registration number){{ REQ }}<input name="cin" data-req value="{{ v.get('cin', '') }}" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase placeholder:text-slate-400" placeholder="U12345KA2020PTC123456"></label>
+        <label class="block" data-in data-show="LLP">LLPIN{{ REQ }}<input name="llpin" data-req value="{{ v.get('llpin', '') }}" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase placeholder:text-slate-400" placeholder="AAB-1234"></label>
       </div>
-      <label class="mt-4 flex items-center gap-2 text-sm"><input type="checkbox" name="gst_registered" id="gst" onchange="toggleType()" {{ 'checked' if v.get('gst_registered', True) }}> We are registered for GST in India</label>
+      <label data-in class="mt-4 flex items-center gap-2 text-sm"><input type="checkbox" name="gst_registered" id="gst" onchange="toggleType()" {{ 'checked' if v.get('gst_registered', True) }}> We are registered for GST in India</label>
     </section>
 
     <section class="bg-white rounded-xl border p-4 sm:p-5">
@@ -70,12 +83,13 @@
       <div class="grid md:grid-cols-2 gap-4 mt-4 text-sm">
         <label class="block md:col-span-2">Registered address{{ REQ }}<input name="address" required value="{{ v.get('address', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
         <label class="block">City{{ REQ }}<input name="city" required value="{{ v.get('city', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
-        <div class="grid grid-cols-2 gap-3">
+        <label class="block" data-intl>Postal code{{ REQ }}<input name="postal_code" data-req value="{{ v.get('postal_code', '') }}" maxlength="12" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase"></label>
+        <div class="grid grid-cols-2 gap-3" data-in>
           <label class="block">State{{ REQ }}
-            <select name="state" required class="mt-1 w-full rounded-md border px-2 py-2"><option value=""></option>
+            <select name="state" data-req class="mt-1 w-full rounded-md border px-2 py-2"><option value=""></option>
               {% for st in states %}<option {{ 'selected' if v.get('state') == st }}>{{ st }}</option>{% endfor %}
             </select></label>
-          <label class="block">PIN code{{ REQ }}<input name="pin" required inputmode="numeric" value="{{ v.get('pin', '') }}" maxlength="6" class="mt-1 w-full rounded-md border px-3 py-2 mono"></label>
+          <label class="block">PIN code{{ REQ }}<input name="pin" data-req inputmode="numeric" placeholder="560001" value="{{ v.get('pin', '') }}" maxlength="6" class="mt-1 w-full rounded-md border px-3 py-2 mono placeholder:text-slate-400"></label>
           <span id="pin-msg" class="col-span-2 -mt-1 text-xs text-rose-700 empty:hidden" role="alert"></span>
         </div>
         <label class="block">Contact person{{ REQ }}<input name="contact_name" required value="{{ v.get('contact_name', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
@@ -95,10 +109,14 @@
       <h2 class="text-xl flex items-baseline gap-3"><span class="mono text-[12px] text-indigo-600 tracking-widest">03</span>Bank account for payments</h2>
       <div class="grid md:grid-cols-3 gap-4 mt-4 text-sm">
         <label class="block">Account holder name{{ REQ }}<input name="bank_holder" required value="{{ v.get('bank_holder', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
-        <label class="block">Account number{{ REQ }}<input name="bank_account" required value="{{ v.get('bank_account', '') }}" class="mt-1 w-full rounded-md border px-3 py-2 mono"></label>
-        <label class="block">IFSC{{ REQ }}<input name="ifsc" required value="{{ v.get('ifsc', '') }}" maxlength="11" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase"></label>
+        <label class="block">Account number <span data-intl class="text-slate-400 font-normal">or IBAN</span>{{ REQ }}<input name="bank_account" required value="{{ v.get('bank_account', '') }}" class="mt-1 w-full rounded-md border px-3 py-2 mono"></label>
+        <label class="block" data-in>IFSC{{ REQ }}<input name="ifsc" data-req value="{{ v.get('ifsc', '') }}" maxlength="11" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase placeholder:text-slate-400" placeholder="HDFC0001234">
+          <span class="mt-1 block text-xs text-slate-500">11 characters, printed on your cheque book</span></label>
+        <label class="block" data-intl>SWIFT / BIC code{{ REQ }}<input name="swift" id="swift" data-req value="{{ v.get('swift', '') }}" maxlength="11" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase placeholder:text-slate-400">
+          <span class="mt-1 block text-xs text-slate-500">8 or 11 characters; letters 5 and 6 are your bank's country</span>
+          <span id="swift-msg" class="block text-xs text-rose-700 empty:hidden" role="alert"></span></label>
       </div>
-      <label class="mt-4 flex items-center gap-2 text-sm"><input type="checkbox" name="msme" id="msme" onchange="toggleType()" {{ 'checked' if v.get('msme') }}> We are MSME-registered (Udyam)</label>
+      <label data-in class="mt-4 flex items-center gap-2 text-sm"><input type="checkbox" name="msme" id="msme" onchange="toggleType()" {{ 'checked' if v.get('msme') }}> We are MSME-registered (Udyam)</label>
       <label class="block mt-3 text-sm max-w-sm" data-msme>Udyam registration number{{ REQ }}<input name="udyam_no" data-req value="{{ v.get('udyam_no', '') }}" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase" placeholder="UDYAM-XX-00-0000000"></label>
     </section>
 
@@ -107,7 +125,7 @@
       <p class="text-xs text-slate-500 mt-1">All documents are required. PDF, JPG or PNG, up to 10 MB each. Please upload the original files: the GST certificate as downloaded from the GST portal, and clear photos or scans of the PAN card and a cancelled cheque.</p>
       <div class="mt-4 space-y-3 text-sm">
         {% for slot in ['gst_certificate', 'pan_card', 'bank_proof', 'udyam_certificate'] %}
-        <div class="grid gap-2 sm:grid-cols-[11rem_1fr] lg:grid-cols-[12rem_1fr_12rem] sm:items-center sm:gap-4 rounded-lg border px-3 py-3 sm:py-2.5" {{ 'data-msme' if slot == 'udyam_certificate' }}>
+        <div class="grid gap-2 sm:grid-cols-[11rem_1fr] lg:grid-cols-[12rem_1fr_12rem] sm:items-center sm:gap-4 rounded-lg border px-3 py-3 sm:py-2.5" {{ 'data-msme' if slot == 'udyam_certificate' }} {{ 'data-in' if slot in ('gst_certificate', 'pan_card') }}>
           <div class="font-medium">{{ SLOT_LABEL[slot] }}{{ REQ }}</div>
           <input type="file" name="{{ slot }}" {{ 'data-req' if not (prev_docs.get(slot) or demo_files.get(slot)) }} {{ 'data-gst' if slot == 'gst_certificate' }} aria-label="{{ SLOT_LABEL[slot] }}" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/*" class="text-xs min-w-0 max-w-full">
           <div class="text-xs text-slate-500 sm:col-span-2 lg:col-span-1 lg:text-right truncate empty:hidden">
@@ -117,6 +135,7 @@
         </div>
         {% endfor %}
       </div>
+      <p data-intl class="text-xs text-slate-500 mt-2">Outside India we only need proof of your bank account now. Our team asks for your tax registration certificate when they contact you.</p>
       {% if prev %}<p class="text-xs text-slate-500 mt-2">Leave a slot empty to keep the file you sent before.</p>{% endif %}
     </section>
 
@@ -147,26 +166,75 @@
   </form>
 </div>
 <script>
+const COUNTRIES = {{ COUNTRIES | tojson }}, SWIFT_CODES = {{ SWIFT_CODES | tojson }};
+const isIndia = () => document.getElementById('country').value === 'India';
+const shown = el => { for (let x = el; x && x !== document.body; x = x.parentElement) if (x.style && x.style.display === 'none') return false; return true; };
 function toggleType() {
-  const bt = document.getElementById('bt').value;
-  document.querySelectorAll('[data-show]').forEach(el => el.style.display = el.dataset.show.split(' ').includes(bt) ? '' : 'none');
-  const m = document.getElementById('msme').checked;
-  document.querySelectorAll('[data-msme]').forEach(el => el.style.display = m ? '' : 'none');
-  // required only when it applies: shown for this business type / MSME, and GST items only for GST-registered vendors
-  const gst = document.getElementById('gst'), g = !gst || gst.checked;
-  document.querySelectorAll('[data-req]').forEach(el => {
-    const box = el.closest('[data-show],[data-msme]');
-    el.required = (!box || box.style.display !== 'none') && (!el.hasAttribute('data-gst') || g);
+  const bt = document.getElementById('bt').value, india = isIndia();
+  const m = india && document.getElementById('msme').checked;
+  // each block shows only when every condition on it holds: business type, MSME, India / outside India
+  document.querySelectorAll('[data-show],[data-msme],[data-in],[data-intl]').forEach(el => {
+    let ok = true;
+    if (el.dataset.show) ok = ok && el.dataset.show.split(' ').includes(bt);
+    if (el.hasAttribute('data-msme')) ok = ok && m;
+    if (el.hasAttribute('data-in')) ok = ok && india;
+    if (el.hasAttribute('data-intl')) ok = ok && !india;
+    el.style.display = ok ? '' : 'none';
   });
-  document.querySelectorAll('[data-gst]:not([data-req])').forEach(el => el.required = g);
+  // required only when it is on screen, and GST items only for GST-registered vendors in India
+  const gst = document.getElementById('gst'), g = india && (!gst || gst.checked);
+  document.querySelectorAll('[data-req]').forEach(el => el.required = shown(el) && (!el.hasAttribute('data-gst') || g));
+  document.querySelectorAll('[data-gst]:not([data-req])').forEach(el => el.required = g && shown(el));
+  setTaxBox();
+  if (typeof checkPin === 'function') checkPin();
+  checkIds();
 }
-toggleType();
+
+// the tax ID box follows the country: its name, a grey sample in the box, and the format in words
+function setTaxBox() {
+  const c = COUNTRIES[document.getElementById('country').value];
+  document.getElementById('tax-label').textContent = c ? c.tax_label : 'Tax ID';
+  document.getElementById('tax_id').placeholder = c ? c.example : 'Your business tax number';
+  document.getElementById('tax-hint').textContent = c ? c.hint : 'As shown on your tax registration';
+  document.getElementById('swift').placeholder = 'ABCD' + (c ? c.code : 'XX') + '22';
+}
+const norm = s => (s || '').replace(/\s/g, '').toUpperCase();
+const fits = (name, v) => new RegExp(COUNTRIES[name].pattern).test(v);
+function taxProblem(country, v) {
+  const c = COUNTRIES[country];
+  if (!c || !v || fits(country, v)) return '';
+  const other = Object.keys(COUNTRIES).find(n => n !== country && fits(n, v));
+  if (other) return `${v} looks like a ${COUNTRIES[other].tax_label.split(' (')[0]} from ${other}, not a ${c.tax_label}. Check the country you chose.`;
+  return `A ${c.tax_label} looks like ${c.example} (${c.hint}).`;
+}
+function checkIds() {
+  const country = document.getElementById('country').value, india = isIndia();
+  const gstin = document.getElementById('gstin'), pan = document.getElementById('pan'), tax = document.getElementById('tax_id'), swift = document.getElementById('swift');
+  // India: GSTIN format (blocks submit); the PAN inside it vs the PAN typed (a hint only: our checks decide)
+  const g = norm(gstin.value), why = india ? taxProblem('India', g) : '';
+  gstin.setCustomValidity(why); document.getElementById('gstin-msg').textContent = why;
+  const p = norm(pan.value);
+  document.getElementById('pan-msg').textContent = india && g.length === 15 && !why && p.length === 10 && g.slice(2, 12) !== p
+    ? `Your GSTIN contains the PAN ${g.slice(2, 12)}, which is different from the PAN you entered. Please check both.` : '';
+  // outside India: the tax ID must fit the country chosen; the SWIFT code must be a bank in that country
+  const t = india ? '' : taxProblem(country, norm(tax.value));
+  tax.setCustomValidity(t); document.getElementById('tax-msg').textContent = t;
+  let s = '';
+  const sv = norm(swift.value), mm = sv.match(/^[A-Z]{4}([A-Z]{2})[A-Z0-9]{2}([A-Z0-9]{3})?$/), c = COUNTRIES[country];
+  if (!india && sv) {
+    if (!mm) s = 'A SWIFT/BIC code has 8 or 11 characters, like BARCGB22XXX.';
+    else if (c && mm[1] !== c.code) s = `SWIFT code ${sv} is for a bank in ${SWIFT_CODES[mm[1]] || 'country ' + mm[1]}, not ${country}.`;
+  }
+  swift.setCustomValidity(s); document.getElementById('swift-msg').textContent = s;
+}
+['gstin', 'pan', 'tax_id', 'swift'].forEach(id => document.getElementById(id).addEventListener('input', checkIds));
 
 // the PIN code must belong to the chosen state (same rule as our checks: R-ID-10)
 const PIN_SPECIFIC = {{ PIN_SPECIFIC | tojson }}, PIN_TWO = {{ PIN_TWO | tojson }};
 function checkPin() {
   const pin = document.querySelector('[name=pin]'), st = document.querySelector('[name=state]'), msg = document.getElementById('pin-msg');
   if (!pin || !st) return;
+  if (!isIndia()) { pin.setCustomValidity(''); msg.textContent = ''; return; }
   const v = pin.value.trim();
   let why = '';
   if (v) {
@@ -181,7 +249,7 @@ function checkPin() {
   msg.textContent = why;
 }
 ['input', 'change'].forEach(e => { document.querySelector('[name=pin]')?.addEventListener(e, checkPin); document.querySelector('[name=state]')?.addEventListener(e, checkPin); });
-checkPin();
+toggleType();
 </script>
 </div>
 {% endblock %}

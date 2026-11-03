@@ -12,6 +12,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 
+from onboarding import countries as C
 from onboarding import matching as M
 from onboarding import validators as V
 from onboarding.ai.read import DocRead, FieldReading
@@ -40,7 +41,8 @@ FIELD_LABEL = {"legal_name": "Legal name", "gstin": "GSTIN", "pan": "PAN", "addr
                "bank_holder": "Account holder name", "bank_account": "Bank account number", "ifsc": "IFSC",
                "business_type": "Business type", "cin": "CIN", "llpin": "LLPIN", "proprietor_name": "Proprietor's name",
                "udyam_no": "Udyam number", "bill_invoice_number": "Invoice number", "bill_amount": "Bill amount",
-               "bill_description": "What the work was", "bill_engaged_by": "Who at our company engaged you"}
+               "bill_description": "What the work was", "bill_engaged_by": "Who at our company engaged you",
+               "country": "Country", "tax_id": "Tax ID", "swift": "SWIFT / BIC code", "postal_code": "Postal code"}
 
 
 @dataclass
@@ -143,7 +145,15 @@ def required_fields(form: dict) -> list[str]:
     return req
 
 
+def required_fields_abroad(form: dict) -> list[str]:
+    """Vendors outside India: no GSTIN, PAN, state or IFSC; their own tax ID and a SWIFT code instead."""
+    return ["legal_name", "tax_id", "address", "city", "postal_code", "contact_name", "contact_email",
+            "bank_holder", "bank_account", "swift", "business_type"]
+
+
 def required_docs(form: dict) -> list[str]:
+    if not C.is_india(form.get("country")):
+        return ["bank_proof"]       # the tax registration certificate is collected by our team
     return (["gst_certificate", "pan_card", "bank_proof"] + (["udyam_certificate"] if form.get("msme") else [])
             + (["invoice"] if form.get("bill_mode") else []))
 
@@ -153,6 +163,43 @@ def reupload(slot: str, what: str) -> str:
 
 
 # --- the rules ------------------------------------------------------------------------------
+def _abroad(f: dict, docs: dict, out: list) -> list:
+    """Outside India: check what the vendor can fix (missing details, tax ID format, a bank in another
+    country) and send it back; once it's right, hand the application to our team (R-SCOPE-01)."""
+    add, country = out.append, f.get("country", "")
+    known = country in C.COUNTRIES
+    missing = [k for k in required_fields_abroad(f) if not str(f.get(k) or "").strip()]
+    add(R("R-COMP-01", "completeness", FAIL if missing else PASS,
+          "Required details missing" if missing else "All required details provided", "VENDOR",
+          {"missing": missing}, vendor_text=f"Please fill in: {', '.join(FIELD_LABEL.get(m, m) for m in missing)}." if missing else ""))
+    missing_docs = [s for s in required_docs(f) if s not in docs]
+    add(R("R-COMP-02", "completeness", FAIL if missing_docs else PASS,
+          "Required documents missing" if missing_docs else "All required documents uploaded", "VENDOR",
+          {"missing": missing_docs}, vendor_text=f"Please upload: {', '.join(SLOT_LABEL[s] for s in missing_docs)}." if missing_docs else ""))
+    tid = C.normalise(f.get("tax_id"))
+    if known and tid:
+        why = C.tax_id_problem(country, tid)
+        label = C.COUNTRIES[country]["tax_label"]
+        add(R("R-ID-11", "identifiers", FAIL if why else PASS,
+              f"{label} format fits {country}" if not why else f"Tax ID doesn't fit {country}'s format",
+              "VENDOR", {"country": country, "tax_id": tid, "expected": C.COUNTRIES[country]["example"]}, vendor_text=why))
+    swift = C.normalise(f.get("swift"))
+    if swift:
+        why = C.swift_problem(country, swift)
+        add(R("R-ID-12", "identifiers", FAIL if why else PASS,
+              "Bank's SWIFT code is from the vendor's country" if not why else "Bank's SWIFT code doesn't fit the country",
+              "VENDOR", {"country": country, "swift": swift}, vendor_text=why))
+    fixable = [r for r in out if r.result == FAIL and r.outcome == "VENDOR"]
+    title = f"Vendor registered outside India ({country or 'country not given'})"
+    if fixable:     # vendor fixes first; then our team takes over
+        add(R("R-SCOPE-01", "scope", WARN, title + ": goes to our team once the details above are fixed", "WARN"))
+    else:
+        add(R("R-SCOPE-01", "scope", FAIL, title, "REVIEW",
+              internal="" if known else "Country outside our supported list: onboard manually.",
+              vendor_text="Vendors registered outside India are onboarded by our team directly; we'll contact you within 3 business days. No action is needed now."))
+    return out
+
+
 def evaluate(ctx: Context) -> list[R]:
     f, docs, out = ctx.form, ctx.docs, []
     add = out.append
@@ -189,11 +236,8 @@ def evaluate(ctx: Context) -> list[R]:
                   internal="Invite link may have been forwarded or reached the wrong company.", fraud=True))
 
     # Layer 1: scope gate ------------------------------------------------------------------
-    if (f.get("country") or "India").strip().lower() != "india":
-        country = f.get("country", "")
-        add(R("R-SCOPE-01", "scope", FAIL, f"Vendor registered outside India ({country})", "REVIEW",
-              vendor_text="Vendors registered outside India are onboarded by our team directly; we'll contact you within 3 business days. No action is needed now."))
-        return out
+    if not C.is_india(f.get("country")):
+        return _abroad(f, docs, out)
     if not f.get("gst_registered", True):
         add(R("R-SCOPE-02", "scope", FAIL, "Vendor is not GST-registered", "REVIEW",
               vendor_text="Vendors without a GST registration are onboarded by our team directly; we'll contact you within 3 business days."))

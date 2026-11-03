@@ -101,7 +101,8 @@ COLOR = {"slate": "text-slate-600", "green": "text-emerald-700", "red": "text-ro
          "emerald": "text-emerald-700", "amber": "text-amber-700", "orange": "text-amber-700", "indigo": "text-amber-700", "violet": "text-amber-700", "rose": "text-rose-700"}
 templates.env.globals.update(COLOR=COLOR)
 from onboarding import pincode as _pincode  # noqa: E402
-templates.env.globals.update(PIN_SPECIFIC=_pincode.SPECIFIC, PIN_TWO=_pincode.TWO)
+from onboarding import countries as _countries
+templates.env.globals.update(PIN_SPECIFIC=_pincode.SPECIFIC, PIN_TWO=_pincode.TWO, COUNTRIES=_countries.COUNTRIES, SWIFT_CODES=_countries.CODE_NAME)
 templates.env.globals.update(STATUS_LABEL=STATUS_LABEL, LEVEL_NAMES=LEVEL_NAMES, SLOT_TITLE=SLOT_TITLE, SLOT_LABEL=SLOT_LABEL,
                              ROLE_LABEL=ROLE_LABEL, ROLE_HINT=ROLE_HINT, inr=inr, money=money, BUYER=BUYER, BUSINESS_TYPES=V.BUSINESS_TYPES, mask_pan=V.mask_pan, mask_account=V.mask_account,
                              tone=lambda s: sum(map(ord, s or "")) % 6)
@@ -565,13 +566,23 @@ async def _collect_form(request: Request) -> tuple[dict, dict[str, tuple[str, by
     data = await request.form()
     f = {k: (str(data.get(k) or "")).strip() for k in ("business_type", "legal_name", "proprietor_name", "gstin", "pan", "cin", "llpin", "address",
                                                        "city", "state", "pin", "contact_name", "contact_email", "contact_phone", "alt_contact_name", "alt_contact_email", "alt_contact_phone", "bank_holder",
-                                                       "bank_account", "ifsc", "udyam_no", "country")}
-    for k in ("gstin", "pan", "cin", "llpin", "ifsc", "udyam_no"):
+                                                       "bank_account", "ifsc", "udyam_no", "country",
+                                                       "tax_id", "swift", "postal_code")}
+    for k in ("gstin", "pan", "cin", "llpin", "ifsc", "udyam_no", "tax_id", "swift"):
         f[k] = f[k].upper().replace(" ", "")
     f["bank_account"] = f["bank_account"].replace(" ", "").replace("-", "")
     f["country"] = f["country"] or "India"
     f["msme"] = data.get("msme") == "on"
     f["gst_registered"] = data.get("gst_registered", "on") == "on"
+    # keep only the fields for the country chosen (the form hides the others, but they may still be filled in)
+    if _countries.is_india(f["country"]):
+        f["country"] = "India"
+        for k in ("tax_id", "swift", "postal_code"):
+            f[k] = ""
+    else:
+        for k in ("gstin", "pan", "cin", "llpin", "state", "pin", "ifsc", "udyam_no"):
+            f[k] = ""
+        f["msme"] = False
     if data.get("bill_mode") == "1":
         f["bill_mode"] = True
         f["bill_engaged_by"] = str(data.get("bill_engaged_by") or "").strip()   # the rest is read from the bill itself
