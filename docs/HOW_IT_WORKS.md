@@ -67,7 +67,7 @@ The home page (`/`) asks **"Who are you?"**:
 
 | Who | Email | What they see |
 |---|---|---|
-| Company (Arjun Mehta, Procurement reviewer) | `arjun.mehta@nareenterprises.example.com` | The console. Priya, Rahul and Kavita log in the same way with their own `@nareenterprises.example.com` emails. |
+| Company (Arjun Mehta, Procurement reviewer) | `arjun.mehta@nareenterprises.com` | The console. Priya, Rahul and Kavita log in the same way with their own `@nareenterprises.com` emails. |
 | Vendor (Sneha Kulkarni, Kesari Facility Services) | `billing@kesarifacility.example.com` | An empty vendor account, ready to register with a bill (a demo link pre-fills Kesari's details and documents). |
 
 After logging in, the **"Acting as"** menu (bottom of the left sidebar; top right on a phone) lets the demo switch person without logging out. It lists each person with their role and what they're allowed to do, so you can watch the permissions change. In production each person logs in as themselves and the menu doesn't exist.

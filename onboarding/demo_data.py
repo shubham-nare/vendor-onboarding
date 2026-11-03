@@ -426,7 +426,7 @@ SCENARIOS: dict[str, dict] = {
         "expected": "PENDING_VENDOR",
         "bill": True,
         "form": form(BRINDAVAN, "PVT_LTD", cin=BRINDAVAN["cin"]) | {
-            "bill_mode": True, "bill_engaged_by": "rahul.desai@nareenterprises.example.com"},
+            "bill_mode": True, "bill_engaged_by": "rahul.desai@nareenterprises.com"},
         "documents": {
             "gst_certificate": gst_cert(BRINDAVAN),
             "pan_card": pan_card(BRINDAVAN["legal_name"], BRINDAVAN["pan"], date_label="Date of Incorporation/Formation", date=BRINDAVAN["incorporated"]),
