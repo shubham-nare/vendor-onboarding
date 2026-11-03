@@ -362,7 +362,7 @@
           <span class="absolute -top-3 left-4 rounded-t-md border border-b-0 border-slate-200 bg-white px-3 pt-1 pb-0.5 kicker !text-[10px] !text-slate-700">{{ SLOT_TITLE.get(d.slot, d.slot) }}</span>
           <div class="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
             <a href="/files/{{ d.sha256 }}" target="_blank" class="inline-flex items-center gap-1.5 text-[13px] text-indigo-700 hover:underline mono break-all">{{ icon('doc', 'h-4 w-4 shrink-0') }}{{ d.filename }}</a>
-            {% if au.level %}<div class="sm:text-right shrink-0"><div class="kicker !text-[9px] mb-1">the file itself</div>{{ level_chip(au.level) }}{% if au.specimen %}<div class="mt-1"><span class="tag text-slate-500" title="One of this demo's own fictional documents: recognised by fingerprint, so visual judgements are skipped">demo specimen</span></div>{% endif %}</div>{% endif %}
+            {% if au.level %}<div class="sm:text-right shrink-0"><div class="kicker !text-[9px] mb-1">the file itself</div>{{ level_chip(au.level) }}{% if au.specimen %}<div class="mt-1"><span class="tag text-slate-500" title="This exact file is on record (matched by fingerprint), so visual checks are skipped. Its contents are not independently confirmed.">known file</span></div>{% endif %}</div>{% endif %}
           </div>
           <dl class="mt-3 text-[13px] grid grid-cols-[7.25rem_1fr] sm:grid-cols-[8rem_1fr] gap-x-2 gap-y-1">
             <dt class="text-slate-500">AI read it as</dt><dd class="font-medium">{{ (r.doc_type or 'unreadable') | replace('_', ' ') | lower }}</dd>
@@ -374,7 +374,7 @@
           {% if sigs %}
           <ul class="mt-3 space-y-2">
             {% for s in sigs %}
-            <li class="text-[12.5px] flex gap-2">{{ severity_chip(s.severity) }}<span><span class="mono text-[10px] text-slate-400">{{ s.code }}</span> {{ s.title }}{% if s.detail %}<span class="block text-slate-500">{{ s.detail }}</span>{% endif %}</span></li>
+            <li class="text-[12.5px] flex gap-2">{{ severity_chip(s.severity) }}<span><span class="mono text-[10px] text-slate-400">{{ s.code }}</span> {% set st = signal_text(s) %}{{ st.title }}{% if st.detail %}<span class="block text-slate-500">{{ st.detail }}</span>{% endif %}</span></li>
             {% endfor %}
           </ul>
           {% else %}<p class="mt-3 text-[12.5px] text-emerald-700 flex items-center gap-1.5">{{ icon('check', 'h-3.5 w-3.5') }} No authenticity concerns found.</p>{% endif %}

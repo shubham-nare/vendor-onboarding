@@ -366,3 +366,21 @@ def test_new_bank_account_does_not_inherit_the_old_level(flows):
     bank = facts.split("Bank account", 1)[1][:1500]
     assert "A1" in bank and "7766" in bank      # the current bank fact is the new account, at its own (lower) level
 
+
+
+def test_vendor_360_reads_as_a_product(flows):
+    """Supplier record and latest application are separate cards; known files and registration bills say what they are."""
+    page = flows["kesari_360_after_change"]
+    assert "Supplier master" in page and "Latest application" in page and "Payment eligibility" in page
+    assert "demo specimen" not in page and "fictional" not in page.lower()
+    if "Onboarding bill" in page:
+        assert "not a payable invoice" in page
+
+
+def test_old_development_wording_is_not_shown_for_known_files():
+    from onboarding.web import signal_text
+    old = {"code": "SPECIMEN", "title": "Known fictional test document (generated for this demo)", "detail": "x"}
+    shown = signal_text(old)
+    assert "fictional" not in shown["title"].lower() and "demo" not in shown["title"].lower()
+    assert "not independently confirmed" in shown["detail"]
+    assert "known file" in signal_text({"code": "AU-1", "title": "t", "detail": "[not applied: known test specimen] y"})["detail"]

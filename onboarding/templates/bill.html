@@ -148,7 +148,7 @@
               <dt class="text-slate-500">Extraction</dt><dd>{% if r.origin == 'live' %}read live{% elif r.origin %}<span class="text-amber-700">{{ 'saved reading (reader unavailable)' if r.origin == 'cache-fallback' else 'saved reading' }}</span>{% else %}not read{% endif %}</dd>
             </dl>
             {% for s in au.signals or [] %}{% if loop.first %}<ul class="mt-3 space-y-2">{% endif %}
-              <li class="text-[12.5px] flex gap-2">{{ severity_chip(s.severity) }}<span>{{ s.title }}{% if s.detail %}<span class="block text-slate-500">{{ s.detail }}</span>{% endif %}</span></li>
+              <li class="text-[12.5px] flex gap-2">{{ severity_chip(s.severity) }}<span>{% set st = signal_text(s) %}{{ st.title }}{% if st.detail %}<span class="block text-slate-500">{{ st.detail }}</span>{% endif %}</span></li>
             {% if loop.last %}</ul>{% endif %}{% endfor %}
             {% if r.fields %}
             <table class="mt-3 w-full text-[12.5px]">

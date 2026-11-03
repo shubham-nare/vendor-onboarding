@@ -128,6 +128,41 @@ async def seed(reset: bool = False, dispose: bool = True) -> dict:
 
 
 
+async def load_payables_sample(dispose: bool = True) -> dict:
+    """Make payables testable on an existing database without a reset:
+    - the sample purchase orders and service confirmations (added once);
+    - the demo vendor login linked to its own ACTIVE registration, when that registration has no login yet
+      (registrations made before vendor accounts existed) and was made with the same contact email.
+    It never links a login to a registration made by another login, and never by PAN alone."""
+    from onboarding.models import Application, Run, VendorLink
+    from onboarding.ap.models import PurchaseOrder
+    eng = engine()
+    async with eng.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    Session = async_sessionmaker(eng, expire_on_commit=False)
+    out = {}
+    async with Session() as s:
+        before = len((await s.execute(select(PurchaseOrder))).scalars().all())
+        await seed_purchase_orders(s, {e.name: e for e in (await s.execute(select(Employee))).scalars()})
+        out["purchase_orders_added"] = len((await s.execute(select(PurchaseOrder))).scalars().all()) - before
+        acct = (await s.execute(select(VendorAccount).where(VendorAccount.email == DEMO_VENDOR["email"]))).scalar_one_or_none()
+        linked = []
+        if acct:
+            taken = {ln.application_id for ln in (await s.execute(select(VendorLink))).scalars() if ln.application_id}
+            for app in (await s.execute(select(Application).where(Application.current_status == "ACTIVE"))).scalars():
+                if app.id in taken:
+                    continue
+                run = (await s.execute(select(Run).where(Run.application_id == app.id).order_by(Run.id.desc()).limit(1))).scalar_one_or_none()
+                if run and str((run.form or {}).get("contact_email", "")).strip().lower() == acct.email.lower():
+                    s.add(VendorLink(account_id=acct.id, application_id=app.id))
+                    linked.append(app.ref)
+        out["registrations_linked_to_demo_vendor_login"] = linked
+        await s.commit()
+    if dispose:
+        await eng.dispose()
+    return out
+
+
 async def ensure_demo_logins(s: AsyncSession) -> None:
     """Give every seeded employee a console login and create the demo vendor account, if missing.
     Called by seed() and at app start (so a fresh deploy can always be logged into)."""

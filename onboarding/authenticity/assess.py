@@ -173,10 +173,10 @@ def assess(raw: bytes, mime: str, read: DocRead | None) -> Authenticity:
     if specimen:
         for s in out:
             if s.code in ("AU-1", "AU-2") and s.severity != "info":
-                s.detail = f"[not applied: known test specimen] {s.detail}"
+                s.detail = f"[not applied: known file] {s.detail}"
                 s.severity = "info"
-        out.append(Signal("SPECIMEN", "info", "Known fictional test document (generated for this demo)",
-                          "Recognised by its SHA-256 fingerprint. It can't legally carry the national emblem, so visual authenticity judgements are not applied."))
+        out.append(Signal("SPECIMEN", "info", "Known file: matched by fingerprint to a registered reference copy",
+                          "This exact file is on record, so visual authenticity checks are not applied. What it says is document evidence only: not independently confirmed."))
 
     worst = max((s.severity for s in out), key=SEVERITY.index, default="")
     if sig.present and sig.intact and sig.valid and worst in ("", "info"):

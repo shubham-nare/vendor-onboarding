@@ -85,6 +85,16 @@ def _mask(name: str, value) -> str:
 templates.env.filters["dt"] = _fmt_dt
 templates.env.filters["sigdate"] = lambda v: (f"{v[6:8]}/{v[4:6]}/{v[:4]} {v[8:10]}:{v[10:12]}" if isinstance(v, str) and len(v) >= 12 and v[:12].isdigit() else v)
 templates.env.filters["mask"] = lambda value, name="": _mask(name, value)
+def signal_text(s) -> dict:
+    """How an authenticity signal reads on screen. Older checks stored development wording for known files."""
+    get = (lambda k: s.get(k, "")) if isinstance(s, dict) else (lambda k: getattr(s, k, ""))
+    title, detail = get("title") or "", get("detail") or ""
+    if get("code") == "SPECIMEN":
+        title, detail = "Known file: matched by fingerprint to a registered reference copy", "This exact file is on record, so visual authenticity checks are not applied. What it says is document evidence only: not independently confirmed."
+    return dict(title=title, detail=detail.replace("[not applied: known test specimen]", "[not applied: known file]"))
+
+
+templates.env.globals.update(signal_text=signal_text)
 templates.env.globals.update(STATUS_LABEL=STATUS_LABEL, LEVEL_NAMES=LEVEL_NAMES, SLOT_TITLE=SLOT_TITLE, SLOT_LABEL=SLOT_LABEL,
                              ROLE_LABEL=ROLE_LABEL, ROLE_HINT=ROLE_HINT, inr=inr, money=money, BUYER=BUYER, BUSINESS_TYPES=V.BUSINESS_TYPES, mask_pan=V.mask_pan, mask_account=V.mask_account,
                              tone=lambda s: sum(map(ord, s or "")) % 6)
