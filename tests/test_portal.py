@@ -155,6 +155,26 @@ def flows(tmp_path_factory):
             out["kesari_360"] = (await staff.get(f"/vendors/{vnd}")).text
             out["vendor_dir_unpaid"] = (await staff.get("/vendors?inv=needs_review")).text
 
+            # bank-account change request: the vendor asks, Finance (only) approves after an independent check
+            out["profile"] = (await v.get("/vendor/profile")).text
+            r = await v.post("/vendor/profile/change", data={"kind": "bank_account", "account": "50200099887766", "ifsc": "HDFC0000123",
+                                                            "holder": "Kesari Facility Services Private Limited", "reason": "Moved our main account"},
+                             files={"proof": ("new_cheque.pdf", b"%PDF-1.4 test cheque", "application/pdf")})
+            out["cr_post"] = r.status_code
+            out["profile_after"] = (await v.get("/vendor/profile")).text
+            staff.cookies.set("actor", "3")
+            out["review_maker"] = (await staff.get("/review")).text
+            staff.cookies.set("actor", "4")
+            cr_id = re.search(r'/change-requests/(\d+)/decide', (await staff.get("/review")).text).group(1)
+            staff.cookies.set("actor", "3")
+            out["cr_maker"] = (await staff.post(f"/change-requests/{cr_id}/decide", data={"decision": "approve", "note": "looks fine"})).status_code
+            staff.cookies.set("actor", "4")
+            out["cr_nonote"] = (await staff.post(f"/change-requests/{cr_id}/decide", data={"decision": "approve", "note": ""})).status_code
+            out["cr_checker"] = (await staff.post(f"/change-requests/{cr_id}/decide", data={"decision": "approve", "note": "Called the number on record; Sneha confirmed"})).status_code
+            out["profile_done"] = (await v.get("/vendor/profile")).text
+            for path in ("/review", "/applications", "/relationships", "/audit?entity=change_request"):
+                out[path] = await staff.get(path)
+
             # who sees what: Priya (1) is named on the bills, Rahul (2) isn't, Arjun (3) reviews, Kavita (4) is Finance
             sha = re.search(r'href="/files/([0-9a-f]+)"', out["newbank_page"]).group(1)
             seen = {}
@@ -278,7 +298,7 @@ def test_requester_sees_only_their_own_and_no_evidence(flows):
 def test_reviewers_see_everything_and_only_finance_sees_the_full_account(flows):
     from onboarding.demo_data import KESARI
     arjun, kavita = flows["seen"][3], flows["seen"][4]
-    acct = KESARI["bank"]["account"]
+    acct = "50200099887766"   # Kesari's account after the approved bank change earlier in the flow
     for who in (arjun, kavita):
         assert who["bill"].status_code == 200 and "R-BILL-10" in who["bill"].text and who["file"] == 200 and who["outbox"] == 200
         assert "Every rule that ran" in who["run"].text
@@ -325,4 +345,15 @@ def test_vendor_360_is_the_supplier_record(flows):
     assert "Investigate before anything is paid" in page          # the blocked duplicate leads the next actions
     assert "Kesari" in flows["vendor_dir"] and "Eligible" in flows["vendor_dir"] or "Blocked" in flows["vendor_dir"]
     assert "Kesari" in flows["vendor_dir_unpaid"]
+
+
+def test_bank_change_needs_finance_and_an_independent_check(flows):
+    assert "Company and tax details" in flows["profile"] and "never inherits" in flows["profile"]
+    assert flows["cr_post"] == 303 and "Being checked" in flows["profile_after"]
+    assert flows["cr_maker"] == 403 and flows["cr_nonote"] == 400 and flows["cr_checker"] == 303
+    assert "decided by the Finance controller" in flows["review_maker"]
+    assert "••••7766" in flows["profile_done"] and "Approved" in flows["profile_done"]
+    for path in ("/review", "/applications", "/relationships", "/audit?entity=change_request"):
+        assert flows[path].status_code == 200, path
+    assert "Called the number on record" in flows["/audit?entity=change_request"].text
 

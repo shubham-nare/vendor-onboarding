@@ -15,7 +15,7 @@
   {% if submitted %}
   <div class="mt-4 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-900 flex flex-wrap items-center justify-between gap-2">
     <span><b>Thank you.</b> We're checking your details now; this page updates when we're done.</span>
-    {% if staff %}<a class="text-xs underline underline-offset-4" href="/runs/{{ submitted }}">Demo: watch the company's live view {{ icon('arrow', 'h-3 w-3 inline') }}</a>{% endif %}
+    {% if staff and DEMO_TOOLS %}<a class="text-xs underline underline-offset-4" href="/runs/{{ submitted }}">Demo: watch the company's live view {{ icon('arrow', 'h-3 w-3 inline') }}</a>{% endif %}
   </div>
   {% endif %}
 
@@ -42,7 +42,7 @@
       <div class="font-medium text-[15px]">I already did work for {{ BUYER.short_name }}</div>
       <p class="text-[13px] text-slate-500 mt-1 flex-1">Register and attach your bill. The person who engaged you confirms the work.</p>
       <a href="/bill" class="mt-3 text-center rounded-md border border-slate-300 bg-white text-sm font-medium px-4 py-2.5 hover:border-slate-500">Register and submit your bill</a>
-      {% if demo_bill %}<a href="/bill?demo={{ demo_bill }}" class="mt-2 text-center text-xs text-indigo-700 underline underline-offset-4">Demo: fill in {{ acct.company_name.split()[0] }}'s details, bill and documents</a>{% endif %}
+      {% if demo_bill and DEMO_TOOLS %}<a href="/bill?demo={{ demo_bill }}" class="mt-2 text-center text-xs text-indigo-700 underline underline-offset-4">Demo: fill in {{ acct.company_name.split()[0] }}'s details, bill and documents</a>{% endif %}
     </div>
   </div>
   <p class="mt-3 text-xs text-slate-500">Neither? You can still <a class="underline" href="/apply">apply without an invitation</a>; it's reviewed by hand.</p>
@@ -88,7 +88,8 @@
   <section class="mt-8">
     <div class="flex flex-wrap items-baseline justify-between gap-3">
       <h2 class="text-2xl">Your bills</h2>
-      <a href="/vendor/bills/new" class="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-md bg-indigo-600 text-white text-sm font-medium px-4 py-2.5 hover:bg-indigo-700 shadow-sm">{{ icon('plus') }} Submit a new bill</a>
+      <div class="flex w-full sm:w-auto gap-2"><a href="/vendor/profile" class="flex-1 sm:flex-none inline-flex items-center justify-center rounded-md border border-slate-300 bg-white text-sm font-medium px-4 py-2.5 hover:bg-slate-50">Company profile</a>
+      <a href="/vendor/bills/new" class="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 rounded-md bg-indigo-600 text-white text-sm font-medium px-4 py-2.5 hover:bg-indigo-700 shadow-sm">{{ icon('plus') }} Submit a new bill</a></div>
     </div>
     {% if vbills %}
     <ul class="mt-3 bg-white rounded-xl border divide-y divide-slate-100">

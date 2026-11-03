@@ -103,7 +103,7 @@
     <li>All demo vendors are fictional. Their documents carry a SPECIMEN banner and are recognised by fingerprint, because a fictional PAN card can't legally carry the national emblem.</li>
     <li>No real person's documents from the internet are used. The genuine signed certificate is a government office's own published document.</li>
     <li>Gemini's free tier allows 15 reads a minute; at most 2 applications run at once. If the AI is down, a saved reading of the same file is used and labelled.</li>
-    <li>Employees and vendors log in with email and password (demo logins are listed on the login pages). In production employees would use the company's single sign-on; the "Acting as" menu exists only so the demo can switch person quickly.</li>
+    <li>Employees and vendors log in with email and password. In production employees would use the company's single sign-on.{% if DEMO_TOOLS %} The development person switcher is on in this environment.{% endif %}</li>
   </ul>
 </section>
 </div>

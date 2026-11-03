@@ -16,7 +16,7 @@
     <button class="w-full rounded-md bg-slate-900 text-white font-medium py-3 hover:bg-slate-800 shadow-sm">Log in</button>
   </form>
 
-  <section class="mt-5 rounded-xl border border-dashed border-slate-300 bg-white/60 p-4 text-sm">
+  {% if DEMO_TOOLS %}<section class="mt-5 rounded-xl border border-dashed border-slate-300 bg-white/60 p-4 text-sm">
     <div class="kicker !text-[10px]">Demo employees · one password for all</div>
     <ul class="mt-2 divide-y divide-slate-100">
       {% for e in employees %}
@@ -28,7 +28,7 @@
       {% endfor %}
     </ul>
     <p class="mt-2 text-xs text-slate-500">After logging in, "Acting as" (bottom of the sidebar; top right on a phone) lets the demo switch person without logging out. In production each person logs in as themselves, through the company's single sign-on.</p>
-  </section>
+  </section>{% endif %}
   <p class="mt-5 text-sm text-center"><a href="/" class="text-slate-500 underline decoration-dotted underline-offset-4">← Back to the start</a></p>
 </div>
 <script>

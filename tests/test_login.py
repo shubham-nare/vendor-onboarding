@@ -118,3 +118,25 @@ def test_a_slow_password_check_does_not_freeze_other_requests(app_client, monkey
     login, waited = _run(go())
     assert login.status_code == 303
     assert waited < 0.4, f"the server froze for {waited:.2f}s during a login"
+
+
+def test_without_demo_tools_the_console_is_the_logged_in_person(app_client, monkeypatch):
+    """Production mode: no person switcher, no demo scenarios or credentials, and the 'actor' cookie is ignored."""
+    from onboarding.config import get_settings
+    from onboarding.seeding import DEMO_COMPANY_EMAIL, DEMO_PASSWORD
+    monkeypatch.setattr(get_settings(), "demo_tools", False)
+
+    async def go():
+        async with await _client(app_client) as c:
+            login_page = (await c.get("/company/login")).text
+            await c.post("/company/login", data={"email": DEMO_COMPANY_EMAIL, "password": DEMO_PASSWORD})
+            c.cookies.set("actor", "4")                       # trying to act as the Finance controller
+            console = (await c.get("/console")).text
+            act = await c.post("/act-as", data={"employee_id": "4"})
+            demo = await c.get("/demo/happy_nilgiri")
+            return login_page, console, act, demo
+    login_page, console, act, demo = _run(go())
+    assert "one password for all" not in login_page.lower() and "Fill" not in login_page
+    assert "Arjun" in console and "Welcome back, Kavita" not in console
+    assert "Switch person" not in console and "Demo ·" not in console and "Try a scenario" not in console
+    assert act.status_code == 404 and demo.status_code == 404

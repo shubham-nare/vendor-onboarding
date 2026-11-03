@@ -28,7 +28,7 @@
   </script>
   <style>
     :root {
-      --page: #F5F6F8; --card: #FFFFFF; --ink: #0F172A; --ink-soft: #64748B; --rule: #E5E7EB;
+      --page: #F6F5F2; --card: #FFFFFF; --ink: #0F172A; --ink-soft: #64748B; --rule: #E5E7EB;
       --accent: #2950D3; --ok: #059669; --warn: #D97706; --review: #7C3AED; --bad: #E11D48;
       --ease-out: cubic-bezier(.2, .8, .2, 1);
     }
@@ -47,7 +47,7 @@
     .kicker { font-family: Geist, sans-serif; font-weight: 600; font-size: 11.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-soft); }
 
     /* cards */
-    main .bg-white.border, main section.bg-white { box-shadow: 0 1px 2px rgba(15,23,42,.04), 0 1px 3px rgba(15,23,42,.05); border-color: var(--rule); border-radius: 12px; }
+    main .bg-white.border, main section.bg-white { box-shadow: none; border-color: var(--rule); border-radius: 10px; }
     main .rounded-xl { border-radius: 12px; }
     main table thead { font-family: Geist, sans-serif; letter-spacing: .04em; text-transform: uppercase; font-size: 11px !important; font-weight: 600; }
     main table thead th { font-weight: 600 !important; }
@@ -58,8 +58,8 @@
     .stamp > span { font-family: "Geist Mono", monospace; font-weight: 500; letter-spacing: .04em !important; opacity: .85; border-left-width: 1.5px !important; }
     .stamp-land { animation: pop .45s var(--ease-out) .15s both; }
     @keyframes pop { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: none; } }
-    .tag { display: inline-flex; align-items: center; gap: .35rem; border: 1px solid color-mix(in srgb, currentColor 24%, transparent); background-color: color-mix(in srgb, currentColor 8%, white);
-      border-radius: 9999px; padding: .1rem .55rem; font-family: Geist, sans-serif; font-weight: 550; font-size: 11.5px; letter-spacing: 0; white-space: nowrap; line-height: 1.5; }
+    .tag { display: inline-flex; align-items: center; gap: .35rem; border: 1px solid color-mix(in srgb, currentColor 22%, transparent); background-color: color-mix(in srgb, currentColor 7%, white);
+      border-radius: 5px; padding: .1rem .55rem; font-family: Geist, sans-serif; font-weight: 550; font-size: 11.5px; letter-spacing: 0; white-space: nowrap; line-height: 1.5; }
     .tag.dot::before { content: ""; width: 6px; height: 6px; border-radius: 9999px; background: currentColor; }
 
     /* proof ladder (assurance A0-A4) */
@@ -104,11 +104,11 @@
     ::selection { background: #DCE7FE; }
 
     /* sidebar */
-    .side-link { display: flex; align-items: center; gap: .7rem; padding: .5rem .7rem; border-radius: 8px; font-size: 14px; font-weight: 500; color: #475569; }
-    .side-link:hover { background: #F1F5F9; color: var(--ink); }
-    .side-link[aria-current] { background: #EEF4FF; color: var(--accent); }
-    .side-link[aria-current] svg { color: var(--accent); }
-    .side-link svg { color: #94A3B8; }
+    .side-link { display: flex; align-items: center; gap: .7rem; padding: .45rem .7rem; border-radius: 6px; font-size: 13.5px; font-weight: 500; color: #CBD5E1; }
+    .side-link:hover { background: rgba(255,255,255,.06); color: #fff; }
+    .side-link[aria-current] { background: rgba(255,255,255,.11); color: #fff; }
+    .side-link[aria-current] svg { color: #93B4FF; }
+    .side-link svg { color: #7F8EA8; }
 
     /* ---- responsive ---- */
     .no-scrollbar { scrollbar-width: none; } .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -151,6 +151,12 @@
     </a>
   {%- endmacro %}
   {% set NAV_ICONS = {
+    '/review': '<path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/>',
+    '/applications': '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/>',
+    '/relationships': '<circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M8.6 7.5l6.8 9M9 6h6"/>',
+    '/invoices': '<path d="M5 3h14v18l-2.3-1.5L14.3 21 12 19.5 9.7 21l-2.4-1.5L5 21z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
+    '/purchase-orders': '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/>',
+    '/audit': '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
     '/console': '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
     '/bills': '<path d="M5 3h14v18l-2.3-1.5L14.3 21 12 19.5 9.7 21l-2.4-1.5L5 21z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
     '/vendors': '<path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16"/><path d="M16 9h2a2 2 0 0 1 2 2v10"/><path d="M3 21h18M8 7h4M8 11h4M8 15h4"/>',
@@ -225,22 +231,24 @@
   <main class="{{ 'max-w-5xl' if vendor_page else 'max-w-6xl' }} mx-auto px-4 sm:px-6 py-6 sm:py-10">
     {{ self.content() }}
   </main>
-  <footer class="{{ 'max-w-5xl' if vendor_page else 'max-w-6xl' }} mx-auto px-4 sm:px-6 pb-10 text-[12px] text-slate-400 text-center">Demo · fictional vendors · government lookups simulated</footer>
+
 
   {% else %}
-  {% set NAV = [('Workspace', [('/console', 'Dashboard'), ('/vendors', 'Vendors'), ('/bills', 'Bills'), ('/invites', 'Invites')]),
-                ('Review tools', [('/outbox', 'Outbox'), ('/check', 'Document check'), ('/supplier-accounts', 'Supplier accounts'), ('/system', 'System')]),
-                ('About', [('/assumptions', 'What is verified')])] %}
+  {% set NAV = [('Workspace', [('/console', 'Dashboard'), ('/review', 'Review queue'), ('/vendors', 'Vendors'), ('/applications', 'Applications'), ('/relationships', 'Relationships'), ('/invites', 'Invites')]),
+                ('Payables', [('/invoices', 'Invoice verification'), ('/purchase-orders', 'Purchase orders')]),
+                ('Records', [('/audit', 'Decisions and audit')]),
+                ('Settings and tools', [('/assumptions', 'Verification sources'), ('/supplier-accounts', 'Supplier accounts'), ('/outbox', 'Outbox'), ('/check', 'Document check'), ('/system', 'System')])] %}
+  {% set REVIEWER_ONLY = ['/relationships', '/purchase-orders', '/audit', '/supplier-accounts', '/outbox', '/check', '/system'] %}
   {% set reviewer = actor and actor.role in ('maker', 'checker') %}
   {# desktop sidebar #}
-  <aside class="hidden lg:flex fixed inset-y-0 left-0 z-30 w-64 flex-col border-r border-slate-200 bg-white">
-    <div class="h-16 px-5 flex items-center border-b border-slate-100">{{ brand(BUYER.legal_name) }}</div>
+  <aside class="hidden lg:flex fixed inset-y-0 left-0 z-30 w-64 flex-col bg-[#0F1B2D] text-slate-200">
+    <div class="h-16 px-5 flex items-center border-b border-white/10 [&_span.text-slate-500]:!text-slate-400">{{ brand(BUYER.legal_name) }}</div>
     <nav class="flex-1 overflow-y-auto px-3 py-4 space-y-5" aria-label="Main">
       {% for group, items in NAV %}
-      {% set shown = items if reviewer or group != 'Review tools' else [] %}
+      {% set shown = items | rejectattr('0', 'in', REVIEWER_ONLY if not reviewer else []) | list %}
       {% if actor and shown %}
       <div>
-        <div class="px-3 mb-1.5 text-[11px] font-semibold uppercase tracking-[.06em] text-slate-400">{{ group }}</div>
+        <div class="px-3 mb-1.5 text-[10.5px] font-semibold uppercase tracking-[.08em] text-slate-500">{{ group }}</div>
         {% for href, label in shown %}
         {% set on = path == href or (href != '/console' and path.startswith(href ~ '/')) or (href == '/console' and path.startswith('/runs/')) %}
         <a href="{{ href }}" class="side-link" {{ 'aria-current=page' if on }}>{{ nav_icon(href) }}{{ label }}</a>
@@ -250,9 +258,13 @@
       {% endfor %}
     </nav>
     {% if actor %}
-    <div class="p-3 border-t border-slate-100 space-y-2">
-      <div class="px-1 text-[11px] font-semibold uppercase tracking-[.06em] text-slate-400">Acting as</div>
+    <div class="p-3 border-t border-white/10 space-y-2">
+      {% if DEMO_TOOLS %}
+      <div class="px-1 text-[10.5px] font-semibold uppercase tracking-[.08em] text-slate-500">Switch person (development)</div>
       {{ persona('left-0 bottom-full mb-2') }}
+      {% else %}
+      <div class="flex items-center gap-2.5 px-1.5 py-1">{{ avatar(actor, 'h-8 w-8 text-[11.5px]') }}<span class="min-w-0 leading-tight"><span class="block text-[13px] font-semibold text-white truncate">{{ actor.name }}</span><span class="block text-[11.5px] text-slate-400 truncate">{{ ROLE_LABEL[actor.role] }}</span></span></div>
+      {% endif %}
       <form method="post" action="/company/logout"><button class="side-link w-full" title="{{ ('Logged in as ' ~ staff.name) if staff else '' }}"><svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>Log out</button></form>
     </div>
     {% endif %}
@@ -263,13 +275,13 @@
       {{ brand(BUYER.legal_name) }}
       {% if actor %}
       <div class="ml-auto flex items-center gap-1.5">
-        {{ persona('right-0 top-full mt-2', compact=true) }}
+        {% if DEMO_TOOLS %}{{ persona('right-0 top-full mt-2', compact=true) }}{% else %}<span class="text-[13px] font-medium text-slate-700">{{ actor.name.split()[0] }}</span>{% endif %}
         <form method="post" action="/company/logout"><button class="whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[13px] font-medium text-slate-600 hover:bg-slate-100">Log out</button></form>
       </div>
       {% endif %}
     </div>
     <nav id="mainnav" class="px-2 sm:px-4 flex flex-nowrap overflow-x-auto no-scrollbar fade-r text-[13.5px]" aria-label="Main">
-      {% for group, items in NAV %}{% for href, label in items if actor and (reviewer or group != 'Review tools') %}
+      {% for group, items in NAV %}{% for href, label in items if actor and (reviewer or href not in REVIEWER_ONLY) %}
         {% set on = path == href or (href != '/console' and path.startswith(href ~ '/')) or (href == '/console' and path.startswith('/runs/')) %}
         <a href="{{ href }}" class="shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-2.5 border-b-2 font-medium {{ 'border-indigo-600 text-indigo-700' if on else 'border-transparent text-slate-500 hover:text-slate-900' }}" {{ 'aria-current=page' if on }}>{{ label }}</a>
       {% endfor %}{% endfor %}
@@ -280,7 +292,7 @@
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 py-6 sm:py-8">
       {% block content %}{% endblock %}
     </main>
-    <footer class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 pb-10 text-[12px] text-slate-400">Demo · fictional vendors · government lookups simulated</footer>
+
   </div>
   {% endif %}
   <script>

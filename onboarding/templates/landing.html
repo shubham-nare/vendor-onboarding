@@ -4,7 +4,6 @@
 {% block content %}
 <div class="reveal max-w-6xl mx-auto">
   <div class="text-center max-w-2xl mx-auto pt-2 sm:pt-6">
-    <div class="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[560px] overflow-hidden" aria-hidden="true"><div class="absolute inset-0 bg-[radial-gradient(55%_65%_at_50%_0%,rgba(41,80,211,.14),transparent_70%)]"></div><div class="absolute inset-0 opacity-60 [background-image:linear-gradient(#E2E8F0_1px,transparent_1px),linear-gradient(90deg,#E2E8F0_1px,transparent_1px)] [background-size:44px_44px] [mask-image:radial-gradient(60%_70%_at_50%_0%,#000,transparent_75%)]"></div></div>
     <span class="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-white px-3 py-1 text-[12.5px] font-medium text-indigo-700 shadow-sm"><span class="h-1.5 w-1.5 rounded-full bg-indigo-600"></span>Vendor onboarding &amp; bills</span>
     <h1 class="hero text-[36px] sm:text-[56px] leading-[1.05] tracking-tight mt-4">Who are <em class="text-indigo-600">you?</em></h1>
     <p class="text-slate-600 text-[15px] mt-3">Suppliers register, prove who they are and send their bills. The company checks every document, every number and every bill before anyone is paid.</p>
@@ -28,7 +27,7 @@
       {% else %}
         <a href="/company/login" class="mt-7 inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 text-white font-medium px-5 py-3 hover:bg-slate-800 shadow-sm">Employee log in {{ icon('arrow') }}</a>
       {% endif %}
-      <p class="mt-3 text-xs text-slate-500">Employees log in with their work email (in production: the company's single sign-on). Demo logins are listed on the login page.</p>
+      <p class="mt-3 text-xs text-slate-500">Employees log in with their work email .</p>
     </section>
 
     <section class="relative bg-white rounded-xl border p-6 sm:p-8 flex flex-col ring-1 ring-indigo-100 hover-lift">
@@ -51,7 +50,7 @@
           <a href="/vendor/login" class="inline-flex items-center justify-center gap-2 rounded-md border border-slate-300 bg-white font-medium px-5 py-3 hover:border-slate-500">Log in</a>
         </div>
       {% endif %}
-      <p class="mt-3 text-xs text-slate-500">All vendors in this demo are fictional. Register with any email (nothing is sent), or use the demo vendor login.</p>
+      <p class="mt-3 text-xs text-slate-500">New suppliers create an account; invited suppliers use the link from their invitation.</p>
     </section>
   </div>
 </div>

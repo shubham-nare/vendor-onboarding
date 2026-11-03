@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% from "_macros.html" import status_badge, tier_chip, empty, icon, monogram %}
+{% block title %}Review queue{% endblock %}
+{% block content %}
+{% set TONE = {'slate': 'text-slate-600', 'indigo': 'text-indigo-700', 'amber': 'text-amber-700', 'emerald': 'text-emerald-700', 'rose': 'text-rose-700'} %}
+<div class="reveal space-y-6">
+  <div>
+    <h1>Review queue</h1>
+    <p class="text-slate-500 text-[14px] mt-1.5 max-w-3xl">What you can act on now, as {{ ROLE_LABEL[actor.role] if actor else 'a guest' }}. Items you're not allowed to decide (segregation of duties) aren't listed.</p>
+  </div>
+
+  {% if full and changes %}
+  <section class="bg-white border rounded-xl overflow-hidden">
+    <div class="px-4 sm:px-5 py-4 border-b border-slate-100"><h2 class="text-[16px]">Change requests <span class="text-slate-400 font-normal">{{ changes | length }}</span></h2><p class="text-[12.5px] text-slate-500 mt-0.5">A new bank account is verified on its own. Approve only after checking it independently, for example by calling a number already on record.</p></div>
+    <ul class="divide-y divide-slate-100">
+      {% for x in changes %}{% set c = x.cr %}
+      <li class="px-4 sm:px-5 py-3.5">
+        <div class="flex flex-wrap items-center gap-2"><span class="tag {{ 'text-rose-700' if c.kind == 'bank_account' else 'text-slate-600' }}">{{ 'bank account change' if c.kind == 'bank_account' else 'contact change' }}</span>
+          {% if x.vendor %}<a class="font-medium hover:text-indigo-700" href="/vendors/{{ x.vendor.vendor_id }}">{{ x.name }}</a>{% else %}<span class="font-medium">{{ x.name }}</span>{% endif %}
+          <span class="text-[12px] text-slate-500">{{ c.created_at | dt }}</span></div>
+        <div class="mt-1 text-[13px] text-slate-700">{% for k, val in c.requested.items() if val %}<span class="mr-3"><span class="text-slate-500">{{ k }}:</span> <span class="mono">{{ val }}</span></span>{% endfor %}{% if c.reason %}<div class="text-slate-500">Reason given: {{ c.reason }}</div>{% endif %}
+          {% if c.document_sha256 %}<a class="text-indigo-700 hover:underline" target="_blank" href="/files/{{ c.document_sha256 }}">{{ c.document_name }}</a>{% endif %}</div>
+        {% if x.mine %}
+        <form method="post" action="/change-requests/{{ c.id }}/decide" class="mt-2 flex flex-wrap gap-2">
+          <input type="hidden" name="back" value="/review">
+          <input name="note" required placeholder="How you checked it (audit trail)" class="flex-1 min-w-[14rem] rounded-md border px-3 py-1.5 text-[13px]">
+          <button name="decision" value="approve" class="rounded-md bg-indigo-600 text-white px-3 py-1.5 text-[13px] font-semibold hover:bg-indigo-700">Approve</button>
+          <button name="decision" value="reject" class="rounded-md border border-rose-300 bg-white text-rose-700 px-3 py-1.5 text-[13px] font-semibold hover:bg-rose-50">Reject</button>
+        </form>
+        {% else %}<p class="mt-1.5 text-[12px] text-slate-500 flex items-center gap-1">{{ icon('lock', 'h-3.5 w-3.5') }} Bank-account changes are decided by the Finance controller.</p>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  <section class="bg-white border rounded-xl overflow-hidden">
+    <div class="px-4 sm:px-5 py-4 border-b border-slate-100"><h2 class="text-[16px]">Invoices <span class="text-slate-400 font-normal">{{ invoices | length }}</span></h2></div>
+    {% if invoices %}
+    <ul class="divide-y divide-slate-100">
+      {% for x in invoices %}{% set b = x.b %}
+      <li><a href="/bills/{{ b.id }}" class="group flex flex-wrap items-center gap-3 px-4 sm:px-5 py-3 hover:bg-slate-50">
+        <span class="flex-1 min-w-[14rem]"><span class="block text-[14px] font-medium group-hover:text-indigo-700">{{ x.next[0] }}</span><span class="block text-[12px] text-slate-500">{{ x.name }} · <span class="mono">{{ b.invoice_number or b.ref }}</span> · {{ inr(money(b.amount)) if b.amount else '' }} · {{ x.next[1] }}</span></span>
+        <span class="tag dot {{ TONE[B.INVOICE_TONE.get(x.status, 'slate')] }}">{{ x.status }}</span>
+      </a></li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="px-5 py-4 text-[13px] text-slate-500">No invoices need you right now.</p>{% endif %}
+  </section>
+
+  <section class="bg-white border rounded-xl overflow-hidden">
+    <div class="px-4 sm:px-5 py-4 border-b border-slate-100"><h2 class="text-[16px]">Vendor decisions <span class="text-slate-400 font-normal">{{ apps_todo | length }}</span></h2></div>
+    {% if apps_todo %}
+    <ul class="divide-y divide-slate-100">
+      {% for t in apps_todo %}
+      <li><a href="{{ t.href }}" class="group flex flex-wrap items-center gap-3 px-4 sm:px-5 py-3 hover:bg-slate-50">
+        {{ monogram(t.name) }}
+        <span class="flex-1 min-w-[14rem]"><span class="block text-[14px] font-medium group-hover:text-indigo-700">{{ t.verb }} · {{ t.name }}</span><span class="block text-[12px] text-slate-500"><span class="mono">{{ t.ref }}</span>{% if t.waiting %} · {{ t.waiting }}{% endif %}</span></span>
+        {% if t.status != 'BILL' %}{{ status_badge(t.status) }}{% endif %}{% if full %}{{ tier_chip(t.risk) }}{% endif %}
+      </a></li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="px-5 py-4 text-[13px] text-slate-500">No vendor decisions need you right now.</p>{% endif %}
+  </section>
+</div>
+{% endblock %}

@@ -57,7 +57,7 @@ app.mount("/static", StaticFiles(directory=__file__.rsplit("main.py", 1)[0] + "s
 
 
 # Company pages (the console) need an employee login; vendor pages have their own login (portal.py).
-COMPANY_AREAS = {"console", "act-as", "invites", "runs", "files", "outbox", "check", "assumptions", "system", "demo", "bills", "vendors", "supplier-accounts", "invoices", "purchase-orders", "audit", "applications", "review", "relationships"}
+COMPANY_AREAS = {"console", "act-as", "invites", "runs", "files", "outbox", "check", "assumptions", "system", "demo", "bills", "vendors", "supplier-accounts", "invoices", "purchase-orders", "audit", "change-requests", "applications", "review", "relationships"}
 
 
 @app.middleware("http")
@@ -156,7 +156,9 @@ async def readyz():
 from onboarding.portal import router as portal_router  # noqa: E402
 from onboarding.web import router  # noqa: E402
 from onboarding.ap.web import router as ap_router  # noqa: E402
+from onboarding.workspace import router as ws_router  # noqa: E402
 
 app.include_router(router)
 app.include_router(ap_router)
+app.include_router(ws_router)
 app.include_router(portal_router)

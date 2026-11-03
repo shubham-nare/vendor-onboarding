@@ -26,7 +26,7 @@
     <p class="text-sm mt-2 rounded-md bg-amber-50 border border-amber-200 p-3 text-amber-900">You're applying without an invitation link. We'll review your application manually; it can't be approved automatically.</p>
   {% endif %}
 
-  {% if demo %}
+  {% if demo and DEMO_TOOLS %}
   <div class="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-900">
     <b>Demo:</b> "{{ demo_title }}". The form is pre-filled. Files left empty below are taken from the scenario:
     <ul class="mt-1 text-xs mono break-all">{% for slot, fn in demo_files.items() %}<li>{{ SLOT_TITLE.get(slot, slot) }} → {{ fn }}</li>{% endfor %}</ul>

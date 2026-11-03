@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% block title %}Company profile{% endblock %}
+{% block content %}
+<div class="reveal max-w-4xl mx-auto space-y-6">
+  <div>
+    <div class="text-[13px] font-medium text-slate-500 flex items-center gap-1.5"><a href="/vendor" class="hover:text-slate-900">My account</a> {{ icon('chev', 'h-3.5 w-3.5 text-slate-400') }} <span>Company profile</span></div>
+    <h1 class="mt-1">{{ f.legal_name or acct.company_name }}</h1>
+    <p class="text-slate-600 text-sm mt-1">{% if active %}Verified supplier · vendor ID <span class="mono">{{ active.vendor.vendor_id }}</span>{% elif reg %}Registration {{ reg.app.ref }} · {{ STATUS_LABEL.get(reg.app.current_status, reg.app.current_status) | lower }}{% else %}Not registered yet{% endif %}</p>
+  </div>
+  {% if sent %}<div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">Your change request was sent. We'll check it before anything changes; until then, payments keep going to your current verified account.</div>{% endif %}
+  {% if not reg %}
+    <section class="bg-white border rounded-xl p-5 text-sm">Register first: your verified company details appear here afterwards. <a class="text-indigo-700 underline" href="/vendor">Go to my account</a>.</section>
+  {% else %}
+  <section class="bg-white border rounded-xl overflow-hidden">
+    <div class="px-5 py-4 border-b border-slate-100"><h2 class="text-[16px]">Company and tax details</h2><p class="text-[12.5px] text-slate-500 mt-0.5">Given once at registration and checked against your documents. You don't re-enter them for each bill.</p></div>
+    <dl class="p-5 text-[14px] grid sm:grid-cols-[11rem_1fr] gap-x-4 gap-y-2">
+      <dt class="text-slate-500">Legal name</dt><dd>{{ f.legal_name }}</dd>
+      <dt class="text-slate-500">Business type</dt><dd>{{ BUSINESS_TYPES.get(f.business_type, f.business_type) }}</dd>
+      <dt class="text-slate-500">GSTIN</dt><dd class="mono">{{ f.gstin }}</dd>
+      <dt class="text-slate-500">PAN</dt><dd class="mono">{{ mask_pan(f.pan) }}</dd>
+      <dt class="text-slate-500">Address</dt><dd>{{ f.address }}, {{ f.city }}, {{ f.state }} {{ f.pin }}</dd>
+      <dt class="text-slate-500">Contact</dt><dd>{{ f.contact_name }} · {{ f.contact_email }} · {{ f.contact_phone }}</dd>
+      <dt class="text-slate-500">Bank account</dt><dd><span class="mono">{{ mask_account(active.vendor.account if active else f.bank_account) }}</span> · {{ active.vendor.ifsc if active else f.ifsc }}{% if active %} <span class="tag dot text-emerald-700 ml-1">verified</span>{% endif %}<div class="text-[12px] text-slate-500">Bills are paid only into this account.</div></dd>
+    </dl>
+  </section>
+
+  <section class="bg-white border rounded-xl overflow-hidden">
+    <div class="px-5 py-4 border-b border-slate-100"><h2 class="text-[16px]">Documents you gave us</h2></div>
+    <ul class="divide-y divide-slate-100 text-[14px]">
+      {% for d in docs %}<li class="px-5 py-2.5 flex flex-wrap justify-between gap-2"><span>{{ SLOT_TITLE.get(d.slot, d.slot) }}</span><span class="text-slate-500 break-all">{{ d.filename }} · {{ run.started_at | dt }}</span></li>{% else %}<li class="px-5 py-3 text-slate-500">None.</li>{% endfor %}
+    </ul>
+  </section>
+
+  {% if active %}
+  <section class="bg-white border rounded-xl overflow-hidden" id="changes">
+    <div class="px-5 py-4 border-b border-slate-100"><h2 class="text-[16px]">Request a change</h2><p class="text-[12.5px] text-slate-500 mt-0.5">Material changes are checked again before they take effect. A new bank account is verified on its own: it never inherits your current account's status, and payments continue to your current account until it is approved.</p></div>
+    <div class="grid md:grid-cols-2">
+      <form method="post" action="/vendor/profile/change" enctype="multipart/form-data" class="p-5 space-y-3 text-sm border-b md:border-b-0 md:border-r border-slate-100">
+        <input type="hidden" name="kind" value="bank_account">
+        <div class="font-semibold">New bank account</div>
+        <label class="block">Account number<input name="account" required inputmode="numeric" class="mt-1 w-full rounded-md border px-3 py-2 mono"></label>
+        <label class="block">IFSC<input name="ifsc" required maxlength="11" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase"></label>
+        <label class="block">Account holder name<input name="holder" required class="mt-1 w-full rounded-md border px-3 py-2"></label>
+        <label class="block">Cancelled cheque or bank letter<input type="file" name="proof" required accept=".pdf,.jpg,.jpeg,.png" class="mt-1 block text-xs"></label>
+        <label class="block">Why are you changing it?<input name="reason" class="mt-1 w-full rounded-md border px-3 py-2"></label>
+        <button class="rounded-md bg-indigo-600 text-white font-semibold px-4 py-2 hover:bg-indigo-700">Request bank change</button>
+      </form>
+      <form method="post" action="/vendor/profile/change" class="p-5 space-y-3 text-sm">
+        <input type="hidden" name="kind" value="contact">
+        <div class="font-semibold">Contact details</div>
+        <label class="block">Email<input name="email" type="email" class="mt-1 w-full rounded-md border px-3 py-2"></label>
+        <label class="block">Phone<input name="phone" class="mt-1 w-full rounded-md border px-3 py-2"></label>
+        <label class="block">Reason<input name="reason" class="mt-1 w-full rounded-md border px-3 py-2"></label>
+        <button class="rounded-md border border-slate-300 bg-white font-semibold px-4 py-2 hover:bg-slate-50">Request contact change</button>
+      </form>
+    </div>
+    {% if changes %}
+    <ul class="border-t border-slate-100 divide-y divide-slate-100 text-[13.5px]">
+      {% for c in changes %}<li class="px-5 py-2.5 flex flex-wrap justify-between gap-2"><span>{{ 'Bank account' if c.kind == 'bank_account' else 'Contact' }} change · {{ c.requested.get('account') or c.requested.get('email') or c.requested.get('phone') }} · {{ c.created_at | dt }}</span>
+        <span class="tag dot {{ {'submitted': 'text-indigo-700', 'approved': 'text-emerald-700', 'rejected': 'text-rose-700'}[c.status] }}">{{ {'submitted': 'Being checked', 'approved': 'Approved', 'rejected': 'Not approved'}[c.status] }}</span></li>{% endfor %}
+    </ul>
+    {% endif %}
+  </section>
+  {% endif %}
+  {% endif %}
+</div>
+{% endblock %}

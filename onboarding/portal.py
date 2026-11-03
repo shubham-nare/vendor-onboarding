@@ -24,7 +24,7 @@ from sqlalchemy import select, func
 from onboarding import access, auth
 from onboarding import bills as B
 from onboarding.demo_data import KESARI, SCENARIOS
-from onboarding.models import (Application, Bill, Employee, Fact, Invite, Message, Run, StaffLogin, StoredFile, VendorAccount, VendorBill,
+from onboarding.models import (Application, Bill, Document, Employee, Fact, Invite, Message, Run, StaffLogin, StoredFile, VendorAccount, VendorBill,
                                VendorLink, VendorMaster, now)
 from onboarding.seeding import DEMO_COMPANY_EMAIL, DEMO_PASSWORD, DEMO_VENDOR
 from onboarding.pipeline import read_sessions, sessions
@@ -488,3 +488,72 @@ async def vendors_list(request: Request):
         rows = [dict(acct=a, **pf) for a, pf in zip(accts, pfs)]
         actor = await _actor(request, s)
         return await render(request, s, "vendors.html", rows=rows, B=B, full=access.full_view(actor))
+
+
+# --- company profile: one-time onboarding, controlled changes ------------------------------------------------------
+@router.get("/vendor/profile", response_class=HTMLResponse)
+async def vendor_profile_page(request: Request, sent: str = ""):
+    """The vendor's verified company details, documents and change requests. Material changes are re-verified."""
+    from onboarding.ap.models import ChangeRequest
+    async with sessions()() as s:
+        acct = await vendor_account(request, s)
+        if not acct:
+            return RedirectResponse("/vendor/login?next=/vendor/profile", status_code=303)
+        pf = await _portfolio(s, acct)
+        reg = pf["active"] or (pf["regs"][0] if pf["regs"] else None)
+        run = reg["run"] if reg else None
+        docs = (await s.execute(select(Document).where(Document.run_id == run.id).order_by(Document.id))).scalars().all() if run else []
+        changes = (await s.execute(select(ChangeRequest).where(ChangeRequest.account_id == acct.id).order_by(ChangeRequest.id.desc()))).scalars().all()
+        return await render(request, s, "vendor_profile.html", acct=acct, reg=reg, run=run, f=(run.form if run else {}), docs=docs, changes=changes,
+                            sent=sent, active=pf["active"])
+
+
+@router.post("/vendor/profile/change")
+async def vendor_change_request(request: Request):
+    from onboarding.ap.audit import record
+    from onboarding.ap.models import ChangeRequest
+    from onboarding.intel.crypto import encrypt, mask
+    from onboarding.intel.models import Vendor
+    import json as _json
+    data = await request.form()
+    kind = str(data.get("kind") or "")
+    if kind not in ("bank_account", "contact"):
+        raise HTTPException(400, "Unknown change.")
+    async with sessions()() as s:
+        acct = await vendor_account(request, s)
+        if not acct:
+            return RedirectResponse("/vendor/login", status_code=303)
+        pf = await _portfolio(s, acct)
+        if not pf["active"]:
+            raise HTTPException(409, "Changes can be requested once your registration is approved and active. Until then, update your registration.")
+        vm = pf["active"]["vendor"]
+        reason = str(data.get("reason") or "").strip()
+        cr = ChangeRequest(account_id=acct.id, erp_vendor_id=vm.vendor_id, kind=kind, reason=reason,
+                           vendor_pk=(await s.execute(select(Vendor.id).where(Vendor.erp_vendor_id == vm.vendor_id))).scalar())
+        if kind == "bank_account":
+            account = re.sub(r"\D", "", str(data.get("account") or ""))
+            ifsc = str(data.get("ifsc") or "").strip().upper()
+            holder = str(data.get("holder") or "").strip()
+            if len(account) < 6 or len(ifsc) != 11 or not holder:
+                raise HTTPException(400, "Please give the new account number, its 11-character IFSC and the account holder's name.")
+            up = data.get("proof")
+            if up is None or not getattr(up, "filename", ""):
+                raise HTTPException(400, "Please attach a cancelled cheque or a bank letter for the new account.")
+            raw = await up.read()
+            if len(raw) > MAX_BYTES:
+                raise HTTPException(413, "The file is larger than 10 MB.")
+            cr.document_sha256, cr.document_name = await _store(s, up.filename, raw), up.filename
+            cr.requested = {"account": mask("BANK_ACCOUNT", account), "ifsc": ifsc, "holder": holder}
+            cr.requested_enc = encrypt(_json.dumps({"account": account, "ifsc": ifsc, "holder": holder}))
+        else:
+            email, phone = str(data.get("email") or "").strip(), str(data.get("phone") or "").strip()
+            if not email and not phone:
+                raise HTTPException(400, "Please give the new email or phone.")
+            cr.requested = {"email": email, "phone": phone}
+        s.add(cr)
+        await s.flush()
+        record(s, entity="change_request", entity_id=cr.id, entity_label=f"{'Bank account' if kind == 'bank_account' else 'Contact'} change · {vm.vendor_id}",
+               action="requested", actor_label=f"{acct.contact_name or acct.email} (vendor)", vendor_pk=cr.vendor_pk, reason=reason, detail=cr.requested)
+        await s.commit()
+    return RedirectResponse("/vendor/profile?sent=1", status_code=303)
+

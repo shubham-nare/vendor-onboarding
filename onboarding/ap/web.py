@@ -238,3 +238,47 @@ async def audit_log(request: Request, entity: str = ""):
                              reason=a.comment, override=a.action in ("override_reject", "review_approve"), vendor=None, href=f"/runs/{a.run_id}"))
         rows.sort(key=lambda x: x["at"].replace(tzinfo=None) if x["at"] else x["at"], reverse=True)
         return await render(request, s, "ap_audit.html", rows=rows, entity=entity, labels=B.BILL_ACTION_LABEL)
+
+
+@router.post("/change-requests/{cr_id}/decide")
+async def decide_change(request: Request, cr_id: int):
+    """A bank-account change needs its own review by Finance (not the vendor's word, not the old account's status):
+    approve only after confirming it independently, e.g. a call to a number already on record."""
+    import json as _json
+    from onboarding.ap.models import ChangeRequest
+    from onboarding.intel.crypto import decrypt
+    from onboarding.intel.project import _identifier
+    form = await request.form()
+    decision, note = str(form.get("decision") or ""), str(form.get("note") or "").strip()
+    async with sessions()() as s:
+        actor = await _actor(request, s)
+        cr = await s.get(ChangeRequest, cr_id)
+        if not cr:
+            raise HTTPException(404, "No such change request")
+        if not actor or (cr.kind == "bank_account" and actor.role != "checker") or (cr.kind != "bank_account" and not access.full_view(actor)):
+            raise HTTPException(403, "Bank-account changes are reviewed by the Finance controller; other changes by Procurement or Finance.")
+        if cr.status != "submitted":
+            raise HTTPException(409, "This request has already been decided.")
+        if decision not in ("approve", "reject") or len(note) < 5:
+            raise HTTPException(400, "Choose approve or reject and say how you checked it (it goes on the audit trail).")
+        vm = (await s.execute(select(VendorMaster).where(VendorMaster.vendor_id == cr.erp_vendor_id))).scalar_one_or_none()
+        if decision == "approve" and vm is not None:
+            if cr.kind == "bank_account":
+                new = _json.loads(decrypt(cr.requested_enc))
+                old = vm.account
+                vm.account, vm.ifsc = new["account"], new["ifsc"]
+                vendor = await s.get(Vendor, cr.vendor_pk) if cr.vendor_pk else None
+                if vendor is not None:
+                    from onboarding.intel.models import VendorIdentifier
+                    await _identifier(s, vendor, "BANK_ACCOUNT", new["account"])
+                    await _identifier(s, vendor, "IFSC", new["ifsc"])
+                    for idf in (await s.execute(select(VendorIdentifier).where(VendorIdentifier.vendor_pk == vendor.id, VendorIdentifier.kind == "BANK_ACCOUNT",
+                                                                              VendorIdentifier.lookup_key == lookup_key("BANK_ACCOUNT", old)))).scalars():
+                        idf.status = "previous"
+        cr.status, cr.reviewed_by, cr.reviewed_at, cr.review_note = ("approved" if decision == "approve" else "rejected"), actor.id, now(), note
+        record(s, entity="change_request", entity_id=cr.id, entity_label=f"{'Bank account' if cr.kind == 'bank_account' else 'Contact'} change · {cr.erp_vendor_id}",
+               action=f"{decision}d", actor=actor, actor_label=f"{actor.name} ({ROLE_LABEL.get(actor.role, actor.role)})", vendor_pk=cr.vendor_pk, reason=note,
+               detail=cr.requested)
+        await s.commit()
+    return RedirectResponse(str(form.get("back") or "/review"), status_code=303)
+

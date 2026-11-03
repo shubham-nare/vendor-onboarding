@@ -6,7 +6,7 @@
   <h1 class="text-[30px] sm:text-[38px] leading-tight mt-1">Submit a bill</h1>
   <p class="text-slate-600 text-sm mt-2">Vendor <span class="mono">{{ vm.vendor_id }}</span> · address the invoice to <b>{{ BUYER.legal_name }}</b>, GSTIN <span class="mono">{{ BUYER.gstin }}</span>.</p>
 
-  {% if demo_bills %}
+  {% if demo_bills and DEMO_TOOLS %}
   <div class="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-900">
     <b>Demo:</b> fill in a sample bill for this fictional vendor:
     <div class="mt-2 flex flex-wrap gap-2">

@@ -102,7 +102,10 @@ async def staff_member(request: Request, s) -> Employee | None:
 
 
 async def _actor(request: Request, s) -> Employee | None:
-    """Who the console is acting as: the person picked in the demo switcher, else whoever logged in."""
+    """Who is using the console: the logged-in employee. Only with DEMO_TOOLS on (development) can the person
+    switcher act as someone else."""
+    if not get_settings().demo_tools:
+        return await staff_member(request, s)
     emps = await _employees(s)
     if not emps:
         return None
@@ -118,7 +121,7 @@ async def _actor(request: Request, s) -> Employee | None:
 
 async def render(request: Request, s, name: str, **ctx) -> HTMLResponse:
     ctx.update(request=request, actor=await _actor(request, s), employees=await _employees(s), path=request.url.path,
-               staff=await staff_member(request, s))
+               staff=await staff_member(request, s), DEMO_TOOLS=get_settings().demo_tools)
     if "vendor_account" not in ctx:
         ctx["vendor_account"] = await vendor_account(request, s)
     return templates.TemplateResponse(request, name, ctx)
@@ -355,6 +358,8 @@ def _waiting(dt) -> str:
 
 @router.post("/act-as")
 async def act_as(request: Request, employee_id: int = Form(...)):
+    if not get_settings().demo_tools:
+        raise HTTPException(404, "Not found")
     back = request.headers.get("referer") or "/console"
     resp = RedirectResponse(back, status_code=303)
     resp.set_cookie("actor", str(employee_id), max_age=60 * 60 * 24 * 30, samesite="lax")
@@ -397,6 +402,8 @@ async def create_invite(request: Request, company_name: str = Form(...), contact
 @router.get("/demo/{key}")
 async def demo_start(key: str):
     """Start a demo scenario as a vendor would: a fresh invite (cloned from the seeded one), then the form."""
+    if not get_settings().demo_tools:
+        raise HTTPException(404, "Not found")
     cat = demo_catalog()
     if key not in cat:
         raise HTTPException(404, "Unknown scenario")

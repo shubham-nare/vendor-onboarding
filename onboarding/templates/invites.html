@@ -22,7 +22,7 @@
   <section class="bg-white rounded-xl border p-4 sm:p-5 self-start">
     <h2 class="text-xl">Invite a vendor</h2>
     {% if actor and actor.role != 'sponsor' %}
-      <p class="mt-2 text-sm rounded-md bg-amber-50 border border-amber-200 p-3 text-amber-900">You're acting as <b>{{ actor.name }}</b> ({{ ROLE_LABEL[actor.role] }}). Only a requester sends invites: switch "Acting as" (bottom of the sidebar) to Priya Nair or Rahul Desai.</p>
+      <p class="mt-2 text-sm rounded-md bg-amber-50 border border-amber-200 p-3 text-amber-900">You're signed in as <b>{{ actor.name }}</b> ({{ ROLE_LABEL[actor.role] }}). Invites are sent by the employee who needs the vendor (a requester){{ ': switch person to Priya Nair or Rahul Desai.' if DEMO_TOOLS else ', so their approver stays independent.' }}</p>
     {% endif %}
     <form method="post" action="/invites" class="mt-4 space-y-3 text-sm">
       <label class="block">Vendor company name<input name="company_name" required class="mt-1 w-full rounded-md border px-3 py-2" placeholder="As registered"></label>
