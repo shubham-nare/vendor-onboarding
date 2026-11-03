@@ -158,7 +158,7 @@
           <span class="ml-auto">{{ level_chip(c.level) }}</span>
         </div>
         <div class="mt-1.5 pl-0 sm:pl-[7.75rem] flex flex-wrap items-center gap-2 text-[12px] text-slate-500">
-          {{ basis(c.basis) }} <span>{{ c.source_label }}</span> · <span>check #{{ c.run_id }}</span> · {{ evref(c.evidence_item_id) }}
+          {{ basis(c.basis) }} <span>{{ c.source_label }}</span> · <span>{{ ('check #' ~ c.run_id) if c.run_id else 'change request' }}</span> · {{ evref(c.evidence_item_id) }}
           {% if c.note %}<span class="w-full text-amber-700">{{ c.note }}</span>{% endif %}
           {% if c.valid_until %}<span class="w-full">Re-check due {{ c.valid_until.strftime('%d %b %Y') }}</span>{% endif %}
         </div>
@@ -167,7 +167,7 @@
         <details class="mt-1.5 sm:pl-[7.75rem] group">
           <summary class="text-[12px] text-indigo-700">{{ 'Changed value · ' if f.changed }}{{ f.history | length }} earlier observation{{ 's' if f.history | length != 1 }}</summary>
           <ol class="mt-1.5 space-y-1 border-l-2 border-slate-200 pl-3">
-            {% for o in f.history %}<li class="text-[12px] text-slate-600"><span class="mono">{{ o.value_display }}</span> · {{ o.level }} · {{ V360.BASIS_LABEL.get(o.basis, o.basis) }} · check #{{ o.run_id }} · {{ o.observed_at | dt }}</li>{% endfor %}
+            {% for o in f.history %}<li class="text-[12px] text-slate-600"><span class="mono">{{ o.value_display }}</span> · {{ o.level }} · {{ V360.BASIS_LABEL.get(o.basis, o.basis) }} · {{ ('check #' ~ o.run_id) if o.run_id else 'change request' }} · {{ o.observed_at | dt }}</li>{% endfor %}
           </ol>
         </details>
         {% endif %}

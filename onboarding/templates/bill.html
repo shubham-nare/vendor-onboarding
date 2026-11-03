@@ -51,7 +51,7 @@
       {# ---- why / what to do ---- #}
       <section class="bg-white rounded-xl border overflow-hidden">
         <div class="px-4 sm:px-6 py-4 border-b border-slate-100">
-          <h2 class="text-[16px]">{{ 'What needs attention' if failing or b.status == 'blocked' else 'Checks' }}</h2>
+          <h2 class="text-[16px]">{{ ('Checks that did not pass' if b.status in ('approved', 'rejected') else 'What needs attention') if failing or b.status == 'blocked' else 'Checks' }}</h2>
         </div>
         <div class="p-4 sm:p-6 space-y-3">
           {% if b.status == 'blocked' and case and case.blocked_reason %}
@@ -210,7 +210,7 @@
         <h2 class="text-[16px]">Payment</h2>
         <dl class="mt-3 text-[13px] grid grid-cols-[8.5rem_1fr] gap-x-2 gap-y-1.5">
           <dt class="text-slate-500">Status</dt><dd class="font-medium">{{ {'none': 'Not approved', 'unpaid': 'Approved, not yet released', 'on_hold': 'On hold', 'in_progress': 'Released, awaiting bank confirmation', 'paid': 'Paid'}.get(case.payment_status if case else 'none') }}</dd>
-          <dt class="text-slate-500">Pays into</dt><dd class="mono">{{ vm.account if full_bank else mask_account(vm.account) }} · {{ vm.ifsc }}<div class="font-sans text-[11.5px] text-slate-500">the account verified at onboarding{{ ' · full number: Finance only' if full_bank }}</div></dd>
+          <dt class="text-slate-500">Pays into</dt><dd class="mono">{{ vm.account if full_bank else mask_account(vm.account) }} · {{ vm.ifsc }}<div class="font-sans text-[11.5px] text-slate-500">the vendor's current verified account{{ ' · full number: Finance only' if full_bank }}</div></dd>
           {% if case and case.approved_by %}<dt class="text-slate-500">Approved by</dt><dd>{{ emps[case.approved_by].name if case.approved_by in emps else '—' }} · {{ case.approved_at | dt }}</dd>{% endif %}
           {% if case and case.released_by %}<dt class="text-slate-500">Released by</dt><dd>{{ emps[case.released_by].name if case.released_by in emps else '—' }} · {{ case.released_at | dt }}</dd>{% endif %}
           {% if case and case.payment_reference %}<dt class="text-slate-500">Reference</dt><dd class="mono">{{ case.payment_reference }}</dd>{% endif %}

@@ -272,9 +272,23 @@ async def decide_change(request: Request, cr_id: int):
                     from onboarding.intel.models import VendorIdentifier
                     await _identifier(s, vendor, "BANK_ACCOUNT", new["account"])
                     await _identifier(s, vendor, "IFSC", new["ifsc"])
-                    for idf in (await s.execute(select(VendorIdentifier).where(VendorIdentifier.vendor_pk == vendor.id, VendorIdentifier.kind == "BANK_ACCOUNT",
-                                                                              VendorIdentifier.lookup_key == lookup_key("BANK_ACCOUNT", old)))).scalars():
-                        idf.status = "previous"
+                    old_ifsc_key = lookup_key("IFSC", (await s.execute(select(VendorIdentifier.display).where(VendorIdentifier.vendor_pk == vendor.id,
+                                                   VendorIdentifier.kind == "IFSC", VendorIdentifier.status == "current"))).scalars().first() or "")
+                    for idf in (await s.execute(select(VendorIdentifier).where(VendorIdentifier.vendor_pk == vendor.id))).scalars():
+                        if (idf.kind == "BANK_ACCOUNT" and idf.lookup_key == lookup_key("BANK_ACCOUNT", old)) or                            (idf.kind == "IFSC" and idf.lookup_key == old_ifsc_key and old_ifsc_key != lookup_key("IFSC", new["ifsc"])):
+                            idf.status = "previous"
+                    # the new account starts from its own evidence: not the old account's level, never A4 without a real source
+                    from onboarding.intel.models import EvidenceItem, FactObservation
+                    ev = EvidenceItem(vendor_pk=vendor.id, kind="human_decision", ref=f"change:{cr.id}", basis="human", source_label=f"Bank change approved by {actor.name}",
+                                      payload={"note": note, "document": cr.document_name}, content_sha256=cr.document_sha256)
+                    s.add(ev)
+                    await s.flush()
+                    prev = (await s.execute(select(FactObservation).where(FactObservation.vendor_pk == vendor.id, FactObservation.fact == "BANK_ACCOUNT")
+                                            .order_by(FactObservation.id.desc()))).scalars().first()
+                    s.add(FactObservation(vendor_pk=vendor.id, fact="BANK_ACCOUNT", value_display=mask("BANK_ACCOUNT", new["account"]), value_key=lookup_key("BANK_ACCOUNT", new["account"]),
+                                          level="A1", basis="human", source_label="Change request: bank letter or cheque, reviewer's callback",
+                                          note=f"Changed on request {cr.id}; checked by {actor.name}: {note}. Not confirmed at source.", evidence_item_id=ev.id,
+                                          run_id=None, supersedes_id=prev.id if prev else None))
         cr.status, cr.reviewed_by, cr.reviewed_at, cr.review_note = ("approved" if decision == "approve" else "rejected"), actor.id, now(), note
         record(s, entity="change_request", entity_id=cr.id, entity_label=f"{'Bank account' if cr.kind == 'bank_account' else 'Contact'} change · {cr.erp_vendor_id}",
                action=f"{decision}d", actor=actor, actor_label=f"{actor.name} ({ROLE_LABEL.get(actor.role, actor.role)})", vendor_pk=cr.vendor_pk, reason=note,

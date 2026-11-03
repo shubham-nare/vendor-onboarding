@@ -9,6 +9,7 @@ and identity conflicts are "actionable"; shared addresses, emails and phones are
 from __future__ import annotations
 
 import math
+from datetime import datetime
 from collections import defaultdict
 
 FACT_ORDER = ["LEGAL_NAME", "PAN", "GSTIN", "BANK_ACCOUNT", "BANK_BRANCH", "MSME"]
@@ -41,7 +42,7 @@ def fact_history(observations) -> list[dict]:
     for fact in FACT_ORDER + sorted(set(by) - set(FACT_ORDER)):
         if fact not in by:
             continue
-        obs = sorted(by[fact], key=lambda o: (o.run_id or 0, o.id), reverse=True)
+        obs = sorted(by[fact], key=lambda o: (o.observed_at.replace(tzinfo=None) if o.observed_at else datetime.min, o.id), reverse=True)
         cur = obs[0]
         changed = len({o.value_key for o in obs if o.value_key}) > 1
         out.append(dict(fact=fact, label=FACT_LABEL.get(fact, fact), current=cur, history=obs[1:], changed=changed))

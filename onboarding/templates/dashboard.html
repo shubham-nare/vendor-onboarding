@@ -23,22 +23,21 @@
 </div>
 
 {# key numbers #}
-<div class="grid grid-cols-2 md:grid-cols-3 2xl:grid-cols-6 gap-3 sm:gap-4">
-  {% for label, value, ic, chip, foot, filt in [
-      ('Applications', stats.applications, 'building', 'bg-indigo-50 text-indigo-600', stats.runs ~ ' checking runs', 'all'),
-      ('Active / approved', counts.ACTIVE + counts.APPROVED, 'check', 'bg-emerald-50 text-emerald-600', stats.first_pass ~ ' approved first time', 'ok'),
-      ('Waiting on vendor', counts.PENDING_VENDOR, 'clock', 'bg-amber-50 text-amber-600', 'Vendor has to fix something', 'PENDING_VENDOR'),
-      ('Internal review', counts.PENDING_REVIEW, 'users', 'bg-violet-50 text-violet-600', 'A person decides', 'PENDING_REVIEW'),
-      ('Rejected', counts.REJECTED, 'x', 'bg-rose-50 text-rose-600', 'Confirmed by a person', 'REJECTED'),
-      ('Fraud-class flags', stats.fraud, 'flag', 'bg-rose-50 text-rose-600', 'Borrowed IDs, fakes, edits', 'fraud') if full else ('Waiting for your OK', to_confirm, 'flag', 'bg-amber-50 text-amber-600', 'Work only you can confirm', '')] %}
-  <{{ 'button type=button data-filter=' ~ filt if filt else 'div' }} class="kpi text-left bg-white border rounded-xl p-4 sm:p-5 {{ 'hover:border-indigo-300 hover:shadow-md transition aria-pressed:border-indigo-500 aria-pressed:ring-2 aria-pressed:ring-indigo-100' if filt }}" {{ 'aria-pressed=true' if filt == 'all' }} {% if filt %}title="Show these in Recent checks"{% endif %}>
-    <div class="flex items-center justify-between gap-2">
-      <span class="text-[13px] font-medium text-slate-500 truncate">{{ label }}</span>
-      <span class="h-8 w-8 shrink-0 rounded-lg grid place-items-center {{ chip }}">{{ icon(ic) }}</span>
-    </div>
-    <div class="mt-2 text-[30px] sm:text-[34px] font-semibold tracking-tight leading-none tabular-nums">{{ value }}</div>
-    <div class="mt-2 text-[12px] text-slate-400 truncate">{{ foot }}</div>
-  </{{ 'button' if filt else 'div' }}>
+<div class="grid grid-cols-2 md:grid-cols-3 2xl:grid-cols-6 gap-3">
+  {% for label, value, note, href, tone in [
+      ('Reviews awaiting you', work.reviews, 'vendor decisions you can take', '/review', 'indigo' if work.reviews else 'slate'),
+      ('Waiting on vendors', work.waiting, 'applications and invoices', '/applications?status=PENDING_VENDOR', 'slate'),
+      ('High-risk relationships', work.high_risk, 'open fraud-class flags', '/relationships', 'rose' if work.high_risk else 'slate'),
+      ('Invoices needing review', work.inv_review, (inr(work.inv_review_amt) if work.inv_review else 'blocked or with discrepancies'), '/invoices?status=Needs internal review', 'amber' if work.inv_review else 'slate'),
+      ('Payment holds', work.holds, (inr(work.holds_amt) if work.holds else 'none'), '/invoices?status=Payment on hold', 'amber' if work.holds else 'slate'),
+      ('Approved, not yet paid', work.unpaid, (inr(work.unpaid_amt) if work.unpaid else 'nothing to release'), '/invoices?status=Approved for payment', 'indigo' if work.unpaid else 'slate')] %}
+  {% if full or loop.index <= 2 %}
+  <a href="{{ href }}" class="bg-white border rounded-xl px-4 py-3.5 hover:border-indigo-300 transition">
+    <div class="text-[12.5px] font-medium text-slate-500">{{ label }}</div>
+    <div class="mt-1 text-[28px] font-semibold tracking-tight leading-none tabular-nums {{ {'indigo': 'text-indigo-700', 'rose': 'text-rose-700', 'amber': 'text-amber-700', 'slate': 'text-slate-800'}[tone] }}">{{ value }}</div>
+    <div class="mt-1.5 text-[12px] text-slate-500 truncate">{{ note }}</div>
+  </a>
+  {% endif %}
   {% endfor %}
 </div>
 
@@ -110,6 +109,15 @@
     </div>
   </section>
 </div>
+
+{% if full and work.recent %}
+<section class="bg-white border rounded-xl overflow-hidden">
+  <div class="px-4 sm:px-5 py-4 border-b border-slate-100 flex items-center justify-between"><h2 class="text-[16px]">Recent decisions</h2><a href="/audit" class="text-[12.5px] font-medium text-indigo-700 hover:underline">Decisions and audit</a></div>
+  <ul class="divide-y divide-slate-100 text-[13px]">
+    {% for d in work.recent %}<li class="px-4 sm:px-5 py-2.5 flex flex-wrap items-baseline gap-x-3 gap-y-0.5"><span class="text-[12px] text-slate-500 w-28 shrink-0">{{ d.at | dt }}</span><span class="font-medium text-slate-800">{{ d.what }}</span>{% if d.href %}<a class="text-indigo-700 hover:underline mono text-[12px]" href="{{ d.href }}">{{ d.label }}</a>{% else %}<span class="mono text-[12px]">{{ d.label }}</span>{% endif %}<span class="text-slate-500">· {{ d.who }}</span>{% if d.override %}<span class="tag text-amber-700">override</span>{% endif %}</li>{% endfor %}
+  </ul>
+</section>
+{% endif %}
 
 {% if full and alerts %}
 <section class="bg-white border rounded-xl overflow-hidden">

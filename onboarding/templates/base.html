@@ -174,7 +174,7 @@
   {%- endmacro %}
   {% macro persona(menu_cls, compact=false) -%}
     <details class="persona relative min-w-0 {{ '' if compact else 'w-full' }}">
-      <summary class="flex items-center gap-2.5 rounded-lg {{ 'p-1 hover:bg-slate-100' if compact else 'w-full border border-slate-200 bg-white hover:bg-slate-50 p-2' }} select-none" aria-label="Acting as {{ actor.name }}, {{ ROLE_LABEL[actor.role] }}. Change person">
+      <summary class="flex items-center gap-2.5 rounded-lg text-slate-900 {{ 'p-1 hover:bg-slate-100' if compact else 'w-full border border-slate-200 bg-white hover:bg-slate-50 p-2' }} select-none" aria-label="Acting as {{ actor.name }}, {{ ROLE_LABEL[actor.role] }}. Change person">
         {{ avatar(actor, 'h-8 w-8 text-[11.5px]' if compact else 'h-9 w-9 text-[12px]') }}
         <span class="leading-tight text-left min-w-0 flex-1 {{ 'hidden sm:block' if compact }}">
           <span class="block text-[13.5px] font-semibold truncate">{{ actor.name }}</span>

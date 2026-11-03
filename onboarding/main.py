@@ -32,6 +32,14 @@ async def lifespan(_app: FastAPI):
         async with sessions()() as s:  # a fresh deploy can always be logged into
             await ensure_demo_logins(s)
             await s.commit()
+        from onboarding.config import get_settings
+        if get_settings().demo_tools:   # development fixtures: the company's sample purchase orders
+            from sqlalchemy import select
+            from onboarding.models import Employee
+            from onboarding.seeding import seed_purchase_orders
+            async with sessions()() as s:
+                await seed_purchase_orders(s, {e.name: e for e in (await s.execute(select(Employee))).scalars()})
+                await s.commit()
         n = await sweep_interrupted()
         if n:
             log.warning("marked %s unfinished run(s) as interrupted", n)

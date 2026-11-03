@@ -174,6 +174,7 @@ def flows(tmp_path_factory):
             out["profile_done"] = (await v.get("/vendor/profile")).text
             for path in ("/review", "/applications", "/relationships", "/audit?entity=change_request"):
                 out[path] = await staff.get(path)
+            out["kesari_360_after_change"] = (await staff.get(f"/vendors/{vnd}")).text
 
             # who sees what: Priya (1) is named on the bills, Rahul (2) isn't, Arjun (3) reviews, Kavita (4) is Finance
             sha = re.search(r'href="/files/([0-9a-f]+)"', out["newbank_page"]).group(1)
@@ -356,4 +357,12 @@ def test_bank_change_needs_finance_and_an_independent_check(flows):
     for path in ("/review", "/applications", "/relationships", "/audit?entity=change_request"):
         assert flows[path].status_code == 200, path
     assert "Called the number on record" in flows["/audit?entity=change_request"].text
+
+
+def test_new_bank_account_does_not_inherit_the_old_level(flows):
+    page = flows["kesari_360_after_change"]
+    facts = page.split("Evidence and fact history", 1)[1].split("Relationships", 1)[0]
+    assert "7766" in facts and "change request" in facts and "Not confirmed at source" in facts
+    bank = facts.split("Bank account", 1)[1][:1500]
+    assert "A1" in bank and "7766" in bank      # the current bank fact is the new account, at its own (lower) level
 

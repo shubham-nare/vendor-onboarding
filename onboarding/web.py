@@ -252,7 +252,7 @@ async def dashboard(request: Request):
                  docs=_rows(select(Document.run_id, Document.read["origin"].as_string())),  # just where each reading came from
                  bills=_all(select(Bill)),
                  acted=_rows(select(HumanAction.run_id, HumanAction.action)),
-                 open_vbills=_all(select(VendorBill).where(VendorBill.status.in_(("awaiting_confirmation", "for_review", "vendor_fix", "ready_for_approval")))))
+                 open_vbills=_all(select(VendorBill).where(VendorBill.status.in_(("awaiting_confirmation", "for_review", "vendor_fix", "ready_for_approval", "blocked", "approved")))))
         if full:
             q["alerts"] = _rows(select(RiskEvent, Vendor).join(Vendor, Vendor.id == RiskEvent.vendor_pk).where(RiskEvent.status == "open").order_by(RiskEvent.opened_at))
             q["vnames"] = _rows(select(Vendor.id, Vendor.vendor_id, Vendor.display_name))
@@ -288,12 +288,42 @@ async def dashboard(request: Request):
             to_confirm = sum(1 for r in runs if r["bill"] and r["bill"].engaged_employee_id == actor.id and r["bill"].confirmation == "awaiting"
                              and r["app"].current_status not in ("REJECTED", "ACTIVE"))
             to_confirm += len(r["vbills"])
-        todo = _todo(actor, runs, sponsors, emps, r["acted"], r["open_vbills"])
+        from onboarding.ap.models import InvoiceCase
+        bill_cases = {c.bill_id: c for c in (await _reads(c=_all(select(InvoiceCase))))["c"]}
+        todo = _todo(actor, runs, sponsors, emps, r["acted"], r["open_vbills"], bill_cases)
+        work = await _work_summary(s, actor, full, counts, todo)
         vnames = {pk: (vid, name) for pk, vid, name in r.get("vnames", [])}
         alerts = [dict(ev=ev, vendor=vend, related=vnames.get(ev.related_vendor_pk)) for ev, vend in r.get("alerts", [])]
         alerts.sort(key=lambda a: a["ev"].severity != "fraud")
         return await render(request, s, "dashboard.html", runs=runs, counts=counts, stats=stats, catalog=demo_catalog(), full=full,
-                            to_confirm=to_confirm, todo=todo, alerts=alerts)
+                            to_confirm=to_confirm, todo=todo, alerts=alerts, work=work)
+
+
+async def _work_summary(s, actor, full, counts, todo) -> dict:
+    """Actionable work for the dashboard, from stored records only."""
+    from onboarding import bills as BL
+    from onboarding.ap.models import AuditEvent, InvoiceCase
+    r = await _reads(vbills=_all(select(VendorBill)), cases=_all(select(InvoiceCase)),
+                     risks=_all(select(RiskEvent).where(RiskEvent.status == "open")),
+                     audit=_all(select(AuditEvent).order_by(AuditEvent.id.desc()).limit(8)) if full else _none,
+                     decisions=_rows(select(HumanAction, Employee, Application).join(Employee, Employee.id == HumanAction.employee_id)
+                                     .join(Run, Run.id == HumanAction.run_id).join(Application, Application.id == Run.application_id)
+                                     .order_by(HumanAction.id.desc()).limit(8)) if full else _none)
+    cases = {c.bill_id: c for c in r["cases"]}
+    bills = [b for b in r["vbills"] if full or access.can_open_bill(actor, b)]
+    st = [(b, BL.invoice_status(b, cases.get(b.id))) for b in bills]
+    amt = lambda rows: sum(money(b.amount) or 0 for b, _ in rows)  # noqa: E731
+    review = [(b, x) for b, x in st if x in ("Needs internal review", "Blocked for investigation")]
+    holds = [(b, x) for b, x in st if x == "Payment on hold"]
+    unpaid = [(b, x) for b, x in st if x in ("Approved for payment", "Payment in progress")]
+    recent = [dict(at=e.at, who=e.actor_label, what=BL.BILL_ACTION_LABEL.get(e.action, e.action.replace("_", " ")), label=e.entity_label,
+                   href=f"/bills/{e.entity_id}" if e.entity == "invoice" else "", override=e.override) for e in r["audit"]]
+    recent += [dict(at=a.at, who=f"{emp.name} ({ROLE_LABEL.get(emp.role, emp.role)})", what=ACTIONS.get(a.action, a.action.replace("_", " ")), label=app.ref,
+                    href=f"/runs/{a.run_id}", override=a.action in ("override_reject", "review_approve")) for a, emp, app in r["decisions"]]
+    recent.sort(key=lambda x: x["at"].replace(tzinfo=None), reverse=True)
+    return dict(reviews=len(todo), waiting=counts.get("PENDING_VENDOR", 0) + sum(1 for _, x in st if x == "Needs vendor information"),
+                high_risk=sum(1 for x in r["risks"] if x.severity == "fraud"), inv_review=len(review), inv_review_amt=amt(review),
+                holds=len(holds), holds_amt=amt(holds), unpaid=len(unpaid), unpaid_amt=amt(unpaid), recent=recent[:8])
 
 
 _TODO_VERB = {"activate": "Activate vendor", "review_approve": "Review and decide", "ask_vendor": "Review and decide", "review_reject": "Review and decide",
@@ -303,7 +333,7 @@ _TODO_BILL_VERB = {"confirm_engagement": "Confirm the work was done", "deny_enga
                    "approve_payment": "Approve the bill", "ask_vendor": "Approve the bill", "reject_bill": "Approve the bill"}
 
 
-def _todo(actor, runs, invites, emps, acted, vbills) -> list[dict]:
+def _todo(actor, runs, invites, emps, acted, vbills, cases: dict | None = None) -> list[dict]:
     """What this person can act on right now, using the same rules as the buttons (segregation of duties,
     high risk to the Finance controller): the latest run of each application, and open vendor bills."""
     from onboarding.bills import allowed_bill_actions
@@ -325,11 +355,15 @@ def _todo(actor, runs, invites, emps, acted, vbills) -> list[dict]:
         if open_:
             out.append(dict(href=f"/runs/{run.id}", ref=app.ref, name=app.legal_name, verb=_TODO_VERB.get(open_[0], "Open"),
                             status=app.current_status, risk=run.risk_tier, fraud=x["fraud"], since=run.finished_at or run.started_at))
+    from onboarding import bills as BL
+    cases = cases or {}
     for b in vbills:
-        acts = allowed_bill_actions(b, actor, emps.get(b.engaged_employee_id))
-        open_ = [a for a, v in acts.items() if not v["blocked"]]
+        case = cases.get(b.id)
+        acts = allowed_bill_actions(b, actor, emps.get(b.engaged_employee_id), case)
+        open_ = [a for a, v in acts.items() if not v["blocked"] and a not in ("block", "hold_payment")]   # a real next step, not a safety valve
         if open_:
-            out.append(dict(href=f"/bills/{b.id}", ref=b.ref, name=names.get(b.application_id, b.vendor_id), detail=f"Invoice {b.invoice_number}", verb=_TODO_BILL_VERB.get(open_[0], "Open"),
+            verb = BL.next_action(b, case)[0] or _TODO_BILL_VERB.get(open_[0], "Open")
+            out.append(dict(href=f"/bills/{b.id}", ref=b.ref, name=names.get(b.application_id, b.vendor_id), detail=f"Invoice {b.invoice_number}", verb=verb,
                             status="BILL", risk=b.risk_tier, fraud=b.fraud, since=getattr(b, "created_at", None), amount=b.amount))
     for t in out:
         t["waiting"] = _waiting(t["since"])
