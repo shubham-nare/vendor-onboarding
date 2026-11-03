@@ -39,6 +39,20 @@
     </div>
   </div>
 </div>
+{% if full %}
+{% set ITONE = {'slate': 'text-slate-600', 'indigo': 'text-indigo-700', 'amber': 'text-amber-700', 'emerald': 'text-emerald-700', 'rose': 'text-rose-700'} %}
+{% set open_risk = risks | selectattr('status', 'equalto', 'open') | selectattr('vendor_pk', 'equalto', v.id) | list %}
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 text-[13px]">
+  {% set latest_app = apps[-1] if apps else None %}
+  {% for label, value, note, tone in [
+      ('Onboarding', STATUS_LABEL.get(latest_app.app.current_status, latest_app.app.current_status) if latest_app else 'Not onboarded here', latest_app.app.ref if latest_app else 'vendor master record', 'emerald' if latest_app and latest_app.app.current_status in ('APPROVED', 'ACTIVE') else ('rose' if latest_app and latest_app.app.current_status == 'REJECTED' else 'amber')),
+      ('Risk', (open_risk | length) ~ ' open flag' ~ ('s' if open_risk | length != 1 else '') if open_risk else 'No open flags', (open_risk[0].title[:60]) if open_risk else 'from the onboarding rules', 'rose' if open_risk | selectattr('severity', 'equalto', 'fraud') | list else ('amber' if open_risk else 'emerald')),
+      ('Supplier master', ('Active · ' ~ v.erp_vendor_id) if v.erp_vendor_id and v.status in ('active', 'on_record') else 'Not in the supplier master', 'activated after approval' if v.origin == 'application' and v.erp_vendor_id else ('existing record' if v.erp_vendor_id else 'activation follows approval'), 'emerald' if v.erp_vendor_id else 'slate'),
+      ('Payment eligibility', {'eligible': 'Eligible', 'blocked': 'Blocked from payment', 'not_yet': 'Not eligible yet'}.get(pay[0], '—'), pay[1], {'eligible': 'emerald', 'blocked': 'rose', 'not_yet': 'slate'}.get(pay[0], 'slate'))] %}
+  <div class="bg-white border rounded-xl px-4 py-3 min-w-0"><div class="text-[12px] font-medium text-slate-500">{{ label }}</div><div class="mt-0.5 font-semibold {{ ITONE[tone] }}">{{ value }}</div><div class="mt-0.5 text-[11.5px] text-slate-500 line-clamp-2">{{ note }}</div></div>
+  {% endfor %}
+</div>
+{% endif %}
 {% if not full %}<div class="rounded-lg border border-amber-200 bg-amber-50/70 px-4 py-2.5 text-[13px] text-amber-900 flex items-start gap-2">{{ icon('lock', 'h-4 w-4 shrink-0 mt-0.5') }}<span><b>Requester view.</b> You see the status of your requests and what happens next. Identity details, evidence, relationships and risk flags are for Procurement and Finance only.</span></div>{% endif %}
 
 {# ---- what to do next ---- #}
@@ -66,6 +80,45 @@
     {% endfor %}
   </ol>
 </section>
+
+{# ---- invoices and payments ---- #}
+{% if invoices or v.erp_vendor_id %}
+<section class="bg-white border rounded-xl overflow-hidden" id="invoices">
+  <div class="px-4 sm:px-6 py-4 border-b border-slate-100 flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <h2 class="text-[16px]">Invoices and payments</h2>
+      <p class="text-[12.5px] text-slate-500 mt-0.5">Approval to onboard is not approval to pay: each invoice is matched to its purchase order and delivery, approved, then released by Finance.</p>
+    </div>
+    {% if full %}<dl class="grid grid-cols-3 gap-4 text-right text-[12px]">
+      <div><dt class="text-slate-500">Approved, unpaid</dt><dd class="text-[15px] font-semibold tabular-nums">{{ inr(msum.approved_unpaid) }}</dd></div>
+      <div><dt class="text-slate-500">On hold</dt><dd class="text-[15px] font-semibold tabular-nums {{ 'text-amber-700' if msum.on_hold }}">{{ inr(msum.on_hold) }}</dd></div>
+      <div><dt class="text-slate-500">Paid</dt><dd class="text-[15px] font-semibold tabular-nums text-emerald-700">{{ inr(msum.paid) }}</dd></div>
+    </dl>{% endif %}
+  </div>
+  {% if invoices %}
+  <div class="overflow-x-auto">
+  <table class="rtable w-full text-[13px]">
+    <thead class="text-left text-slate-500 bg-slate-50/70"><tr><th class="pl-4 sm:pl-6 pr-2 py-2">Invoice</th><th class="px-2">PO</th><th class="px-2 text-right">Amount</th><th class="px-2">Status</th><th class="pr-4 sm:pr-6 pl-2">Payment</th></tr></thead>
+    <tbody class="divide-y divide-slate-100">
+    {% for x in invoices %}{% set b = x.b %}{% set c = x.case %}
+      <tr class="hover:bg-slate-50/80 cursor-pointer" onclick="location.href='/bills/{{ b.id }}'">
+        <td class="pl-4 sm:pl-6 pr-2 py-2.5"><a class="mono font-medium hover:text-indigo-700" href="/bills/{{ b.id }}">{{ b.invoice_number or b.ref }}</a><div class="text-[11.5px] text-slate-500">{{ b.invoice_date or '' }} · {{ b.ref }}</div></td>
+        <td class="px-2 py-2.5 mono text-[12px]" data-label="PO">{{ b.po_number or '—' }}</td>
+        <td class="px-2 py-2.5 text-right tabular-nums" data-label="Amount">{{ inr(money(b.amount)) if b.amount else '—' }}</td>
+        <td class="px-2 py-2.5" data-label="Status"><span class="tag dot {{ ITONE[BL.INVOICE_TONE.get(x.status, 'slate')] if full else 'text-slate-600' }}">{{ x.status }}</span></td>
+        <td class="pr-4 sm:pr-6 pl-2 py-2.5 text-[12px] text-slate-600" data-label="Payment">{% if c and c.payment_status == 'paid' %}{{ c.payment_reference }} · {{ c.paid_at | dt }}{% elif c and c.payment_status == 'on_hold' %}<span class="text-amber-700">{{ c.hold_reason }}</span>{% elif c and c.payment_status == 'in_progress' %}released {{ c.released_at | dt }}{% else %}—{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}<p class="px-4 sm:px-6 py-4 text-[13px] text-slate-500">No invoices yet. The vendor submits them from their portal against a purchase order.</p>{% endif %}
+  {% if pos %}
+  <div class="border-t border-slate-100 px-4 sm:px-6 py-3 text-[12.5px]"><span class="font-semibold text-slate-700">Purchase orders:</span>
+    {% for po in pos %}<a class="ml-2 mono text-indigo-700 hover:underline" href="/purchase-orders/{{ po.id }}">{{ po.po_number }}</a>{% endfor %}</div>
+  {% endif %}
+</section>
+{% endif %}
 
 {% if full %}
 <div class="grid xl:grid-cols-[1fr_1fr] gap-4 sm:gap-6">
@@ -247,6 +300,35 @@
     <li class="px-6 py-6 text-[13px] text-slate-500">No risk flags.</li>
   {% endfor %}
   </ul>
+</section>
+{% endif %}
+
+{% if full %}
+{# ---- documents ---- #}
+<section class="bg-white border rounded-xl overflow-hidden" id="documents">
+  <div class="px-4 sm:px-6 py-4 border-b border-slate-100">
+    <h2 class="text-[16px]">Documents</h2>
+    <p class="text-[12.5px] text-slate-500 mt-0.5">Everything the vendor uploaded, kept after approval as the permanent evidence record. Each shows what was read from it and which facts rely on it.</p>
+  </div>
+  {% if documents %}
+  <div class="overflow-x-auto">
+  <table class="rtable w-full text-[12.5px]">
+    <thead class="text-left text-slate-500 bg-slate-50/70"><tr><th class="pl-4 sm:pl-6 pr-2 py-2">Document</th><th class="px-2">Status</th><th class="px-2">Read as</th><th class="px-2">Proof</th><th class="px-2">Supports</th><th class="pr-4 sm:pr-6 pl-2">File</th></tr></thead>
+    <tbody class="divide-y divide-slate-100">
+    {% for x in documents %}{% set d = x.doc %}
+      <tr class="{{ 'opacity-60' if x.status == 'superseded' }}">
+        <td class="pl-4 sm:pl-6 pr-2 py-2.5"><div class="font-medium text-slate-800">{{ SLOT_TITLE.get(d.slot, d.slot) }}</div><div class="text-slate-500">{{ x.app.ref if x.app }} · check #{{ d.run_id }} · {{ x.run.started_at | dt if x.run }}{% if x.issue_date %} · issued {{ x.issue_date }}{% endif %}</div></td>
+        <td class="px-2 py-2.5" data-label="Status"><span class="tag {{ {'current': 'text-emerald-700', 'superseded': 'text-slate-500', 'reused': 'text-rose-700', 'unreadable': 'text-amber-700'}[x.status] }}">{{ x.status }}</span>{% if x.reused_by %}<div class="text-rose-700 mt-0.5">also in {{ x.reused_by | join(', ') }}</div>{% endif %}</td>
+        <td class="px-2 py-2.5" data-label="Read as">{{ (x.read.doc_type or 'unreadable') | replace('_', ' ') | lower }}<div class="text-slate-500">{{ (x.read.document_form or '') | replace('_', ' ') | lower }}{{ ' · saved reading' if x.read.origin in ('cache', 'cache-fallback') }}</div></td>
+        <td class="px-2 py-2.5" data-label="Proof">{% if x.auth.level %}{{ level_chip(x.auth.level) }}{% endif %}{% if x.signed %}<div class="text-emerald-700">signature valid</div>{% endif %}{% if x.auth.specimen %}<div class="text-slate-500">demo specimen</div>{% endif %}</td>
+        <td class="px-2 py-2.5" data-label="Supports">{{ x.supports | join(', ') or '—' }}</td>
+        <td class="pr-4 sm:pr-6 pl-2 py-2.5" data-label="File"><a class="text-indigo-700 hover:underline break-all" href="/files/{{ d.sha256 }}" target="_blank">{{ d.filename }}</a><div class="text-slate-500 mono">{{ (x.size / 1024)|round(0)|int ~ ' KB · ' if x.size }}{{ d.sha256[:12] }}</div></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}<p class="px-4 sm:px-6 py-4 text-[13px] text-slate-500">{{ 'Known from the vendor master: no documents were uploaded through this system.' if v.origin == 'vendor_master' else 'No documents.' }}</p>{% endif %}
 </section>
 {% endif %}
 

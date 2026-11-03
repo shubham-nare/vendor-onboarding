@@ -171,3 +171,71 @@ def next_actions(vendor, apps: list[dict], risks, facts: list[dict], rights_by_a
     if not out:
         out.append(dict(priority="none", title="No action needed.", why="No open flags and no pending decisions.", detail="", evidence=[], who=[], href=None, kind="none"))
     return out
+
+
+# --- supplier record: payment eligibility, invoices, documents --------------------------------------------------
+def payment_eligibility(vendor, risks, facts) -> tuple[str, str]:
+    """('eligible' | 'blocked' | 'not_yet', why). Eligibility to be paid at all; each invoice still needs its own approval."""
+    open_fraud = [r for r in risks if r.status == "open" and r.vendor_pk == vendor.id and r.severity == "fraud"]
+    if vendor.status != "active":
+        return "not_yet", ("Not an active supplier yet: onboarding isn't complete." if vendor.status == "onboarding"
+                           else "On record in the vendor master, not onboarded through this system." if vendor.status == "on_record"
+                           else "Not an active supplier.")
+    if open_fraud:
+        return "blocked", f"Open flag: {open_fraud[0].title}. Resolve it before paying."
+    bank = next((f["current"] for f in facts if f["fact"] == "BANK_ACCOUNT"), None)
+    if bank is None:
+        return "eligible", "Active supplier."
+    return "eligible", f"Active supplier. Pays only into the account verified at onboarding ({bank.level}, {bank.source_label.lower()})."
+
+
+def money_summary(bills, cases, money) -> dict:
+    s = {"approved_unpaid": 0.0, "paid": 0.0, "on_hold": 0.0, "awaiting_review": 0.0, "active": 0}
+    for b in bills:
+        c = cases.get(b.id)
+        amt = money(b.amount) or 0.0
+        pay = c.payment_status if c else "none"
+        if b.status == "approved":
+            if pay == "paid":
+                s["paid"] += amt
+            elif pay == "on_hold":
+                s["on_hold"] += amt
+            else:
+                s["approved_unpaid"] += amt
+        elif b.status in ("for_review", "awaiting_confirmation", "ready_for_approval", "blocked", "failed"):
+            s["awaiting_review"] += amt
+        if b.status not in ("rejected", "draft") and pay != "paid":
+            s["active"] += 1
+    return s
+
+
+def document_rows(docs, runs_by_id: dict, apps_by_id: dict, sizes: dict, reused: dict, evidence_by_sha: dict, observations) -> list[dict]:
+    """Every document the vendor ever uploaded, newest first, with what it supports and whether it's still current."""
+    latest_run_for_app = {}
+    for r in runs_by_id.values():
+        if r.application_id not in latest_run_for_app or r.id > latest_run_for_app[r.application_id]:
+            latest_run_for_app[r.application_id] = r.id
+    facts_by_ev = defaultdict(list)
+    for o in observations:
+        if o.evidence_item_id:
+            facts_by_ev[o.evidence_item_id].append(o)
+    out = []
+    for d in sorted(docs, key=lambda d: (d.run_id, d.id), reverse=True):
+        run = runs_by_id.get(d.run_id)
+        app = apps_by_id.get(run.application_id) if run else None
+        rd, au = d.read or {}, d.authenticity or {}
+        if run and latest_run_for_app.get(run.application_id) != run.id:
+            status = "superseded"
+        elif reused.get(d.sha256):
+            status = "reused"
+        elif not rd.get("doc_type"):
+            status = "unreadable"
+        else:
+            status = "current"
+        evs = evidence_by_sha.get((d.sha256, d.run_id), [])
+        supports = sorted({FACT_LABEL.get(o.fact, o.fact) for e in evs for o in facts_by_ev.get(e.id, [])})
+        sig = au.get("signature") or {}
+        out.append(dict(doc=d, run=run, app=app, size=sizes.get(d.sha256), status=status, read=rd, auth=au, supports=supports,
+                        reused_by=reused.get(d.sha256, []), signed=bool(sig.get("present") and sig.get("intact") and sig.get("valid")),
+                        issue_date=next((f.get("value") for f in rd.get("fields", []) if f.get("name") in ("issue_date", "date_on_card") and f.get("value")), "")))
+    return out

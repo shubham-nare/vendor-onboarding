@@ -1055,7 +1055,7 @@ def _owned_app_ids(actor, apps, invites: dict, bills: dict) -> set[int]:
 
 
 @router.get("/vendors", response_class=HTMLResponse)
-async def vendor_directory(request: Request, q: str = ""):
+async def vendor_directory(request: Request, q: str = "", status: str = "", risk: str = "", pay: str = "", inv: str = "", sort: str = ""):
     """Every canonical vendor: one row per legal entity, however many applications it made."""
     async with read_sessions()() as s:
         actor = await _actor(request, s)
@@ -1063,16 +1063,28 @@ async def vendor_directory(request: Request, q: str = ""):
         r = await _reads(vendors=_all(select(Vendor).order_by(Vendor.id)),
                          links=_rows(select(VendorApplication.vendor_pk, Application).join(Application, Application.id == VendorApplication.application_id)),
                          pans=_rows(select(VendorIdentifier.vendor_pk, VendorIdentifier.display).where(VendorIdentifier.kind == "PAN", VendorIdentifier.status == "current")),
-                         risks=_rows(select(RiskEvent.vendor_pk, RiskEvent.related_vendor_pk, RiskEvent.severity).where(RiskEvent.status == "open")),
-                         invites=_all(select(Invite)), bills=_all(select(Bill)))
+                         risks=_rows(select(RiskEvent.vendor_pk, RiskEvent.related_vendor_pk, RiskEvent.severity, RiskEvent.kind).where(RiskEvent.status == "open")),
+                         gst=_rows(select(VendorIdentifier.vendor_pk, VendorIdentifier.display).where(VendorIdentifier.kind == "GSTIN", VendorIdentifier.status == "current")),
+                         invites=_all(select(Invite)), bills=_all(select(Bill)), vbills=_all(select(VendorBill)))
+        from onboarding import bills as BL
+        from onboarding.ap.models import InvoiceCase
+        cases = {c.bill_id: c for c in (await _reads(c=_all(select(InvoiceCase))))["c"]}
+        vb_by_erp: dict[str, list] = {}
+        for b in r["vbills"]:
+            vb_by_erp.setdefault(b.vendor_id, []).append(b)
         apps_by_v: dict[int, list] = {}
         for vpk, app in r["links"]:
             apps_by_v.setdefault(vpk, []).append(app)
         owned = _owned_app_ids(actor, [a for _, a in r["links"]], {i.id: i for i in r["invites"]}, {b.application_id: b for b in r["bills"]}) if not full else set()
         pan = dict(r["pans"])
+        gst: dict[int, list] = {}
+        for vpk, g in r["gst"]:
+            gst.setdefault(vpk, []).append(g)
         flags: dict[int, list] = {}
-        for vpk, rel, sev in r["risks"]:
+        kinds: dict[int, list] = {}
+        for vpk, rel, sev, kind in r["risks"]:
             flags.setdefault(vpk, []).append(sev)
+            kinds.setdefault(vpk, []).append(kind)
             if rel:
                 flags.setdefault(rel, []).append("linked")
         rows = []
@@ -1082,8 +1094,51 @@ async def vendor_directory(request: Request, q: str = ""):
                 continue
             if q and q.lower() not in f"{v.display_name} {v.vendor_id} {v.erp_vendor_id}".lower():
                 continue
-            rows.append(dict(v=v, apps=apps, pan=pan.get(v.id, "") if full else "", flags=flags.get(v.id, []) if full else []))
-        return await render(request, s, "vendors_dir.html", rows=rows, full=full, q=q, STATUS_TEXT=V360.STATUS_TEXT)
+            vb = vb_by_erp.get(v.erp_vendor_id, []) if v.erp_vendor_id else []
+            if not full:
+                vb = [b for b in vb if access.can_open_bill(actor, b)]
+            msum = V360.money_summary(vb, cases, money)
+            own = [f for f in flags.get(v.id, []) if f != "linked"]
+            payel = "not_yet" if v.status != "active" else ("blocked" if "fraud" in own else "eligible")
+            needs = [b for b in vb if BL.invoice_status(b, cases.get(b.id)) in ("Needs internal review", "Blocked for investigation", "Matched and ready for approval")]
+            stamps = [a.created_at for a in apps] + [b.created_at for b in vb] + [v.updated_at]
+            last = max((x for x in stamps if x), key=lambda d: d.replace(tzinfo=None), default=None)
+            pending_app = next((a for a in reversed(apps) if a.current_status in ("PENDING_REVIEW", "APPROVED", "PENDING_VENDOR")), None)
+            if own and full:
+                nxt = {"shared_bank_account": "Investigate the shared bank account", "reused_document": "Review the reused document",
+                       "identity_conflict": "Resolve the identity conflict", "blocklist": "Confirm the blocklist rejection",
+                       "duplicate_registration": "Check for a duplicate record"}.get(kinds.get(v.id, [""])[0], "Review the open flag")
+            elif needs:
+                nxt = BL.next_action(needs[0], cases.get(needs[0].id))[0]
+            elif pending_app:
+                nxt = {"PENDING_REVIEW": f"Review {pending_app.ref}", "APPROVED": f"Activate ({pending_app.ref} approved)", "PENDING_VENDOR": "Waiting for the vendor"}[pending_app.current_status]
+            elif msum["approved_unpaid"]:
+                nxt = "Release approved payments"
+            else:
+                nxt = ""
+            row = dict(v=v, apps=apps, pan=pan.get(v.id, "") if full else "", gstins=gst.get(v.id, []), flags=flags.get(v.id, []) if full else [],
+                       pay=payel, msum=msum, needs=len(needs), last=last, next=nxt)
+            if status and v.status != status:
+                continue
+            if risk == "flagged" and not own:
+                continue
+            if pay and payel != pay:
+                continue
+            if inv == "needs_review" and not needs:
+                continue
+            if inv == "unpaid" and not msum["approved_unpaid"]:
+                continue
+            rows.append(row)
+        if sort == "activity":
+            rows.sort(key=lambda x: x["last"].replace(tzinfo=None) if x["last"] else datetime.min, reverse=True)
+        elif sort == "awaiting":
+            rows.sort(key=lambda x: -x["msum"]["awaiting_review"])
+        elif sort == "unpaid":
+            rows.sort(key=lambda x: -x["msum"]["approved_unpaid"])
+        else:
+            rows.sort(key=lambda x: (not x["next"], x["v"].display_name.lower()))
+        return await render(request, s, "vendors_dir.html", rows=rows, full=full, q=q, STATUS_TEXT=V360.STATUS_TEXT,
+                            f=dict(status=status, risk=risk, pay=pay, inv=inv, sort=sort))
 
 
 @router.get("/vendors/{vendor_key}", response_class=HTMLResponse)
@@ -1114,7 +1169,10 @@ async def vendor_profile(request: Request, vendor_key: str):
             snaps=_rows(select(DecisionSnapshot.run_id, DecisionSnapshot.replay_ok, DecisionSnapshot.reconstructed)
                         .join(Run, Run.id == DecisionSnapshot.run_id).join(VendorApplication, VendorApplication.application_id == Run.application_id)
                         .where(VendorApplication.vendor_pk == v.id)),
-            invites=_all(select(Invite)), bills=_all(select(Bill)), allv=_all(select(Vendor)))
+            invites=_all(select(Invite)), bills=_all(select(Bill)), allv=_all(select(Vendor)),
+            vbills=_all(select(VendorBill).where(VendorBill.vendor_id == v.erp_vendor_id).order_by(VendorBill.id.desc())) if v.erp_vendor_id else _none,
+            docs=_all(select(Document).join(Run, Run.id == Document.run_id).join(VendorApplication, VendorApplication.application_id == Run.application_id)
+                      .where(VendorApplication.vendor_pk == v.id)))
         invites, bills = {i.id: i for i in r["invites"]}, {b.application_id: b for b in r["bills"]}
         owned = _owned_app_ids(actor, r["apps"], invites, bills)
         if not full and not owned:
@@ -1148,7 +1206,41 @@ async def vendor_profile(request: Request, vendor_key: str):
         if access.sees_full_bank(actor) and v.status == "active":   # Finance releases payments: the real number, decrypted on demand
             full_bank = {i.id: decrypt(i.value_enc) for i in r["idents"] if i.kind == "BANK_ACCOUNT" and i.value_enc}
         doubts = V360.fact_doubts(v, r["my_edges"], risks) if full else {}
+        # the supplier record: invoices, payments, purchase orders, documents
+        from onboarding import bills as BL
+        from onboarding.ap.models import InvoiceCase, PurchaseOrder
+        gstins = [i.display for i in r["idents"] if i.kind == "GSTIN"]
+        shas = list({d.sha256 for d in r["docs"]})
+        app_ids = [a.id for a in r["apps"]]
+        r3 = await _reads(cases=_all(select(InvoiceCase).where(InvoiceCase.bill_id.in_([b.id for b in r["vbills"]]))) if r["vbills"] else _none,
+                          pos=_all(select(PurchaseOrder).where(PurchaseOrder.vendor_gstin.in_(gstins)).order_by(PurchaseOrder.id.desc())) if gstins and full else _none,
+                          sizes=_rows(select(StoredFile.sha256, StoredFile.size).where(StoredFile.sha256.in_(shas))) if shas and full else _none,
+                          reused=_rows(select(Document.sha256, Application.ref).join(Run, Run.id == Document.run_id).join(Application, Application.id == Run.application_id)
+                                       .where(Document.sha256.in_(shas), Application.id.not_in(app_ids))) if shas and full else _none)
+        cases = {c.bill_id: c for c in r3["cases"]}
+        visible_bills = [b for b in r["vbills"] if full or access.can_open_bill(actor, b)]
+        invoices = [dict(b=b, case=cases.get(b.id), status=BL.invoice_status(b, cases.get(b.id)), next=BL.next_action(b, cases.get(b.id))) for b in visible_bills]
+        reused: dict[str, list] = {}
+        for sha, ref in r3["reused"]:
+            reused.setdefault(sha, []).append(ref)
+        ev_by_sha: dict = {}
+        for e in r["evidence"]:
+            if e.kind == "document" and e.content_sha256:
+                ev_by_sha.setdefault((e.content_sha256, e.run_id), []).append(e)
+        documents = V360.document_rows(r["docs"], {x.id: x for x in r["runs"]}, {a.id: a for a in r["apps"]}, dict(r3["sizes"]), reused, ev_by_sha, r["obs"]) if full else []
+        pay = V360.payment_eligibility(v, risks, facts) if full else ("", "")
+        msum = V360.money_summary(visible_bills, cases, money)
+        for x in invoices:   # invoice work joins the next-best-action list
+            if x["next"][0] and x["status"] not in ("Paid", "Rejected", "Being checked", "Draft"):
+                urgent = x["status"] == "Blocked for investigation"
+                nba.insert(0 if urgent else len([a for a in nba if a["priority"] == "urgent"]),
+                           dict(priority="urgent" if urgent else ("high" if x["status"] in ("Needs internal review", "Matched and ready for approval", "Approved for payment", "Payment on hold") else "normal"),
+                                title=x["next"][0] + (f" ({x['b'].invoice_number or x['b'].ref})" if x["b"].invoice_number and x["b"].invoice_number not in x["next"][0] else "") + ".",
+                                why=x["next"][1], detail="", evidence=[], who=["Finance"] if x["status"] in ("Approved for payment", "Payment in progress", "Payment on hold") else ["Procurement or Finance"],
+                                href=f"/bills/{x['b'].id}", kind="invoice"))
+        nba = [a for a in nba if a["kind"] != "none"] or nba
         return await render(request, s, "vendor360.html", v=v, apps=apps, idents=r["idents"], facts=facts, conns=conns, risks=risks, doubts=doubts,
+                            invoices=invoices, pos=r3["pos"], documents=documents, pay=pay, msum=msum, BL=BL,
                             evidence=evidence, actions=r["actions"] if full else [], nba=nba, full=full, vendors_by_pk=vendors_by_pk,
                             lay=V360.layout(v, r["my_edges"], conns) if full else None, my_edges=r["my_edges"] if full else [],
                             snaps={rid: (ok, rec) for rid, ok, rec in r["snaps"]}, full_bank=full_bank, V360=V360)

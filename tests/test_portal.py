@@ -150,6 +150,10 @@ def flows(tmp_path_factory):
                                                {k: "1" for k in re.findall(r'name="(qty_\d+)"', (await staff.get(f"/purchase-orders/{po3}")).text)})).status_code
             staff.cookies.set("actor", "3")
             out["po3_page"] = (await staff.get(f"/purchase-orders/{po3}")).text
+            out["vendor_dir"] = (await staff.get("/vendors")).text
+            vnd = re.search(r'href="/vendors/(VND-\d{4})" class="[^"]*">Kesari', out["vendor_dir"]).group(1)
+            out["kesari_360"] = (await staff.get(f"/vendors/{vnd}")).text
+            out["vendor_dir_unpaid"] = (await staff.get("/vendors?inv=needs_review")).text
 
             # who sees what: Priya (1) is named on the bills, Rahul (2) isn't, Arjun (3) reviews, Kavita (4) is Finance
             sha = re.search(r'href="/files/([0-9a-f]+)"', out["newbank_page"]).group(1)
@@ -311,4 +315,14 @@ def test_payables_pages_and_delivery_recording(flows):
     assert "UTR HDFC261103000417" in flows["/audit"].text or "mark_paid" in flows["/audit"].text or "Record the payment" in flows["/audit"].text
     assert "PO-2026-0141" in flows["/purchase-orders"].text and "Blocked for investigation" in flows["/invoices"].text
     assert flows["receipt"] == 303 and "SC-" in flows["po3_page"]
+
+
+def test_vendor_360_is_the_supplier_record(flows):
+    page = flows["kesari_360"]
+    for text in ("Invoices and payments", "KFS/2026-27/0207", "UTR HDFC261103000417", "Supplier master", "Payment eligibility", "Documents",
+                 "Cancelled cheque", "Blocked for investigation"):
+        assert text in page or text.lower() in page.lower(), text
+    assert "Investigate before anything is paid" in page          # the blocked duplicate leads the next actions
+    assert "Kesari" in flows["vendor_dir"] and "Eligible" in flows["vendor_dir"] or "Blocked" in flows["vendor_dir"]
+    assert "Kesari" in flows["vendor_dir_unpaid"]
 
