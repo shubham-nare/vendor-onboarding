@@ -78,6 +78,9 @@ def flows(tmp_path_factory):
             out["staff_login"] = (await staff.post("/company/login", data={"email": DEMO_COMPANY_EMAIL, "password": DEMO_PASSWORD, "next": "/bills"})).headers.get("location", "")
             out["console"] = (await staff.get("/console")).status_code
             out["console_page"] = (await staff.get("/console")).text
+            out["pending"] = (await staff.get("/console/pending")).json()
+            out["pending_anon"] = (await other.get("/console/pending")).status_code
+            out["applications_page"] = (await staff.get("/applications")).text
             r = await other.post("/vendor/login", data={"email": DEMO_VENDOR["email"], "password": DEMO_PASSWORD})
             out["demo_vendor"] = (r.status_code, (await other.get("/vendor")).text)
             out["vendor_cookie_on_console"] = (await other.get("/console")).headers.get("location", "")
@@ -461,3 +464,27 @@ def test_documents_page_lists_every_upload(flows):
     assert "Documents" in page and "GST certificate" in page and "/files/" in page and "Kesari" in page
     assert "Onboarding bill" in flows["documents_bills"] and "GST certificate</div>" not in flows["documents_bills"]
 
+
+
+def test_pending_reminder_feed_and_house_style(flows):
+    assert flows["pending_anon"] in (302, 303)                                   # signed out: sent to sign in
+    assert isinstance(flows["pending"]["count"], int) and len(flows["pending"]["items"]) <= 4
+    page = flows["applications_page"]
+    assert 'id="pending-note"' in page and "/console/pending" in page            # reminder on other pages
+    assert 'id="pending-note"' not in flows["console_page"]                       # Home already lists them
+    assert "Verdana" in page and "Geist" not in page and "fonts.googleapis" not in page
+    assert "animation: none" in page
+
+
+def test_order_rows_turn_red_on_a_mismatch():
+    from types import SimpleNamespace as NS
+    from onboarding.ap.web import _po_issues
+    bill = lambda rules, status="for_review": NS(ref="BILL-9", status=status, rules=rules)  # noqa: E731
+    case = NS(payment_status="unpaid")
+    base = dict(receipts=[1], delivered_value=100.0, total=100.0)
+    issues, tone = _po_issues(base | dict(invoices=[(bill([{"rule_id": "R-PO-05", "result": "FAIL"}]), case)]))
+    assert tone == "red" and issues == ["BILL-9: unit price mismatch"]
+    assert _po_issues(base | dict(invoices=[(bill([{"rule_id": "R-PO-05", "result": "FAIL"}], "rejected"), case)]))[1] == "green"   # a rejected invoice no longer counts
+    assert _po_issues(base | dict(invoices=[(bill([{"rule_id": "R-PO-05", "result": "PASS"}]), case)]))[1] == "amber"
+    assert _po_issues(base | dict(invoices=[(bill([]), NS(payment_status="paid"))]))[1] == "green"
+    assert _po_issues(dict(receipts=[], delivered_value=0, total=100.0, invoices=[]))[1] == "amber"

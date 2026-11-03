@@ -81,6 +81,22 @@
     <section class="bg-white rounded-xl border p-4 sm:p-5">
       <h2 class="text-xl flex items-baseline gap-3"><span class="mono text-[12px] text-indigo-600 tracking-widest">02</span>Address &amp; contact</h2>
       <div class="grid md:grid-cols-2 gap-4 mt-4 text-sm">
+        <div class="md:col-span-2 border border-slate-200 bg-slate-50 px-3 py-3">
+          <div class="flex flex-wrap items-center gap-2">
+            <button type="button" id="map-open" class="border border-slate-300 bg-white px-3 py-1.5 text-[13px] font-semibold hover:border-indigo-500">Pick the address on a map</button>
+            <span class="text-xs text-slate-500">Drop a pin on your office and we fill in the address, city, state and PIN code. You can still edit them.</span>
+          </div>
+          <div id="map-panel" hidden class="mt-3">
+            <div class="flex flex-wrap gap-2">
+              <input id="map-q" type="search" placeholder="Search a place, street or PIN code" class="flex-1 min-w-[14rem] border px-3 py-2">
+              <button type="button" id="map-find" class="border border-slate-300 bg-white px-3 py-2 text-[13px] font-semibold">Search</button>
+              <button type="button" id="map-me" class="border border-slate-300 bg-white px-3 py-2 text-[13px] font-semibold">Use my location</button>
+            </div>
+            <div id="map" class="mt-2 h-80 w-full border border-slate-300"></div>
+            <p id="map-msg" class="mt-1.5 text-xs text-slate-600">Click the map to drop the pin; drag it to adjust.</p>
+            <p class="text-[11px] text-slate-500">Map and address lookup by OpenStreetMap: the point you pick is sent to OpenStreetMap to find its address.</p>
+          </div>
+        </div>
         <label class="block md:col-span-2">Registered address{{ REQ }}<input name="address" required value="{{ v.get('address', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
         <label class="block">City{{ REQ }}<input name="city" required value="{{ v.get('city', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
         <label class="block" data-intl>Postal code{{ REQ }}<input name="postal_code" data-req value="{{ v.get('postal_code', '') }}" maxlength="12" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase"></label>
@@ -250,6 +266,78 @@ function checkPin() {
 }
 ['input', 'change'].forEach(e => { document.querySelector('[name=pin]')?.addEventListener(e, checkPin); document.querySelector('[name=state]')?.addEventListener(e, checkPin); });
 toggleType();
+
+// ---- pick the address on a map (Leaflet + OpenStreetMap; loaded only when opened) ----
+const COUNTRY_BY_CODE = Object.fromEntries(Object.entries(COUNTRIES).map(([n, c]) => [c.code.toLowerCase(), n]));
+let map, pin;
+function loadLeaflet() {
+  return new Promise((ok, bad) => {
+    if (window.L) return ok();
+    const css = document.createElement('link');
+    css.rel = 'stylesheet'; css.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';
+    document.head.appendChild(css);
+    const js = document.createElement('script');
+    js.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+    js.onload = ok; js.onerror = bad; document.head.appendChild(js);
+  });
+}
+const mapMsg = t => document.getElementById('map-msg').textContent = t;
+function setField(name, value) {
+  const el = document.querySelector(`[name=${name}]`);
+  if (!el || !value) return;
+  if (el.tagName === 'SELECT') { const o = [...el.options].find(o => o.value.toLowerCase() === String(value).toLowerCase() || o.text.toLowerCase() === String(value).toLowerCase()); if (o) el.value = o.value; }
+  else el.value = value;
+  el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true }));
+}
+async function lookup(lat, lon) {
+  mapMsg('Finding the address…');
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&accept-language=en&lat=${lat}&lon=${lon}`);
+    const d = await r.json(), a = d.address || {};
+    if (!d.address) return mapMsg("We couldn't find an address there. Move the pin or type it in.");
+    const country = COUNTRY_BY_CODE[a.country_code] || 'Other';
+    const sel = document.getElementById('country');
+    if (sel.value !== country) { sel.value = country; toggleType(); }
+    const line = [a.house_number, a.building || a.amenity || a.office, a.road, a.neighbourhood || a.suburb, a.quarter].filter(Boolean).join(', ');
+    setField('address', line || (d.display_name || '').split(',').slice(0, 3).join(','));
+    setField('city', a.city || a.town || a.village || a.city_district || a.county || a.state_district);
+    if (country === 'India') { setField('state', a.state); setField('pin', (a.postcode || '').replace(/\s/g, '')); }
+    else setField('postal_code', a.postcode);
+    mapMsg(`Filled from the map: ${d.display_name}. Please check the details below.`);
+  } catch (e) { mapMsg("The address lookup isn't reachable right now. Please type the address."); }
+}
+function place(lat, lon, zoom) {
+  if (!pin) { pin = L.marker([lat, lon], { draggable: true }).addTo(map); pin.on('dragend', () => { const p = pin.getLatLng(); lookup(p.lat, p.lng); }); }
+  else pin.setLatLng([lat, lon]);
+  map.setView([lat, lon], zoom || Math.max(map.getZoom(), 16));
+  lookup(lat, lon);
+}
+document.getElementById('map-open').addEventListener('click', async () => {
+  const panel = document.getElementById('map-panel');
+  panel.hidden = !panel.hidden;
+  if (panel.hidden || map) return;
+  try { await loadLeaflet(); } catch (e) { return mapMsg("The map couldn't load. Please type the address."); }
+  map = L.map('map', { zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false }).setView([20.6, 78.9], 5);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+  map.on('click', e => place(e.latlng.lat, e.latlng.lng));
+});
+document.getElementById('map-find').addEventListener('click', async () => {
+  const q = document.getElementById('map-q').value.trim();
+  if (!q || !map) return;
+  mapMsg('Searching…');
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&accept-language=en&q=${encodeURIComponent(q)}`);
+    const d = await r.json();
+    if (!d.length) return mapMsg('No place found. Try a street and city, or click the map.');
+    place(+d[0].lat, +d[0].lon, 17);
+  } catch (e) { mapMsg("Search isn't reachable right now. Click the map instead."); }
+});
+document.getElementById('map-q').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); document.getElementById('map-find').click(); } });
+document.getElementById('map-me').addEventListener('click', () => {
+  if (!navigator.geolocation || !map) return mapMsg("Your browser can't share its location. Click the map instead.");
+  mapMsg('Asking your browser for your location…');
+  navigator.geolocation.getCurrentPosition(p => place(p.coords.latitude, p.coords.longitude, 17), () => mapMsg('Location not shared. Click the map instead.'));
+});
 </script>
 </div>
 {% endblock %}

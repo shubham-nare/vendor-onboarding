@@ -262,59 +262,73 @@ def _rows(stmt):
 @router.get("/console", response_class=HTMLResponse)
 async def dashboard(request: Request):
     async with read_sessions()() as s:
-        actor = await _actor(request, s)
-        full = access.full_view(actor)
-        emps = {e.id: e for e in await _employees(s)}
-        q = dict(rows=_rows(select(Run, Application).join(Application, Application.id == Run.application_id).order_by(Run.id.desc()).limit(200)),
-                 invites=_all(select(Invite)),
-                 docs=_rows(select(Document.run_id, Document.read["origin"].as_string())),  # just where each reading came from
-                 bills=_all(select(Bill)),
-                 acted=_rows(select(HumanAction.run_id, HumanAction.action)),
-                 open_vbills=_all(select(VendorBill).where(VendorBill.status.in_(("awaiting_confirmation", "for_review", "vendor_fix", "ready_for_approval", "blocked", "approved")))))
-        if full:
-            q["alerts"] = _rows(select(RiskEvent, Vendor).join(Vendor, Vendor.id == RiskEvent.vendor_pk).where(RiskEvent.status == "open").order_by(RiskEvent.opened_at))
-            q["vnames"] = _rows(select(Vendor.id, Vendor.vendor_id, Vendor.display_name))
-        if actor and not full:
-            q["vbills"] = _all(select(VendorBill).where(VendorBill.engaged_employee_id == actor.id, VendorBill.status == "awaiting_confirmation"))
-        r = await _reads(**q)
-        rows = r["rows"]
-        sponsors = {i.id: i for i in r["invites"]}
-        origin: dict[int, list[str]] = {}
-        for run_id, org in r["docs"]:
-            origin.setdefault(run_id, []).append(org or "")
-        bills = {b.application_id: b for b in r["bills"]}
-        runs = []
-        for run, app in rows:
-            inv = sponsors.get(app.invite_id)
-            b = bills.get(app.id)
-            secs = (run.finished_at - run.started_at).total_seconds() if run.finished_at and run.started_at else None
-            o = origin.get(run.id, [])
-            who = (emps[inv.sponsor_id].name if inv and inv.sponsor_id in emps else
-                   ((emps[b.engaged_employee_id].name if b.engaged_employee_id in emps else "unknown") + " · bill" if b else ""))
-            runs.append(dict(run=run, app=app, sponsor=who, bill=b, owned=access.owns_application(actor, inv, b),
-                             seconds=secs, fraud=(run.summary or {}).get("fraud"), resubmission=bool(run.parent_run_id),
-                             reads="live" if o and all(x == "live" for x in o) else ("saved" if o else "")))
-        if not full:  # a requester sees only what they asked for
-            runs = [r for r in runs if r["owned"]]
-        apps = {r["app"].id: r["app"] for r in runs}
-        counts = {k: sum(1 for a in apps.values() if a.current_status == k) for k in ("ACTIVE", "APPROVED", "PENDING_VENDOR", "PENDING_REVIEW", "REJECTED")}
-        done = [r for r in runs if r["seconds"] is not None]
-        stats = dict(applications=len(apps), runs=len(runs), avg_seconds=round(sum(r["seconds"] for r in done) / len(done), 1) if done else None,
-                     fraud=sum(1 for r in runs if r["fraud"]), first_pass=sum(1 for r in runs if not r["resubmission"] and r["run"].status == "APPROVED"))
-        to_confirm = 0
-        if actor and not full:
-            to_confirm = sum(1 for r in runs if r["bill"] and r["bill"].engaged_employee_id == actor.id and r["bill"].confirmation == "awaiting"
-                             and r["app"].current_status not in ("REJECTED", "ACTIVE"))
-            to_confirm += len(r["vbills"])
-        from onboarding.ap.models import InvoiceCase
-        bill_cases = {c.bill_id: c for c in (await _reads(c=_all(select(InvoiceCase))))["c"]}
-        todo = _todo(actor, runs, sponsors, emps, r["acted"], r["open_vbills"], bill_cases)
-        work = await _work_summary(s, actor, full, counts, todo)
-        vnames = {pk: (vid, name) for pk, vid, name in r.get("vnames", [])}
-        alerts = [dict(ev=ev, vendor=vend, related=vnames.get(ev.related_vendor_pk)) for ev, vend in r.get("alerts", [])]
-        alerts.sort(key=lambda a: a["ev"].severity != "fraud")
-        return await render(request, s, "dashboard.html", runs=runs, counts=counts, stats=stats, catalog=demo_catalog(), full=full,
-                            to_confirm=to_confirm, todo=todo, alerts=alerts, work=work)
+        return await render(request, s, "dashboard.html", **await _dashboard_ctx(request, s))
+
+
+@router.get("/console/pending")
+async def pending(request: Request):
+    """What the bottom-right reminder shows on every staff page: how many decisions are still waiting."""
+    async with read_sessions()() as s:
+        if not await _actor(request, s):
+            return JSONResponse({"count": 0, "items": []})
+        todo = (await _dashboard_ctx(request, s))["todo"]
+        return JSONResponse({"count": len(todo), "items": [dict(name=t["name"], ref=t["ref"], verb=t["verb"], href=t["href"]) for t in todo[:4]]})
+
+
+async def _dashboard_ctx(request: Request, s) -> dict:
+    actor = await _actor(request, s)
+    full = access.full_view(actor)
+    emps = {e.id: e for e in await _employees(s)}
+    q = dict(rows=_rows(select(Run, Application).join(Application, Application.id == Run.application_id).order_by(Run.id.desc()).limit(200)),
+             invites=_all(select(Invite)),
+             docs=_rows(select(Document.run_id, Document.read["origin"].as_string())),  # just where each reading came from
+             bills=_all(select(Bill)),
+             acted=_rows(select(HumanAction.run_id, HumanAction.action)),
+             open_vbills=_all(select(VendorBill).where(VendorBill.status.in_(("awaiting_confirmation", "for_review", "vendor_fix", "ready_for_approval", "blocked", "approved")))))
+    if full:
+        q["alerts"] = _rows(select(RiskEvent, Vendor).join(Vendor, Vendor.id == RiskEvent.vendor_pk).where(RiskEvent.status == "open").order_by(RiskEvent.opened_at))
+        q["vnames"] = _rows(select(Vendor.id, Vendor.vendor_id, Vendor.display_name))
+    if actor and not full:
+        q["vbills"] = _all(select(VendorBill).where(VendorBill.engaged_employee_id == actor.id, VendorBill.status == "awaiting_confirmation"))
+    r = await _reads(**q)
+    rows = r["rows"]
+    sponsors = {i.id: i for i in r["invites"]}
+    origin: dict[int, list[str]] = {}
+    for run_id, org in r["docs"]:
+        origin.setdefault(run_id, []).append(org or "")
+    bills = {b.application_id: b for b in r["bills"]}
+    runs = []
+    for run, app in rows:
+        inv = sponsors.get(app.invite_id)
+        b = bills.get(app.id)
+        secs = (run.finished_at - run.started_at).total_seconds() if run.finished_at and run.started_at else None
+        o = origin.get(run.id, [])
+        who = (emps[inv.sponsor_id].name if inv and inv.sponsor_id in emps else
+               ((emps[b.engaged_employee_id].name if b.engaged_employee_id in emps else "unknown") + " · bill" if b else ""))
+        runs.append(dict(run=run, app=app, sponsor=who, bill=b, owned=access.owns_application(actor, inv, b),
+                         seconds=secs, fraud=(run.summary or {}).get("fraud"), resubmission=bool(run.parent_run_id),
+                         reads="live" if o and all(x == "live" for x in o) else ("saved" if o else "")))
+    if not full:  # a requester sees only what they asked for
+        runs = [r for r in runs if r["owned"]]
+    apps = {r["app"].id: r["app"] for r in runs}
+    counts = {k: sum(1 for a in apps.values() if a.current_status == k) for k in ("ACTIVE", "APPROVED", "PENDING_VENDOR", "PENDING_REVIEW", "REJECTED")}
+    done = [r for r in runs if r["seconds"] is not None]
+    stats = dict(applications=len(apps), runs=len(runs), avg_seconds=round(sum(r["seconds"] for r in done) / len(done), 1) if done else None,
+                 fraud=sum(1 for r in runs if r["fraud"]), first_pass=sum(1 for r in runs if not r["resubmission"] and r["run"].status == "APPROVED"))
+    to_confirm = 0
+    if actor and not full:
+        to_confirm = sum(1 for r in runs if r["bill"] and r["bill"].engaged_employee_id == actor.id and r["bill"].confirmation == "awaiting"
+                         and r["app"].current_status not in ("REJECTED", "ACTIVE"))
+        to_confirm += len(r["vbills"])
+    from onboarding.ap.models import InvoiceCase
+    bill_cases = {c.bill_id: c for c in (await _reads(c=_all(select(InvoiceCase))))["c"]}
+    todo = _todo(actor, runs, sponsors, emps, r["acted"], r["open_vbills"], bill_cases)
+    work = await _work_summary(s, actor, full, counts, todo)
+    vnames = {pk: (vid, name) for pk, vid, name in r.get("vnames", [])}
+    alerts = [dict(ev=ev, vendor=vend, related=vnames.get(ev.related_vendor_pk)) for ev, vend in r.get("alerts", [])]
+    alerts.sort(key=lambda a: a["ev"].severity != "fraud")
+    return dict(runs=runs, counts=counts, stats=stats, catalog=demo_catalog(), full=full,
+                to_confirm=to_confirm, todo=todo, alerts=alerts, work=work)
 
 
 async def _work_summary(s, actor, full, counts, todo) -> dict:

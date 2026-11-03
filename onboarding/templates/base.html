@@ -4,9 +4,6 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Vendor onboarding{% endblock %} · Vendor Assurance</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     // A clean product UI: cool greys, one cobalt accent, status colours that carry meaning.
@@ -16,9 +13,9 @@
         indigo: { 50: '#EEF4FF', 100: '#DCE7FE', 200: '#BCD0FC', 300: '#8FB0F8', 400: '#5E87F1', 500: '#3B66E6', 600: '#2950D3', 700: '#2240AB', 800: '#213887', 900: '#1F326B' },
       },
       fontFamily: {
-        sans: ['Geist', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-        display: ['Geist', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-        mono: ['"Geist Mono"', 'ui-monospace', 'monospace'],
+        sans: ['Verdana', 'Geneva', 'Tahoma', 'sans-serif'],
+        display: ['Verdana', 'Geneva', 'Tahoma', 'sans-serif'],
+        mono: ['Verdana', 'Geneva', 'Tahoma', 'sans-serif'],
       },
       boxShadow: {
         card: '0 1px 2px rgba(15,23,42,.04), 0 1px 3px rgba(15,23,42,.05)',
@@ -34,8 +31,8 @@
     }
     html { background: var(--page); }
     main > * , .reveal > * { min-width: 0; }
-    body { font-family: Geist, ui-sans-serif, system-ui, sans-serif; color: var(--ink); background: transparent; -webkit-font-smoothing: antialiased; font-feature-settings: "ss01", "cv11"; }
-    h1, h2, .font-display { font-family: Geist, ui-sans-serif, sans-serif; letter-spacing: -0.022em; }
+    body { font-family: Verdana, Geneva, Tahoma, sans-serif; color: var(--ink); background: transparent; -webkit-font-smoothing: antialiased;  }
+    h1, h2, .font-display { font-family: Verdana, Geneva, Tahoma, sans-serif; letter-spacing: -0.022em; }
     body h1 { font-weight: 650; }
     body h2, body h3 { font-weight: 600; }
     main h1:not(.hero) { font-size: 26px !important; line-height: 1.2 !important; }
@@ -43,23 +40,23 @@
     h1 em, h1 i { font-style: normal; }
     main h2.text-xl { font-size: 16px; line-height: 1.4; }
     .font-display.leading-none { font-weight: 650; letter-spacing: -0.03em; }
-    .mono { font-family: "Geist Mono", ui-monospace, monospace; }
-    .kicker { font-family: Geist, sans-serif; font-weight: 600; font-size: 11.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-soft); }
+    .mono { font-family: Verdana, Geneva, Tahoma, sans-serif; }
+    .kicker { font-family: Verdana, sans-serif; font-weight: 600; font-size: 11.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-soft); }
 
     /* cards */
     main .bg-white.border, main section.bg-white { box-shadow: none; border-color: var(--rule); border-radius: 10px; }
     main .rounded-xl { border-radius: 12px; }
-    main table thead { font-family: Geist, sans-serif; letter-spacing: .04em; text-transform: uppercase; font-size: 11px !important; font-weight: 600; }
+    main table thead { font-family: Verdana, sans-serif; letter-spacing: .04em; text-transform: uppercase; font-size: 11px !important; font-weight: 600; }
     main table thead th { font-weight: 600 !important; }
 
     /* status: a solid badge (was a rubber stamp) */
     .stamp { display: inline-flex; align-items: center; gap: .7rem; padding: .5rem 1rem; border: 1.5px solid color-mix(in srgb, currentColor 30%, transparent);
       background: color-mix(in srgb, currentColor 8%, white); border-radius: 12px; font-weight: 650; letter-spacing: .02em; line-height: 1.15; transform: none !important; }
-    .stamp > span { font-family: "Geist Mono", monospace; font-weight: 500; letter-spacing: .04em !important; opacity: .85; border-left-width: 1.5px !important; }
+    .stamp > span { font-family: Verdana, sans-serif; font-weight: 500; letter-spacing: .04em !important; opacity: .85; border-left-width: 1.5px !important; }
     .stamp-land { animation: pop .45s var(--ease-out) .15s both; }
     @keyframes pop { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: none; } }
     .tag { display: inline-flex; align-items: center; gap: .35rem; border: 1px solid color-mix(in srgb, currentColor 22%, transparent); background-color: color-mix(in srgb, currentColor 7%, white);
-      border-radius: 5px; padding: .1rem .55rem; font-family: Geist, sans-serif; font-weight: 550; font-size: 11.5px; letter-spacing: 0; white-space: nowrap; line-height: 1.5; }
+      border-radius: 5px; padding: .1rem .55rem; font-family: Verdana, sans-serif; font-weight: 550; font-size: 11.5px; letter-spacing: 0; white-space: nowrap; line-height: 1.5; }
     .tag.dot::before { content: ""; width: 6px; height: 6px; border-radius: 9999px; background: currentColor; }
 
     /* proof ladder (assurance A0-A4) */
@@ -69,7 +66,7 @@
     .ladder .bars i:nth-child(1) { height: 6px; } .ladder .bars i:nth-child(2) { height: 8px; } .ladder .bars i:nth-child(3) { height: 10px; }
     .ladder .bars i:nth-child(4) { height: 12px; } .ladder .bars i:nth-child(5) { height: 14px; }
     .ladder .bars i.on { background: currentColor; }
-    .ladder b { font-family: "Geist Mono", monospace; font-weight: 500; font-size: 11px; }
+    .ladder b { font-family: Verdana, sans-serif; font-weight: 500; font-size: 11px; }
     .ladder span { font-size: 12px; color: var(--ink-soft); }
 
     /* live run timeline */
@@ -129,6 +126,21 @@
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0s !important; transition-duration: .01ms !important; }
     }
+
+    /* ---- house style: Verdana, flat rectangles, no motion ---- */
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    button:not(:disabled):active { transform: none; }
+    .hover-lift:hover { transform: none; box-shadow: none; }
+    .shadow-sm, .shadow, .shadow-md, .shadow-lg, .shadow-pop, .shadow-card { box-shadow: none !important; }
+    .rounded, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl, .tag, .stamp,
+    main .bg-white.border, main section.bg-white, main .rounded-xl,
+    input:not([type=checkbox]):not([type=radio]), select, textarea, input[type=file]::file-selector-button { border-radius: 2px !important; }
+    h1, h2, h3 { letter-spacing: 0 !important; }
+    /* numbers: centred and bold wherever they sit in a table */
+    main td.text-right, main th.text-right, main td.tabular-nums, main th.tabular-nums { text-align: center !important; }
+    main .tabular-nums, main td.text-right { font-weight: 700; }
+    /* the reminder in the bottom-right corner */
+    #pending-note { position: fixed; right: 1rem; bottom: 1rem; z-index: 60; width: 22rem; max-width: calc(100vw - 2rem); }
   </style>
 </head>
 <body class="min-h-screen">
@@ -302,6 +314,37 @@
     </main>
 
   </div>
+  {% endif %}
+  {% if actor and path != '/console' %}
+  {# bottom-right reminder: decisions still waiting (amber); nothing shows when the queue is empty #}
+  <aside id="pending-note" hidden role="status" aria-live="polite" class="bg-white border border-amber-300 border-l-4 border-l-amber-500 text-[13px]">
+    <div class="flex items-start gap-3 px-4 py-3">
+      <div class="flex-1 min-w-0">
+        <div class="font-bold text-amber-800"><span id="pending-n" class="tabular-nums"></span> still waiting for you</div>
+        <ul id="pending-list" class="mt-1.5 space-y-1 text-[12.5px] text-slate-700"></ul>
+        <a href="/console" class="mt-2 inline-block text-[12.5px] font-semibold text-indigo-700 hover:underline">Open Home</a>
+      </div>
+      <button type="button" id="pending-x" class="text-slate-400 hover:text-slate-700 px-1" aria-label="Hide for this session">✕</button>
+    </div>
+  </aside>
+  <script>
+    (async () => {
+      try { if (sessionStorage.getItem('pending-hidden')) return; } catch (e) {}
+      try {
+        const r = await fetch('/console/pending', { credentials: 'same-origin' });
+        const d = await r.json();
+        if (!d.count) return;
+        const box = document.getElementById('pending-note');
+        document.getElementById('pending-n').textContent = d.count;
+        const ul = document.getElementById('pending-list');
+        d.items.forEach(t => { const li = document.createElement('li'), a = document.createElement('a');
+          a.href = t.href; a.className = 'hover:underline'; a.textContent = `${t.verb}: ${t.name} (${t.ref})`; li.appendChild(a); ul.appendChild(li); });
+        if (d.count > d.items.length) { const li = document.createElement('li'); li.className = 'text-slate-500'; li.textContent = `and ${d.count - d.items.length} more`; ul.appendChild(li); }
+        box.hidden = false;
+        document.getElementById('pending-x').onclick = () => { box.hidden = true; try { sessionStorage.setItem('pending-hidden', '1'); } catch (e) {} };
+      } catch (e) {}
+    })();
+  </script>
   {% endif %}
   <script>
     document.addEventListener('click', e => document.querySelectorAll('details.persona[open]').forEach(d => { if (!d.contains(e.target)) d.open = false; }));

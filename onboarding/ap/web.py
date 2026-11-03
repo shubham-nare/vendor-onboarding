@@ -73,6 +73,29 @@ async def invoices(request: Request, status: str = "", q: str = "", vendor: str 
                             params=params, total=sum(x["amount"] for x in rows))
 
 
+MISMATCH = {"R-PO-04": "quantity", "R-PO-05": "unit price", "R-PO-06": "total", "R-PO-07": "GST rate",
+            "R-DUP-FILE": "duplicate", "R-DUP-PATTERN": "possible duplicate"}
+
+
+def _po_issues(d) -> tuple[list[str], str]:
+    """red: an invoice against this order doesn't match it (price, quantity, total, GST) or repeats one;
+    amber: something still in progress (delivery not recorded, an invoice waiting for a decision);
+    green: everything invoiced matched and was paid or approved."""
+    issues = []
+    for b, c in d["invoices"]:
+        if b.status == "rejected":
+            continue
+        for r in b.rules or []:
+            if r.get("result") == "FAIL" and r.get("rule_id") in MISMATCH:
+                issues.append(f"{b.ref}: {MISMATCH[r['rule_id']]} mismatch" if "duplicate" not in MISMATCH[r["rule_id"]] else f"{b.ref}: {MISMATCH[r['rule_id']]}")
+    if issues:
+        return issues, "red"
+    open_inv = [b for b, c in d["invoices"] if b.status not in ("rejected",) and c.payment_status != "paid"]
+    if not d["receipts"] or d["delivered_value"] < d["total"] - 0.01 or open_inv:
+        return [], "amber"
+    return [], "green" if d["invoices"] else "slate"
+
+
 async def _po_bundle(s, po_ids=None):
     pos = (await s.execute(select(PurchaseOrder).order_by(PurchaseOrder.id.desc()))).scalars().all()
     if po_ids is not None:
@@ -100,6 +123,7 @@ async def _po_bundle(s, po_ids=None):
         d["delivered_value"] = round(sum(min(d["received"][l.id], l.quantity) * l.unit_price * (1 + l.tax_rate / 100) for l in d["lines"]), 2)
         d["invoiced"] = round(sum(money(b.amount) or 0 for b, c in d["invoices"] if b.status not in ("rejected",)), 2)
         d["paid"] = round(sum(c.paid_amount or 0 for b, c in d["invoices"] if c.payment_status == "paid"), 2)
+        d["issues"], d["tone"] = _po_issues(d)
     return [by_po[p.id] for p in pos]
 
 

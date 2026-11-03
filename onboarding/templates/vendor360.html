@@ -215,15 +215,15 @@
         {% for n in lay.ring %}
           {% set col = LCOL.get(n.edge.status, '#94A3B8') %}
           <g><circle cx="{{ '%.1f' % n.x }}" cy="{{ '%.1f' % n.y }}" r="7" fill="#fff" stroke="{{ col }}" stroke-width="2"/>
-          <text x="{{ '%.1f' % n.x }}" y="{{ '%.1f' % (n.y - 12) }}" text-anchor="middle" font-size="10.5" font-weight="600" fill="#475569" font-family="Geist, sans-serif">{{ V360.KIND_LABEL.get(n.node.kind, n.node.kind) }}</text>
-          <text x="{{ '%.1f' % n.x }}" y="{{ '%.1f' % (n.y + 20) }}" text-anchor="middle" font-size="9.5" fill="#64748B" font-family="Geist Mono, monospace">{{ (n.node.display or '')[:22] }}</text></g>
+          <text x="{{ '%.1f' % n.x }}" y="{{ '%.1f' % (n.y - 12) }}" text-anchor="middle" font-size="10.5" font-weight="600" fill="#475569" font-family="Verdana, sans-serif">{{ V360.KIND_LABEL.get(n.node.kind, n.node.kind) }}</text>
+          <text x="{{ '%.1f' % n.x }}" y="{{ '%.1f' % (n.y + 20) }}" text-anchor="middle" font-size="9.5" fill="#64748B" font-family="Verdana, sans-serif">{{ (n.node.display or '')[:22] }}</text></g>
         {% endfor %}
         {% for o in lay.outer %}
           <g><a href="/vendors/{{ o.vendor.vendor_id }}"><rect x="{{ '%.1f' % (o.x - 78) }}" y="{{ '%.1f' % (o.y - 15) }}" width="156" height="30" rx="8" fill="{{ '#FFF1F2' if o.actionable else '#F8FAFC' }}" stroke="{{ '#FDA4AF' if o.actionable else '#CBD5E1' }}"/>
-          <text x="{{ '%.1f' % o.x }}" y="{{ '%.1f' % (o.y + 4) }}" text-anchor="middle" font-size="10.5" font-weight="600" fill="{{ '#9F1239' if o.actionable else '#475569' }}" font-family="Geist, sans-serif">{{ o.vendor.display_name[:24] }}</text></a></g>
+          <text x="{{ '%.1f' % o.x }}" y="{{ '%.1f' % (o.y + 4) }}" text-anchor="middle" font-size="10.5" font-weight="600" fill="{{ '#9F1239' if o.actionable else '#475569' }}" font-family="Verdana, sans-serif">{{ o.vendor.display_name[:24] }}</text></a></g>
         {% endfor %}
         <circle cx="{{ lay.cx }}" cy="{{ lay.cy }}" r="30" fill="#2950D3"/>
-        <text x="{{ lay.cx }}" y="{{ lay.cy + 4 }}" text-anchor="middle" font-size="11" font-weight="700" fill="#fff" font-family="Geist, sans-serif">{{ v.vendor_id }}</text>
+        <text x="{{ lay.cx }}" y="{{ lay.cy + 4 }}" text-anchor="middle" font-size="11" font-weight="700" fill="#fff" font-family="Verdana, sans-serif">{{ v.vendor_id }}</text>
       </svg>
       {% else %}
         {{ empty('building', 'No relationships recorded', 'Relationships appear once a check has run for this vendor.') }}
