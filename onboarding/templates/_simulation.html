@@ -3,20 +3,20 @@
   {% if refused %}
     <p class="text-[13px] text-slate-700 flex items-start gap-2">{{ icon('lock', 'h-4 w-4 shrink-0 mt-0.5 text-slate-500') }} <span>{{ refused }}</span></p>
   {% else %}
-    <div class="text-[11.5px] font-semibold uppercase tracking-[.05em] text-indigo-700">Simulation · nothing real was changed</div>
+    <div class="text-[11.5px] font-semibold uppercase tracking-[.05em] text-indigo-700">What-if · nothing real was changed</div>
     <div class="mt-1 text-[13.5px] font-semibold text-slate-900">{{ res.label }}{% if res.rule_id %} <span class="mono font-normal text-slate-500">{{ res.rule_id }}</span>{% endif %}</div>
     <div class="mt-3 grid grid-cols-[auto_auto_1fr] items-center gap-x-3 gap-y-2 text-[13px]">
       <span class="text-slate-500">Actual</span>{{ status_badge(res.before.status) }}<span class="text-slate-500">{{ res.before.risk_tier }} risk</span>
-      <span class="text-slate-500">Simulated</span>{{ status_badge(res.after.status) }}<span class="text-slate-500">{{ res.after.risk_tier }} risk</span>
+      <span class="text-slate-500">What-if</span>{{ status_badge(res.after.status) }}<span class="text-slate-500">{{ res.after.risk_tier }} risk</span>
     </div>
     <p class="mt-3 text-[13.5px] font-medium {{ 'text-slate-700' if res.before.status == res.after.status else 'text-indigo-800' }}">{{ res.explanation }}</p>
-    {% if res.note %}<p class="mt-1 text-[12.5px] {{ 'text-amber-800' if 'SIMULATED SOURCE' in res.note else 'text-slate-600' }}">{{ res.note }}</p>{% endif %}
+    {% if res.note %}<p class="mt-1 text-[12.5px] text-slate-600">{{ res.note }}</p>{% endif %}
     {% if res.changed %}
     <div class="mt-3 text-[12px] font-semibold text-slate-600">Rules that changed</div>
     <ul class="mt-1 space-y-1">{% for c in res.changed %}<li class="text-[12.5px] text-slate-700"><span class="mono text-slate-500">{{ c.rule }}</span> {{ c.before }} → <b>{{ c.after }}</b> · {{ c.title }}</li>{% endfor %}</ul>
     {% endif %}
     {% if res.deciding %}
-    <div class="mt-3 text-[12px] font-semibold text-slate-600">What decides the simulated outcome</div>
+    <div class="mt-3 text-[12px] font-semibold text-slate-600">What decides the what-if outcome</div>
     <ul class="mt-1 space-y-1">{% for d in res.deciding %}<li class="text-[12.5px] text-slate-700"><span class="mono text-slate-500">{{ d.rule }}</span> {{ d.title }}</li>{% endfor %}</ul>
     {% endif %}
   {% endif %}

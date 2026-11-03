@@ -48,7 +48,10 @@ async def lifespan(_app: FastAPI):
         asyncio.get_running_loop().create_task(_intel_backfill(backfill))  # Vendor Intelligence catches up on older runs
     except Exception as e:  # the app still starts; /readyz and /system show the problem
         log.error("startup database step failed: %s", type(e).__name__)
+    from onboarding import followups
+    chase = asyncio.get_running_loop().create_task(followups.loop())  # reminders and escalations, every few hours
     yield
+    chase.cancel()
 
 
 async def _intel_backfill(fn) -> None:

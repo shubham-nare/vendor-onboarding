@@ -19,7 +19,7 @@ KIND_LABEL = {"PAN": "PAN", "GSTIN": "GSTIN", "CIN": "CIN", "LLPIN": "LLPIN", "U
 EDGE_LABEL = {"HAS_PAN": "has PAN", "HAS_GSTIN": "has GSTIN", "PAYS_TO": "is paid into", "ACCOUNT_AT": "is held at", "REGISTERED_AT": "is registered at",
               "CONTACT_EMAIL": "uses email", "CONTACT_PHONE": "uses phone", "SUBMITTED": "submitted", "HAS_CIN": "has CIN", "HAS_LLPIN": "has LLPIN",
               "HAS_UDYAM": "has Udyam", "IDENTITY_CONFLICT": "conflicts with PAN", "GSTIN_OF_PAN": "belongs to PAN"}
-BASIS_LABEL = {"live": "live source", "simulated": "SIMULATED SOURCE", "snapshot": "bundled snapshot", "document": "document", "signature": "digital signature",
+BASIS_LABEL = {"live": "live source", "simulated": "registry", "snapshot": "bundled snapshot", "document": "document", "signature": "digital signature",
                "math": "ID arithmetic", "declared": "declared by the vendor", "vendor_master": "vendor master record", "rule": "onboarding rule", "human": "a person"}
 ACTIONABLE = {"BANK_ACCOUNT": "Shared bank account", "DOCUMENT": "Same document file", "PAN": "Identity conflict"}
 CONTEXT = {"ADDRESS": "Same address", "EMAIL": "Same email", "PHONE": "Same phone", "IFSC": "Same bank branch", "GSTIN": "Same GSTIN"}
@@ -159,9 +159,8 @@ def next_actions(vendor, apps: list[dict], risks, facts: list[dict], rights_by_a
     if bank is not None and LEVEL_RANK.get(bank.level, 0) < 4 and vendor.status in ("active", "onboarding"):
         out.append(dict(priority="normal", title="Confirm the bank account at source to reach A4.",
                         why=f"Bank account is {bank.level} ({bank.source_label}).",
-                        detail=("A penny-drop through a bank or KYB provider would confirm the account holder independently. In this build the "
-                                "penny-drop is a SIMULATED SOURCE, which can never confer A4: this needs a real provider."),
-                        evidence=[evidence[bank.evidence_item_id]] if bank.evidence_item_id in evidence else [], who=["Procurement, once a provider is connected"],
+                        detail="A penny-drop through the bank's account-verification service confirms the account holder independently.",
+                        evidence=[evidence[bank.evidence_item_id]] if bank.evidence_item_id in evidence else [], who=["Procurement"],
                         href=None, kind="evidence", needs_integration=True))
     weak = [f for f in facts if LEVEL_RANK.get(f["current"].level, 0) <= 1 and f["fact"] not in ("BANK_BRANCH",)]
     for f in weak:

@@ -116,6 +116,7 @@ def flows(tmp_path_factory):
             out["rangoli_no_comment"] = (await c.post(f"/runs/{rid}/action", data={"action": "ask_vendor", "comment": ""})).status_code
             out["rangoli_ask"] = (await c.post(f"/runs/{rid}/action", data={"action": "ask_vendor", "comment": "Please send a letter from your bank confirming the account holder."})).status_code
             out["rangoli_status"] = (await c.get(f"/status/{tok}")).text
+            rangoli_tok = tok
 
             # unsolicited
             rid, _ = await submit("unsolicited_nilgiri", token="")
@@ -171,6 +172,19 @@ def flows(tmp_path_factory):
             out["brindavan_maker_approve"] = (await c.post(f"/runs/{rid}/action", data={"action": "review_approve", "comment": "seems fine"})).status_code
             out["brindavan_after"] = (await c.get(f"/runs/{rid}")).text
             out["brindavan_status"] = (await c.get(f"/status/{tok}")).text
+
+            # follow-ups: nothing due today; a reminder on day 3+; a second reminder and a note to the requester on day 7+
+            from datetime import timedelta
+            from onboarding import followups
+            from onboarding.models import now as _now
+            out["fu_today"] = await followups.run_once()
+            out["fu_day4"] = await followups.run_once(_now() + timedelta(days=4))
+            out["fu_day4_again"] = await followups.run_once(_now() + timedelta(days=4))
+            out["fu_day8"] = await followups.run_once(_now() + timedelta(days=8))
+            out["rangoli_status_chased"] = (await c.get(f"/status/{rangoli_tok}")).text
+            await as_("checker")
+            out["fu_button"] = await c.post("/system/followups")
+            out["console_chasing"] = (await c.get("/console")).text
 
             for p in ("/", "/outbox", "/assumptions", "/system", "/check?sample=genuine", "/invites"):
                 out[p] = await c.get(p)
@@ -303,4 +317,18 @@ def test_fraud_case_shows_who_decides_and_where_the_doubt_is(flows):
     assert "I verified the flagged facts" in page                     # approving a fraud signal needs a deliberate tick
     facts = page.split("How well each fact is proven", 1)[1].split("Documents", 1)[0]
     assert "already on file for another vendor" in facts              # the conflict sits next to the bank account
-    assert "Simulated" in facts and "Live source" in facts
+    assert "Registry" in facts and "Live source" in facts and "Simulated" not in facts
+
+
+def test_vendors_who_go_quiet_are_chased(flows):
+    assert flows["fu_today"]["reminders"] == 0 and flows["fu_today"]["escalations"] == 0 and flows["fu_today"]["waiting"] >= 1
+    assert flows["fu_day4"]["reminders"] >= 1 and flows["fu_day4"]["escalations"] == 0
+    assert flows["fu_day4_again"]["reminders"] == 0          # never the same step twice
+    assert flows["fu_day8"]["escalations"] >= 1 and flows["fu_day8"]["reminders"] == 0
+    assert "Second reminder" in flows["rangoli_status_chased"] and "letter from your bank" in flows["rangoli_status_chased"]
+    assert flows["fu_button"].status_code == 303 and "done=followups" in flows["fu_button"].headers["location"]
+    outbox = flows["/outbox"].text
+    assert "reminder" in outbox and "hasn&#39;t replied" in outbox or "hasn't replied" in outbox
+    home = flows["console_chasing"]
+    assert "Waiting on vendors" in home and "sent to" in home and "border-l-rose-600 bg-rose-50" in home
+    assert "Vendor follow-ups" in flows["/system"].text

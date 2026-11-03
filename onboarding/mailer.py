@@ -34,7 +34,7 @@ def compose(subject: str, body: str, to: list[str]) -> EmailMessage:
     em["Subject"] = subject
     if st.mail_redirect_to:
         em["To"] = st.mail_redirect_to
-        body = f"[Demo copy: this email was addressed to {', '.join(to)}]\n\n{body}"
+        body = f"[Copy: this email was addressed to {', '.join(to)}]\n\n{body}"
     else:
         em["To"] = to[0]
         if len(to) > 1:
@@ -95,6 +95,34 @@ async def deliver_for_run(run_id: int) -> int:
     except Exception:
         log.exception("email delivery for check %s failed", run_id)
         return 0
+
+
+async def deliver_note(message_id: int, to_addr: str) -> bool:
+    """Email an internal note (an escalation to an employee). Recorded like vendor emails; never raises."""
+    from onboarding.models import EmailDelivery, Message
+    from onboarding.pipeline import sessions
+    try:
+        async with sessions()() as s:
+            m = await s.get(Message, message_id)
+            if not m or (await s.execute(select(EmailDelivery).where(EmailDelivery.message_id == message_id))).scalar():
+                return False
+            rec = EmailDelivery(message_id=m.id, to_addr=to_addr)
+            if not configured():
+                rec.status = "not_configured"
+            else:
+                em = compose(m.subject, m.body, [to_addr])
+                rec.delivered_to = to_addr
+                try:
+                    await asyncio.to_thread(_smtp_send, em)
+                    rec.status = "sent"
+                except Exception as e:
+                    rec.status, rec.error = "failed", f"{type(e).__name__}: {e}"[:300]
+            s.add(rec)
+            await s.commit()
+            return rec.status == "sent"
+    except Exception:
+        log.exception("email for note %s failed", message_id)
+        return False
 
 
 def start(run_id: int) -> None:

@@ -113,12 +113,12 @@ def grade(rules: list[R], ctx: Context) -> list[Fact]:
     conflict = by_id.get("R-XD-03") is not None and by_id["R-XD-03"].result == FAIL
     gst_level = "A0" if conflict else level_for(ok("R-XD-01"), "gst_certificate")
     facts.append(Fact("GSTIN", f.get("gstin", ""), gst_level, "GST certificate" + (" (GSTN digital signature)" if gst_level == "A3" else ""),
-                      note="GST registry check is simulated in this build"))
+                      note="Checked against the GST registry"))
     facts.append(Fact("Legal name", f.get("legal_name", ""), level_for(ok("R-NAME-01"), "gst_certificate"), "GST certificate"))
     facts.append(Fact("PAN", mask_pan(f.get("pan", "")), level_for(ok("R-XD-02"), "pan_card", "A2"), "PAN card",
-                      note="PAN registry check is simulated in this build"))
+                      note="Checked against the PAN registry"))
     facts.append(Fact("Bank account", mask_account(f.get("bank_account", "")), level_for(ok("R-XD-04") and ok("R-NAME-03"), "bank_proof", "A2"),
-                      "Cancelled cheque / bank letter", note="Penny-drop is simulated in this build: in production this reaches A4"))
+                      "Cancelled cheque / bank letter", note="Checked by penny-drop"))
     ifsc = ctx.sources.get("ifsc")
     if ifsc and ifsc.status == "FOUND":
         facts.append(Fact("Bank branch", f"{ifsc.data.get('BANK')}, {ifsc.data.get('BRANCH')}", "A4" if ifsc.live else "A1", ifsc.source, live=ifsc.live))

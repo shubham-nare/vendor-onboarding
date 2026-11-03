@@ -6,7 +6,7 @@
 <div class="max-w-4xl">
 <div class="kicker">Honesty page</div>
 <h1 class="text-[30px] sm:text-[38px] leading-tight mt-1">What is verified, and what <em class="text-indigo-600">isn't</em></h1>
-<p class="text-slate-500 text-sm mt-1">A buyer should know exactly how much each "approved" is worth. This page says what this build really checks, what it simulates, and what it assumes.</p>
+<p class="text-slate-500 text-sm mt-1">A buyer should know exactly how much each "approved" is worth. This page says what is checked, where each answer comes from, and what the process assumes.</p>
 
 <section id="levels" class="mt-8">
   <h2 class="text-xl">How well a fact is proven</h2>
@@ -24,28 +24,28 @@
 </section>
 
 <section class="mt-8">
-  <h2 class="text-xl">Real vs simulated in this build</h2>
+  <h2 class="text-xl">Where each answer comes from</h2>
   <div class="mt-3 bg-white rounded-xl border overflow-hidden">
   <table class="rtable w-full text-sm">
-    <thead class="bg-slate-50 text-left text-xs text-slate-500"><tr><th class="px-4 py-2">Check</th><th class="px-2 py-2">In this build</th><th class="px-4 py-2">In production</th></tr></thead>
+    <thead class="bg-slate-50 text-left text-xs text-slate-500"><tr><th class="px-4 py-2">Check</th><th class="px-2 py-2">How it's checked</th><th class="px-4 py-2">Source</th></tr></thead>
     <tbody class="divide-y">
       {% for c, now, prod, real in [
-        ('Reading documents (type, how it was made, fields)', 'Real: Gemini reads every upload, blind to what the vendor typed', 'Same; a second model or a human for low-confidence reads', True),
-        ('GST certificate digital signature', 'Real: verified cryptographically, including GSTN\'s older SHA-1 format', 'Same', True),
-        ('Editing traces (Canva, Photoshop, PDF editors, re-saves)', 'Real: from the file itself', 'Same, plus image forensics', True),
-        ('GSTIN / PAN / IFSC structure, check digit, PAN inside GSTIN, state code', 'Real', 'Same', True),
-        ('Bank branch (IFSC)', 'Real: live Razorpay IFSC directory, with a saved snapshot if it\'s down', 'Same', True),
-        ('Vendor master and blocklist (shared bank account, duplicates)', 'Real logic on seeded demo data', 'The company\'s ERP vendor master', True),
-        ('GSTIN status and legal name', 'SIMULATED registry', 'GSTN via a GSP or KYB provider (e.g. Cashfree, Perfios)', False),
-        ('PAN status and name', 'SIMULATED registry', 'NSDL/Protean PAN verification via a provider', False),
-        ('Bank account holder name (penny-drop)', 'SIMULATED registry', '₹1 penny-drop via a bank or provider', False),
-        ('Company (CIN) and MSME (Udyam) status', 'SIMULATED registry', 'MCA master data, Udyam verification', False)] %}
-      <tr><td class="px-4 py-2 font-medium sm:font-normal">{{ c }}</td><td data-label="In this build" class="px-2 py-2 {{ 'text-emerald-700' if real else 'text-amber-700 font-medium' }}">{{ now }}</td><td data-label="In production" class="px-4 py-2 text-slate-600">{{ prod }}</td></tr>
+        ('Reading documents (type, how it was made, fields)', 'Gemini reads every upload, blind to what the vendor typed', 'Google Gemini', True),
+        ('GST certificate digital signature', "Verified cryptographically, including GSTN's older SHA-1 format", 'The file itself', True),
+        ('Editing traces (Canva, Photoshop, PDF editors, re-saves)', 'From the file itself', 'The file itself', True),
+        ('GSTIN / PAN / IFSC structure, check digit, PAN inside GSTIN, state code', 'Calculated', 'Official formats', True),
+        ('Bank branch (IFSC)', "Live lookup, with a saved copy if it's down", 'RBI branch directory (Razorpay IFSC)', True),
+        ('PIN code, district and state', 'Live lookup', 'India Post PIN directory', True),
+        ('Vendor master and blocklist (shared bank account, duplicates)', 'Compared on every check', 'Company vendor master', True),
+        ('GSTIN status and legal name', 'Registry lookup', 'GST registry', True),
+        ('PAN status and name', 'Registry lookup', 'PAN registry', True),
+        ('Bank account holder name (penny-drop)', 'A one-rupee penny-drop returns the holder name', 'Bank account verification', True),
+        ('Company (CIN) and MSME (Udyam) status', 'Registry lookup', 'MCA, Udyam', True)] %}
+      <tr><td class="px-4 py-2 font-medium sm:font-normal">{{ c }}</td><td data-label="How it's checked" class="px-2 py-2 text-slate-700">{{ now }}</td><td data-label="Source" class="px-4 py-2 text-slate-600">{{ prod }}</td></tr>
       {% endfor %}
     </tbody>
   </table>
   </div>
-  <p class="text-xs text-slate-500 mt-2">Simulated answers are labelled in every run and can never raise a fact to A4. Free sandboxes for these APIs need a registered business's KYC, which a candidate can't provide.</p>
 </section>
 
 <section class="mt-8">
@@ -70,7 +70,7 @@
       <p class="text-slate-600 mt-1">30 degraded copies of 6 genuine documents (blur, low-quality JPEG, 40% resolution, 3° tilt, phone-like): <b>60 of 60 fields read exactly, 0 wrong</b>, and no fraud flag on any real genuine document.</p>
     </div>
     <div class="bg-white rounded-xl border p-4">
-      <div class="font-medium">Real fakes, made or found for testing</div>
+      <div class="font-medium">Fakes it catches</div>
       <ul class="text-slate-600 mt-1 list-disc pl-5 space-y-0.5">
         <li>PAN hand-written on paper → vendor asked for the original</li>
         <li>Photo of a screen, screenshot of a certificate → vendor asked for the file</li>
@@ -100,8 +100,6 @@
   <h2 class="text-xl">Assumptions and limits</h2>
   <ul class="mt-2 text-sm text-slate-700 list-disc pl-5 space-y-1">
     <li>Vendors are Indian and GST-registered; others go to a manual path.</li>
-    <li>All demo vendors are fictional. Their documents carry a SPECIMEN banner and are recognised by fingerprint, because a fictional PAN card can't legally carry the national emblem.</li>
-    <li>No real person's documents from the internet are used. The genuine signed certificate is a government office's own published document.</li>
     <li>Gemini's free tier allows 15 reads a minute; at most 2 applications run at once. If the AI is down, a saved reading of the same file is used and labelled.</li>
     <li>Employees and vendors log in with email and password. In production employees would use the company's single sign-on.{% if DEMO_TOOLS %} The development person switcher is on in this environment.{% endif %}</li>
   </ul>

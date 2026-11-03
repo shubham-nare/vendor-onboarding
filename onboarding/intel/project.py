@@ -267,9 +267,9 @@ async def project_run(s, run_id: int, *, force: bool = False) -> Vendor | None:
     keep = {"ifsc": ("BANK", "BRANCH", "CITY"), "gst": ("legal_name", "status"), "pan": ("name", "status"), "bank": ("holder",), "cin": ("name", "status")}
     for k, sr in (ctx.sources.items() if ctx else []):
         label = sr.source
-        basis = "live" if sr.live else ("simulated" if "SIMULATED" in label.upper() else "snapshot")
+        basis = "live" if sr.live else ("simulated" if sr.note == "registry connector" or "SIMULATED" in label.upper() else "snapshot")
         ev_src[k] = await _evidence(s, vendor, "source_response", f"run:{run.id}:source:{k}", basis,
-                                    ("SIMULATED SOURCE · " + label.replace("SIMULATED ", "")) if basis == "simulated" else label,
+                                    label.replace("SIMULATED ", ""),
                                     {"status": sr.status, "live": sr.live, "checked_at": sr.checked_at,
                                      **{f: (sr.data or {}).get(f) for f in keep.get(k, ()) if (sr.data or {}).get(f)}}, run_id=run.id, at=at)
     rules = (await s.execute(select(RuleResult).where(RuleResult.run_id == run.id))).scalars().all()
@@ -345,7 +345,7 @@ async def project_run(s, run_id: int, *, force: bool = False) -> Vendor | None:
         anode = await _node(s, "BANK_ACCOUNT", lookup_key("BANK_ACCOUNT", acct), mask("BANK_ACCOUNT", acct))
         bank = rr.get("R-SRC-BANK")
         if bank is not None and bank.result == "FAIL":
-            st, b, rule, note = "unresolved", "simulated", "R-SRC-BANK", "SIMULATED SOURCE: the penny-drop stand-in names a different holder"
+            st, b, rule, note = "unresolved", "simulated", "R-SRC-BANK", "Penny-drop: the bank names a different account holder"
         else:
             (st, b), rule, note = status_for("Bank account"), "", ""
         edges["ACCOUNT"] = await _edge(s, vn, anode, "PAYS_TO", st, b, evidence=ev_doc.get("bank_proof") or ev_form, rule_id=rule, note=note, run_id=run.id, at=at)

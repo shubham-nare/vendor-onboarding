@@ -183,6 +183,23 @@ class Message(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
+class FollowUp(Base):
+    """One step of chasing a vendor who hasn't answered: a reminder to the vendor, or an escalation to the
+    employee who asked for them. Keyed by the check (run) that is waiting, so a resubmission that is again
+    incomplete starts its own clock, and the daily job never sends the same step twice."""
+    __tablename__ = "follow_ups"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey("runs.id"), index=True)
+    application_id: Mapped[int] = mapped_column(ForeignKey("applications.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(20))       # reminder | escalation
+    message_id: Mapped[int | None] = mapped_column(ForeignKey("messages.id"), nullable=True)   # the vendor reminder
+    note_id: Mapped[int | None] = mapped_column(ForeignKey("messages.id"), nullable=True)      # the note to the requester
+    to_employee_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id"), nullable=True)
+    waiting_days: Mapped[int] = mapped_column(Integer, default=0)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    __table_args__ = (UniqueConstraint("run_id", "kind"),)
+
+
 class HumanAction(Base):
     __tablename__ = "human_actions"
     id: Mapped[int] = mapped_column(primary_key=True)

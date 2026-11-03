@@ -70,11 +70,40 @@
 </section>
 <!-- /waiting -->
 
+{# vendors who owe us something: amber while we wait, red once it has gone to the requester #}
+{% if chasing %}
+<section class="bg-white border rounded-xl min-w-0" id="chasing">
+  <div class="px-4 sm:px-5 py-4 border-b border-slate-100 flex flex-wrap items-baseline justify-between gap-2">
+    <div>
+      <h2 class="text-[16px]">Waiting on vendors <span class="ml-1.5 inline-flex items-center justify-center bg-amber-500 text-white text-[11.5px] font-semibold h-5 min-w-[20px] px-1.5 align-middle">{{ chasing | length }}</span></h2>
+      <p class="text-[12.5px] text-slate-500 mt-0.5">We chase these for you: a reminder after {{ FU.REMIND_AFTER_DAYS }} days, and after {{ FU.ESCALATE_AFTER_DAYS }} days a second reminder plus a note to the person who asked for the vendor.</p>
+    </div>
+  </div>
+  <table class="w-full text-[13px]">
+    <thead class="bg-slate-50 text-[11.5px] uppercase tracking-wide text-slate-500">
+      <tr><th class="text-left font-semibold px-4 sm:px-5 py-2">Vendor</th><th class="font-semibold px-3 py-2 text-center">Days waiting</th>
+          <th class="text-left font-semibold px-3 py-2 hidden md:table-cell">Chased so far</th><th class="text-left font-semibold px-3 py-2 hidden sm:table-cell">Next</th></tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+    {% for w in chasing %}
+      <tr class="border-l-4 {{ 'border-l-rose-600 bg-rose-50' if w.tone == 'red' else 'border-l-amber-500' }}">
+        <td class="px-4 sm:px-5 py-2.5"><a href="/runs/{{ w.run.id }}" class="font-medium hover:underline">{{ w.app.legal_name }}</a>
+          <div class="text-[11.5px] text-slate-500"><span class="mono">{{ w.app.ref }}</span>{% if w.requester %} · asked for by {{ w.requester.name }}{% endif %}</div></td>
+        <td class="px-3 py-2.5 text-center tabular-nums font-bold text-[15px] {{ 'text-rose-700' if w.tone == 'red' else 'text-amber-700' }}">{{ w.days }}</td>
+        <td class="px-3 py-2.5 hidden md:table-cell text-[12px] text-slate-600">Asked {{ FU.day(w.since) }}{% if w.reminded %} · reminded {{ FU.day(w.reminded.at) }}{% endif %}{% if w.escalated %} · <b class="text-rose-700">sent to {{ w.requester.name if w.requester else 'the requester' }} {{ FU.day(w.escalated.at) }}</b>{% endif %}</td>
+        <td class="px-3 py-2.5 hidden sm:table-cell text-[12px] text-slate-600">{% set nx = w.next_step %}{% if nx %}{{ nx[0] }} on {{ FU.day(nx[1]) }}{% else %}Waiting for the vendor to resubmit{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
 {% if full %}<p class="text-[12.5px] text-slate-500">Everything else is under <b class="font-medium text-slate-600">In depth</b> in the menu: <a class="text-indigo-700 hover:underline" href="/vendors">Vendors</a> · <a class="text-indigo-700 hover:underline" href="/applications">Applications</a> · <a class="text-indigo-700 hover:underline" href="/relationships">Relationships</a> · <a class="text-indigo-700 hover:underline" href="/audit">History</a> · <a class="text-indigo-700 hover:underline" href="/documents">Documents</a></p>{% endif %}
 
 {% if DEMO_TOOLS %}
 <details class="bg-white rounded-xl border overflow-hidden">
-  <summary class="px-4 sm:px-5 py-3 cursor-pointer text-[14px] font-medium">Try a scenario <span class="text-slate-400 font-normal">(development)</span></summary>
+  <summary class="px-4 sm:px-5 py-3 cursor-pointer text-[14px] font-medium">Try a scenario </summary>
   <ol class="grid md:grid-cols-2 xl:grid-cols-3 p-1.5 border-t border-slate-100">
     {% for key, sc in catalog.items() if not sc.resubmission_of %}
     <li><a href="/demo/{{ key }}" class="group flex items-start gap-3 rounded-lg px-3 py-2.5 h-full hover:bg-slate-50">

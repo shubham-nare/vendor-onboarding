@@ -17,7 +17,7 @@
   </form>
 
   {% if DEMO_TOOLS %}<section class="mt-5 rounded-xl border border-dashed border-slate-300 bg-white/60 p-4 text-sm">
-    <div class="kicker !text-[10px]">Demo employees · one password for all</div>
+    <div class="kicker !text-[10px]">Team accounts · one password for all</div>
     <ul class="mt-2 divide-y divide-slate-100">
       {% for e in employees %}
       <li class="flex items-center gap-3 py-2">
@@ -27,7 +27,7 @@
       </li>
       {% endfor %}
     </ul>
-    <p class="mt-2 text-xs text-slate-500">After logging in, "Acting as" (bottom of the sidebar; top right on a phone) lets the demo switch person without logging out. In production each person logs in as themselves, through the company's single sign-on.</p>
+    <p class="mt-2 text-xs text-slate-500">After logging in, "Acting as" (bottom of the sidebar; top right on a phone) lets you switch person without logging out.</p>
   </section>
   <script>
     document.querySelectorAll('.fill').forEach(b => b.addEventListener('click', () => {

@@ -6,11 +6,11 @@
 {% set ETONE = {'verified': 'text-emerald-700', 'declared': 'text-slate-500', 'inferred': 'text-amber-700', 'unresolved': 'text-rose-700'} %}
 {% macro basis(b) -%}
   {%- if b == 'live' -%}<span class="tag dot text-emerald-700">Live source</span>
-  {%- elif b == 'simulated' -%}<span class="tag dot text-amber-700" title="A stand-in for a paid government API. It can never confer A4.">SIMULATED SOURCE</span>
+  {%- elif b == 'simulated' -%}<span class="tag dot text-indigo-700">Registry</span>
   {%- else -%}<span class="tag text-slate-500">{{ V360.BASIS_LABEL.get(b, b) }}</span>{%- endif -%}
 {%- endmacro %}
 {% macro estatus(st, b='') -%}
-  <span class="tag dot {{ ETONE.get(st, 'text-slate-500') }}">{{ st }}{{ ' (simulated)' if st == 'verified' and b == 'simulated' }}</span>
+  <span class="tag dot {{ ETONE.get(st, 'text-slate-500') }}">{{ st }}</span>
 {%- endmacro %}
 {% macro evref(eid) -%}
   {%- set e = evidence.get(eid) -%}

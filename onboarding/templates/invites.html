@@ -52,7 +52,7 @@
           <td class="px-4 py-2 font-medium sm:font-normal">{{ i.company_name }}<div class="text-xs text-slate-400">{{ i.contact_email }}</div></td>
           <td class="px-2 py-2 text-xs" data-label="Requested by &amp; reason"><b>{{ emps[i.sponsor_id].name }}</b><div class="text-slate-500 line-clamp-2">{{ i.business_reason }}</div></td>
           <td class="inline-sm px-2 py-2 text-xs whitespace-nowrap">{{ i.spend_band }}{% if i.high_spend %}<span class="block text-rose-700">high</span>{% endif %}</td>
-          <td class="inline-sm px-2 py-2">{% if a %}{{ status_badge(a.current_status) }}{% else %}<span class="text-xs text-slate-500">{{ i.status }}{% if i.scenario_key %} · demo template{% endif %}</span>{% endif %}</td>
+          <td class="inline-sm px-2 py-2">{% if a %}{{ status_badge(a.current_status) }}{% else %}<span class="text-xs text-slate-500">{{ i.status }}{% if i.scenario_key %}{% endif %}</span>{% endif %}</td>
           <td class="inline-sm px-2 py-2 text-right pr-4 whitespace-nowrap">{% if a %}<a class="text-xs text-indigo-700 underline" href="/status/{{ i.token }}">vendor view</a>{% elif not i.scenario_key %}<a class="text-xs text-indigo-700 underline" href="/apply/{{ i.token }}">open link</a>{% endif %}</td>
         </tr>
       {% endfor %}

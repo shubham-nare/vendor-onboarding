@@ -8,7 +8,7 @@
 
   {% if demo_bills and DEMO_TOOLS %}
   <div class="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-900">
-    <b>Demo:</b> fill in a sample bill for this fictional vendor:
+    <b>Sample bills:</b> start from a prepared bill for this vendor:
     <div class="mt-2 flex flex-wrap gap-2">
       {% for key, d in demo_bills.items() %}<a href="/vendor/bills/new?demo={{ key }}" class="rounded-md border px-3 py-1.5 text-xs {{ 'bg-violet-700 text-white border-violet-700' if demo == key else 'bg-white border-violet-300 hover:border-violet-500' }}">{{ d.title }}</a>{% endfor %}
     </div>

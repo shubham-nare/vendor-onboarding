@@ -19,7 +19,7 @@ from pathlib import Path
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from urllib.parse import quote
 
@@ -327,8 +327,10 @@ async def _dashboard_ctx(request: Request, s) -> dict:
     vnames = {pk: (vid, name) for pk, vid, name in r.get("vnames", [])}
     alerts = [dict(ev=ev, vendor=vend, related=vnames.get(ev.related_vendor_pk)) for ev, vend in r.get("alerts", [])]
     alerts.sort(key=lambda a: a["ev"].severity != "fraud")
+    from onboarding import followups
+    chasing = [w for w in await followups.waiting(s) if full or (actor and w.requester and w.requester.id == actor.id)]
     return dict(runs=runs, counts=counts, stats=stats, catalog=demo_catalog(), full=full,
-                to_confirm=to_confirm, todo=todo, alerts=alerts, work=work)
+                to_confirm=to_confirm, todo=todo, alerts=alerts, work=work, chasing=chasing, FU=followups)
 
 
 async def _work_summary(s, actor, full, counts, todo) -> dict:
@@ -481,7 +483,7 @@ async def demo_start(key: str):
     async with sessions()() as s:
         tpl = (await s.execute(select(Invite).where(Invite.scenario_key == sc["invite_scenario"]).order_by(Invite.id))).scalars().first()
         if not tpl:
-            raise HTTPException(409, "Demo data not loaded. Use 'Reset demo' on the System page.")
+            raise HTTPException(409, "Reference data not loaded. Use 'Reset data' on the System page.")
         inv = _new_invite_from(tpl)
         s.add(inv)
         await s.commit()
@@ -1036,12 +1038,19 @@ async def run_action(request: Request, run_id: int, action: str = Form(...), com
 async def outbox(request: Request):
     async with read_sessions()() as s:
         access.require_full(await _actor(request, s), "The outbox")
+        from onboarding.models import FollowUp
+        steps = (await s.execute(select(FollowUp))).scalars().all()
+        notes = [f.note_id for f in steps if f.note_id]
+        kind = {f.message_id: f.kind for f in steps if f.message_id} | {f.note_id: "note" for f in steps if f.note_id}
+        emp_by_note = {f.note_id: f.to_employee_id for f in steps if f.note_id}
+        emps = {e.id: e for e in await _employees(s)}
         rows = (await s.execute(select(Message, Run, Application).join(Run, Run.id == Message.run_id).join(Application, Application.id == Run.application_id)
-                                .where(Message.audience == "vendor").order_by(Message.id.desc()).limit(100))).all()
+                                .where(or_(Message.audience == "vendor", Message.id.in_(notes or [-1]))).order_by(Message.id.desc()).limit(100))).all()
         from onboarding.models import EmailDelivery
         mails = {d.message_id: d for d in (await s.execute(select(EmailDelivery).where(EmailDelivery.message_id.in_([m.id for m, _, _ in rows] or [-1])))).scalars()}
         from onboarding import mailer
-        return await render(request, s, "outbox.html", rows=rows, mails=mails, mail_on=mailer.configured())
+        return await render(request, s, "outbox.html", rows=rows, mails=mails, mail_on=mailer.configured(), kind=kind,
+                            note_to={k: emps.get(v) for k, v in emp_by_note.items()})
 
 
 @router.get("/check", response_class=HTMLResponse)
@@ -1086,7 +1095,7 @@ async def assumptions(request: Request):
 
 
 @router.get("/system", response_class=HTMLResponse)
-async def system(request: Request, done: str = ""):
+async def system(request: Request, done: str = "", r: int = 0, e: int = 0, w: int = 0):
     st = get_settings()
     checks = []
     t = time.monotonic()
@@ -1106,9 +1115,23 @@ async def system(request: Request, done: str = ""):
         checks.append(db_check)
         checks.append(("Gemini API key", bool(st.gemini_api_key), f"models: {st.gemini_model} (fallback {st.gemini_fallback_model})" if st.gemini_api_key else "missing: documents can only be read from saved readings"))
         checks.append(("Bank branch lookup (Razorpay IFSC, live)", r.live and r.status == "FOUND", r.source + (f": {r.data.get('BANK')}, {r.data.get('BRANCH')}" if r.data else "")))
-        checks.append(("Simulated sources", True, "GST status, PAN status, penny-drop, CIN, Udyam answer from the seeded sim_registry table (labelled SIMULATED)"))
+        checks.append(("Registry connectors", True, "GST registry, PAN registry, penny-drop, MCA (CIN), Udyam"))
         checks.append(("Background runs", True, f"{runner.busy()} running now (max 2 at a time)"))
-        return await render(request, s, "system.html", checks=checks, done=done)
+        from onboarding import followups
+        from onboarding.models import FollowUp
+        last = (await s.execute(select(FollowUp).order_by(FollowUp.id.desc()).limit(1))).scalar()
+        chasing = await followups.waiting(s)
+        return await render(request, s, "system.html", checks=checks, done=done, fu_result=dict(r=r, e=e, w=w), FU=followups, chasing=chasing, last_fu=last)
+
+
+@router.post("/system/followups")
+async def followups_now(request: Request):
+    """Run the follow-up job now (it also runs by itself every few hours)."""
+    async with sessions()() as s:
+        access.require_full(await _actor(request, s), "Running follow-ups")
+    from onboarding import followups
+    r = await followups.run_once()
+    return RedirectResponse(f"/system?done=followups&r={r['reminders']}&e={r['escalations']}&w={r['waiting']}", status_code=303)
 
 
 @router.post("/system/reset")

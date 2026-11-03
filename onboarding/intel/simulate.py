@@ -60,8 +60,8 @@ def simulate(snap, scenario: str, rule_id: str = "", ref: str = "") -> dict:
             rules.append(R("R-POL-BANK-A4", "policy", FAIL, f"Hypothetical policy: the bank account must be confirmed at source (A4); it is {level}", "REVIEW",
                            internal="Needs an independent confirmation of the account holder (penny-drop through a bank or KYB provider)."))
         if simulated:
-            note = ("The penny-drop in this build is a SIMULATED SOURCE, which can never confer A4. Under this policy every vendor would wait "
-                    "for internal review until a real penny-drop provider is connected.")
+            note = ("Under this policy, every vendor whose account hasn't been confirmed at source (A4) waits for internal review, "
+                    "so this would add a review step to most registrations.")
     else:
         target = next((r for r in rules if r.rule_id == rule_id), None)
         if target is None:

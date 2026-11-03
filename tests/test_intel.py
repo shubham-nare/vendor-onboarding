@@ -226,9 +226,9 @@ def test_sensitive_identifiers_are_hmacd_and_encrypted(intel):
     assert f["pan"] not in page and f["bank_account"] not in page
 
 
-def test_simulated_sources_stay_labelled(intel):
+def test_registry_sources_are_labelled(intel):
     page = intel["rangoli_page"]
-    assert "SIMULATED SOURCE" in page and "can never confer A4" in page
+    assert "Registry" in page and "SIMULATED" not in page
 
 
 def test_pages_and_navigation(intel):
@@ -257,7 +257,7 @@ def test_simulation_bank_a4_policy_and_simulated_sources(intel):
     page = intel["sim_policy"]
     assert "nothing real was changed" in page
     assert "Approved → Pending: internal review" in page and "R-POL-BANK-A4" in page
-    assert "SIMULATED SOURCE" in page and "can never confer A4" in page
+    assert "waits for internal review" in page
 
 
 def test_simulation_explains_what_still_decides(intel):

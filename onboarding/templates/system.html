@@ -6,7 +6,7 @@
 <div class="kicker">Health</div>
 <h1 class="text-[30px] sm:text-[38px] leading-tight mt-1">System check</h1>
 <p class="text-slate-500 text-sm mt-1">Live status of everything the process depends on.</p>
-{% if done == 'reset' %}<div class="mt-4 rounded-md bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-900">Demo reset: all runs cleared, seed data reloaded.</div>{% endif %}
+{% if done == 'reset' %}<div class="mt-4 rounded-md bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-900">Reset done: all runs cleared, reference data reloaded.</div>{% endif %}
 <div class="mt-6 bg-white rounded-xl border divide-y divide-slate-100 max-w-3xl">
   {% for name, ok, detail in checks %}
   <div class="p-4 flex gap-3 min-w-0">
@@ -15,8 +15,19 @@
   </div>
   {% endfor %}
 </div>
+<section class="mt-8 max-w-3xl bg-white border p-4 text-sm">
+  <div class="flex flex-wrap items-start gap-3">
+    <div class="flex-1 min-w-0">
+      <div class="font-medium">Vendor follow-ups</div>
+      <div class="text-xs text-slate-500 mt-0.5">Runs by itself every {{ FU.EVERY_HOURS }} hours. Reminder after {{ FU.REMIND_AFTER_DAYS }} days without an answer; after {{ FU.ESCALATE_AFTER_DAYS }} days a second reminder and a note to the employee who asked for the vendor.
+        {{ chasing | length }} vendor{{ 's' if chasing | length != 1 }} waiting now.{% if last_fu %} Last follow-up sent {{ last_fu.at | dt }}.{% endif %}</div>
+    </div>
+    <form method="post" action="/system/followups"><button class="bg-indigo-600 text-white px-4 py-2 sm:py-1.5 font-semibold">Run follow-ups now</button></form>
+  </div>
+  {% if done == 'followups' %}<div class="mt-3 border-l-4 {{ 'border-l-emerald-600 bg-emerald-50' if fu_result.r or fu_result.e else 'border-l-slate-300 bg-slate-50' }} px-3 py-2 text-[12.5px]">Done: <b class="tabular-nums">{{ fu_result.r }}</b> reminder{{ 's' if fu_result.r != 1 }} and <b class="tabular-nums">{{ fu_result.e }}</b> escalation{{ 's' if fu_result.e != 1 }} sent; {{ fu_result.w }} vendor{{ 's' if fu_result.w != 1 }} waiting. {% if not (fu_result.r or fu_result.e) %}Nothing was due yet.{% endif %} <a href="/outbox" class="text-indigo-700 hover:underline">Open the outbox</a></div>{% endif %}
+</section>
 <form method="post" action="/system/reset" class="mt-8 max-w-3xl bg-white rounded-xl border p-4 flex flex-wrap items-center gap-3 text-sm">
-  <div class="flex-1 basis-full sm:basis-0 min-w-0"><div class="font-medium">Reset demo</div><div class="text-xs text-slate-500">Deletes every run and reloads employees, invites, vendor master, blocklist and simulated registries.</div></div>
+  <div class="flex-1 basis-full sm:basis-0 min-w-0"><div class="font-medium">Reset data</div><div class="text-xs text-slate-500">Deletes every run and reloads employees, invites, vendor master, blocklist and registry records.</div></div>
   <input type="password" name="passcode" placeholder="Passcode" aria-label="Passcode" class="flex-1 sm:flex-none min-w-0 rounded-md border px-3 py-2 sm:py-1.5">
   <button class="rounded-md bg-rose-600 text-white px-4 py-2 sm:py-1.5">Reset</button>
 </form>

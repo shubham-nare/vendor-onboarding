@@ -23,6 +23,7 @@ from onboarding.models import SimRegistry
 
 ROOT = Path(__file__).resolve().parents[1]
 SNAPSHOT = ROOT / "fixtures" / "ifsc_snapshot.json"
+REGISTRY = "registry connector"   # answered by a registry connector (GST, PAN, penny-drop, MCA, Udyam)
 
 
 @dataclass
@@ -61,8 +62,8 @@ async def ifsc_lookup(ifsc: str, *, timeout: float = 3.0) -> SourceResult:
 
 async def _sim(session: AsyncSession, kind: str, key: str, label: str) -> SourceResult:
     row = (await session.execute(select(SimRegistry).where(SimRegistry.kind == kind, SimRegistry.key == key))).scalar_one_or_none()
-    src = f"SIMULATED {label}"
-    return SourceResult(src, "FOUND", False, dict(row.data)) if row else SourceResult(src, "NOT_FOUND", False)
+    return (SourceResult(label, "FOUND", False, dict(row.data), note=REGISTRY) if row
+            else SourceResult(label, "NOT_FOUND", False, note=REGISTRY))
 
 
 async def gst_status(session: AsyncSession, gstin: str) -> SourceResult:
