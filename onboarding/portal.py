@@ -21,6 +21,8 @@ from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select, func
 
+from onboarding.demo_data import BUYER
+from onboarding.ap.replies import suggested_replies
 from onboarding import access, auth
 from onboarding import bills as B
 from onboarding.demo_data import KESARI, SCENARIOS
@@ -424,7 +426,8 @@ async def bill_page(request: Request, bill_id: int):
         vendor = (await s.execute(select(Vendor).where(Vendor.erp_vendor_id == b.vendor_id))).scalar_one_or_none()
         return await render(request, s, "bill.html", b=b, vm=vm, app=app, acct=acct, engaged=engaged, reg_run=reg_run, facts=facts, other=other,
                             full=access.full_view(actor), full_bank=access.sees_full_bank(actor), case=case, po=po, po_lines=po_lines, audit=audit,
-                            emps=emps, vendor=vendor, allowed=B.allowed_bill_actions(b, actor, engaged, case), labels=B.BILL_ACTION_LABEL, B=B)
+                            emps=emps, vendor=vendor, allowed=B.allowed_bill_actions(b, actor, engaged, case), labels=B.BILL_ACTION_LABEL, B=B,
+                            replies=suggested_replies(b, case, po, vm, BUYER))
 
 
 @router.post("/bills/{bill_id}/action")

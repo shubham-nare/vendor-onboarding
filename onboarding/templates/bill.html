@@ -187,6 +187,29 @@
           {% elif engaged %}Waiting for {{ engaged.name }} to confirm, or for the delivery to be recorded on the PO.
           {% else %}Nobody to confirm: "{{ b.engaged_by_text }}" isn't an employee.{% endif %}
         </div>
+        {% if allowed and 'ask_vendor' in allowed and replies %}
+        {% set RTONE = {'red': 'border-l-rose-600', 'amber': 'border-l-amber-500', 'slate': 'border-l-slate-300'} %}
+        <details class="mt-3 border border-slate-200" id="replies" {{ 'open' if replies | selectattr('tone', 'equalto', 'red') | list }}>
+          <summary class="cursor-pointer px-3 py-2 text-[13px] font-semibold bg-slate-50">Ready replies to the vendor <span class="font-normal text-slate-500">({{ replies | length }}: with the right figures from the order)</span></summary>
+          <ul class="divide-y divide-slate-100">
+          {% for r in replies %}
+            <li class="border-l-4 {{ RTONE[r.tone] }} px-3 py-2.5">
+              <div class="flex items-center justify-between gap-2"><span class="text-[13px] font-semibold">{{ r.title }}</span>
+                <button type="button" class="use-reply shrink-0 border border-slate-300 bg-white px-2.5 py-1 text-[12px] font-semibold hover:border-indigo-500" data-text="{{ r.text }}">Use this</button></div>
+              <p class="mt-1 text-[12.5px] text-slate-600">{{ r.text }}</p>
+            </li>
+          {% endfor %}
+          </ul>
+          <p class="px-3 py-2 text-[11.5px] text-slate-500 border-t border-slate-100">"Use this" puts the text in the message box below. Edit it if you like, then press "Ask the vendor to fix something". Nothing is sent until you do.</p>
+        </details>
+        <script>
+          document.querySelectorAll('.use-reply').forEach(btn => btn.addEventListener('click', () => {
+            const box = document.getElementById('ask-vendor-text');
+            if (!box) return;
+            box.value = btn.dataset.text; box.focus(); box.scrollIntoView({ block: 'center' });
+          }));
+        </script>
+        {% endif %}
         {% if allowed %}
         <div class="mt-3 space-y-2.5">
         {% for key, a in allowed.items() %}
@@ -194,7 +217,8 @@
           {% set primary = key in ('approve_payment', 'confirm_engagement', 'release_payment', 'mark_paid', 'release_hold') %}
           <form method="post" action="/bills/{{ b.id }}/action" class="rounded-lg border {{ 'border-dashed border-slate-300 bg-slate-50' if a.blocked else 'border-slate-200' }} p-3">
             <input type="hidden" name="action" value="{{ key }}">
-            {% if a.needs_comment %}<input name="comment" aria-label="{{ B.COMMENT_HINT.get(key, 'Reason') }}" class="w-full rounded-md border px-3 py-2 text-sm mb-2" placeholder="{{ B.COMMENT_HINT.get(key, 'Reason (audit trail)') }}" {{ 'disabled' if a.blocked }} required>{% endif %}
+            {% if a.needs_comment and key == 'ask_vendor' %}<textarea name="comment" id="ask-vendor-text" rows="5" aria-label="Message to the vendor" class="w-full border px-3 py-2 text-sm mb-2" placeholder="Message to the vendor, or pick a ready reply above" {{ 'disabled' if a.blocked }} required></textarea>
+            {% elif a.needs_comment %}<input name="comment" aria-label="{{ B.COMMENT_HINT.get(key, 'Reason') }}" class="w-full rounded-md border px-3 py-2 text-sm mb-2" placeholder="{{ B.COMMENT_HINT.get(key, 'Reason (audit trail)') }}" {{ 'disabled' if a.blocked }} required>{% endif %}
             <button class="w-full rounded-md px-4 py-2 text-sm font-semibold {{ 'bg-rose-600 text-white hover:bg-rose-700' if danger else ('bg-indigo-600 text-white hover:bg-indigo-700' if primary else 'border border-slate-300 bg-white text-slate-800 hover:bg-slate-50') }} disabled:bg-slate-200 disabled:text-slate-500 disabled:border-transparent disabled:cursor-not-allowed" {{ 'disabled' if a.blocked }}>{{ labels.get(key, key) }}</button>
             {% if a.blocked %}<div class="mt-2 text-xs text-slate-600 flex items-start gap-1.5">{{ icon('lock', 'h-3.5 w-3.5 shrink-0 mt-px') }} <span>{{ a.blocked }}</span></div>{% endif %}
           </form>

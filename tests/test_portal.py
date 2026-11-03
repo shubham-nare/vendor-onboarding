@@ -488,3 +488,22 @@ def test_order_rows_turn_red_on_a_mismatch():
     assert _po_issues(base | dict(invoices=[(bill([{"rule_id": "R-PO-05", "result": "PASS"}]), case)]))[1] == "amber"
     assert _po_issues(base | dict(invoices=[(bill([]), NS(payment_status="paid"))]))[1] == "green"
     assert _po_issues(dict(receipts=[], delivered_value=0, total=100.0, invoices=[]))[1] == "amber"
+
+
+def test_ready_replies_carry_the_right_figures():
+    from types import SimpleNamespace as NS
+    from onboarding.ap.replies import suggested_replies
+    from onboarding.demo_data import BUYER
+    b = NS(ref="BILL-9", invoice_number="KFS/101", po_number="PO-1", rules=[
+        {"rule_id": "R-PO-06", "result": "FAIL", "evidence": {"expected": 118000.0, "billed": 177000.0}},
+        {"rule_id": "R-PO-04", "result": "FAIL", "evidence": {}},
+        {"rule_id": "R-BILL-02", "result": "FAIL", "evidence": {"seller_gstin": "27AAAAA0000A1Z5"}},
+        {"rule_id": "R-PO-05", "result": "PASS"}])
+    case = NS(match={"lines": [{"description": "Guard shift", "po_desc": "Security guard shift", "billed_qty": 3, "received": 2,
+                                "billed_before": 0, "unit": "shift", "billed_price": 50000, "po_price": 50000}]})
+    replies = {r["key"]: r for r in suggested_replies(b, case, NS(po_number="PO-1"), NS(gstin="27AAKCK4417F1ZJ", account="123456789012"), BUYER)}
+    assert "₹1,18,000.00" in replies["total"]["text"] and "₹1,77,000.00" in replies["total"]["text"]
+    assert "delivered 2 shift, billed 3" in replies["quantity"]["text"]
+    assert "27AAKCK4417F1ZJ" in replies["gstin"]["text"]
+    assert "price" not in replies                                    # rates matched: no reply about them
+    assert {"clear_copy", "addressed"} <= set(replies)               # the general ones are always there
