@@ -20,7 +20,8 @@
       <dt class="text-slate-500">GSTIN</dt><dd class="mono">{{ f.gstin }}</dd>
       <dt class="text-slate-500">PAN</dt><dd class="mono">{{ mask_pan(f.pan) }}</dd>
       <dt class="text-slate-500">Address</dt><dd>{{ f.address }}, {{ f.city }}, {{ f.state }} {{ f.pin }}</dd>
-      <dt class="text-slate-500">Contact</dt><dd>{{ f.contact_name }} · {{ f.contact_email }} · {{ f.contact_phone }}</dd>
+      <dt class="text-slate-500">Contact</dt><dd>{{ f.contact_name }} · {{ f.contact_email }}{{ ' · ' ~ f.contact_phone if f.contact_phone }}</dd>
+      {% if f.alt_contact_name or f.alt_contact_email %}<dt class="text-slate-500">Alternate contact</dt><dd>{{ f.alt_contact_name }}{{ ' · ' ~ f.alt_contact_email if f.alt_contact_email }}{{ ' · ' ~ f.alt_contact_phone if f.alt_contact_phone }}</dd>{% endif %}
       <dt class="text-slate-500">Bank account</dt><dd><span class="mono">{{ mask_account(active.vendor.account if active else f.bank_account) }}</span> · {{ active.vendor.ifsc if active else f.ifsc }}{% if active %} <span class="tag dot text-emerald-700 ml-1">verified</span>{% endif %}<div class="text-[12px] text-slate-500">Bills are paid only into this account.</div></dd>
     </dl>
   </section>

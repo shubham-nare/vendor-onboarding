@@ -241,7 +241,7 @@ Is each file genuine? See section 8. Signals become rules named after their code
 
 ### Stage 6: Identifier checks
 Pure maths and format rules on what the vendor typed. See section 9.
-- `R-ID-01` to `R-ID-09`: format and check-digit rules.
+- `R-ID-01` to `R-ID-10`: format and check-digit rules, and the PIN code against the state.
 - `R-BANK-01`: live IFSC directory lookup.
 
 ### Stage 7: Cross-document & name checks
@@ -368,6 +368,7 @@ These run on what the vendor typed and need no documents:
 | `R-ID-06` | The PAN's **4th character** matches the business type: C = company, P = individual (proprietorship), F = firm or LLP, and so on. |
 | `R-ID-07` | CIN fits the business type. |
 | `R-ID-08` / `R-ID-09` | IFSC format and account-number format. |
+| `R-ID-10` | The PIN code belongs to the declared state's postal region (for example 560058 is Karnataka; 403xxx is Goa, inside Maharashtra's 40-44). The form checks this as the vendor types; the rule is the backstop. It doesn't prove the exact PIN is in use: that needs India Post's PIN directory. |
 | `R-BANK-01` | **Live** lookup of the IFSC in Razorpay's public IFSC directory: which bank and branch it is. If the service is down, a bundled snapshot is used and labelled; if neither answers → ERROR, which goes to REVIEW. |
 
 ---
@@ -504,6 +505,13 @@ If the rule linking a fact to its document failed, the fact is A0, however genui
 ---
 
 ## 15. Messages: what the vendor hears vs what reviewers see
+
+**The registration form.** Required fields carry a red \*, and so do the documents; the browser won't submit until they're filled (the completeness rules are the backstop). Phone and the **alternate contact** (someone to reach when the main contact is busy, for example the accounts team) are optional; the alternate contact gets a copy of our emails. Supplier passwords need 8+ characters with an uppercase letter, a lowercase letter, a number and a symbol.
+
+**After submitting** the vendor sees an orange **Under review**, never a thank-you: nothing is final until a person confirms it. It turns green (**Confirmed: you are an active vendor**) only on activation.
+
+**Email.** Every message to the vendor (action needed, confirmed, unable to proceed) is emailed to the contact and the alternate contact the moment it is sent, once SMTP is set in `.env` (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM`). `MAIL_REDIRECT_TO` sends every email to one inbox, for demos with example.com addresses. Each delivery (or why it wasn't sent) shows on the Outbox; a mail problem never blocks a decision.
+
 
 Every run writes **two messages**:
 

@@ -3,6 +3,7 @@ passwords, tampered cookies), a bill-first registration linked to the account, a
 bills (clean, and one asking for a new bank account). Throwaway SQLite, saved AI readings, no API calls."""
 
 import asyncio
+import html
 import os
 import re
 import secrets
@@ -13,7 +14,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 CACHE = ROOT / ".read_cache"
 pytestmark = pytest.mark.skipif(not CACHE.exists() or not any(CACHE.iterdir()), reason="no cached AI readings")
-PW = secrets.token_urlsafe(12)
+PW = "Ks@9" + secrets.token_urlsafe(10)   # meets the policy: upper, lower, number, symbol, 8+
 
 
 def test_password_hashing_and_cookie_signing():
@@ -38,6 +39,7 @@ def test_safe_next_only_allows_local_paths():
 def flows(tmp_path_factory):
     db = tmp_path_factory.mktemp("portaldb") / "portal.db"
     os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{db.as_posix()}"
+    os.environ["SMTP_HOST"], os.environ["MAIL_FROM"] = "smtp.test", "vendors@nareenterprises.com"   # email on, to a fake server
     import onboarding.config as cfg
     import onboarding.db as dbm
     cfg.get_settings.cache_clear()
@@ -50,10 +52,14 @@ def flows(tmp_path_factory):
     from onboarding.seeding import seed
 
     runner.PACE = 0
+    from onboarding import mailer
+    sent_mail: list = []
+    mailer._smtp_send = lambda em: sent_mail.append(dict(to=em["To"], cc=em["Cc"] or "", subject=em["Subject"], body=em.get_content()))
     pending: list[asyncio.Task] = []
     runner.start = lambda run_id, prefer_cache=False: pending.append(asyncio.create_task(runner._run(run_id, True)))
     bills.start_check = lambda bill_id, prefer_cache=False: pending.append(asyncio.create_task(bills._guarded(bill_id, True)))
-    out: dict = {}
+    out: dict = {"mails": sent_mail}
+    mailer.start = lambda run_id: pending.append(asyncio.create_task(mailer.deliver_for_run(run_id)))
 
     async def drain():
         await asyncio.gather(*pending)
@@ -84,11 +90,15 @@ def flows(tmp_path_factory):
             out["registered"] = (r.status_code, r.headers.get("set-cookie", ""))
             out["dup"] = (await other.post("/vendor/register", data=reg | {"password": PW})).text
             out["home_new"] = (await v.get("/vendor")).text
+            out["bill_form_page"] = (await v.get("/bill")).text
+            out["weak_pw"] = (await other.post("/vendor/register", data={"company_name": "X", "contact_name": "Y", "email": "y@x.example.com",
+                                                                          "password": "demo_pass"})).text
 
             f = SCENARIOS["bill_kesari"]["form"]
             data = {k: str(x) for k, x in f.items() if not isinstance(x, bool)} | {"bill_mode": "1", "gst_registered": "on", "demo": "bill_kesari"}
             r = await v.post("/bill", data=data)
             run_id = int(re.search(r"/runs/(\d+)", r.headers["location"]).group(1))
+            out["home_submitted"] = (await v.get(f"/vendor?submitted={run_id}")).text
             await drain()
             out["home_reg"] = (await v.get("/vendor")).text
             for actor, action in ((1, "confirm_engagement"), (3, "activate")):
@@ -201,10 +211,13 @@ def flows(tmp_path_factory):
             r = await v.post("/vendor/login", data={"email": reg["email"], "password": PW})
             out["login"] = r.status_code
             out["home_again"] = (await v.get("/vendor")).text
+            await drain()
         await dbm.engine().dispose()
 
     asyncio.run(go())
     os.environ.pop("DATABASE_URL", None)
+    os.environ.pop("SMTP_HOST", None)
+    os.environ.pop("MAIL_FROM", None)
     cfg.get_settings.cache_clear()
     dbm._engine = None
     return out
@@ -384,3 +397,29 @@ def test_old_development_wording_is_not_shown_for_known_files():
     assert "fictional" not in shown["title"].lower() and "demo" not in shown["title"].lower()
     assert "not independently confirmed" in shown["detail"]
     assert "known file" in signal_text({"code": "AU-1", "title": "t", "detail": "[not applied: known test specimen] y"})["detail"]
+
+
+def test_registration_form_marks_required_fields_and_checks_the_pin(flows):
+    page = flows["bill_form_page"]
+    assert "are required, and so are the documents" in page and page.count('text-rose-600 ml-0.5') >= 10
+    assert 'id="pin-msg"' in page and "PIN_SPECIFIC" in page and "R-ID-10" in page
+    assert 'name="alt_contact_email"' in page and "Alternate contact" in page
+    assert "under review" in page and "email the contact above" in page
+
+
+def test_weak_passwords_are_refused(flows):
+    assert "needs" in html.unescape(flows["weak_pw"]) and "an uppercase letter" in html.unescape(flows["weak_pw"])
+
+
+def test_after_submitting_the_vendor_sees_under_review_not_thank_you(flows):
+    page = html.unescape(flows["home_submitted"])
+    assert "Submitted · under review" in page and "Thank you" not in page and "bg-orange-50" in page
+    assert "isn't final until our team confirms it" in page
+
+
+def test_the_vendor_is_emailed_when_a_decision_is_released(flows):
+    mails = flows["mails"]
+    activated = [m for m in mails if "active" in m["subject"].lower()]
+    assert activated, [m["subject"] for m in mails]
+    assert "kesarifacility" in activated[0]["to"]
+

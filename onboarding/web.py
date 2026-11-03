@@ -95,6 +95,8 @@ def signal_text(s) -> dict:
 
 
 templates.env.globals.update(signal_text=signal_text)
+from onboarding import pincode as _pincode  # noqa: E402
+templates.env.globals.update(PIN_SPECIFIC=_pincode.SPECIFIC, PIN_TWO=_pincode.TWO)
 templates.env.globals.update(STATUS_LABEL=STATUS_LABEL, LEVEL_NAMES=LEVEL_NAMES, SLOT_TITLE=SLOT_TITLE, SLOT_LABEL=SLOT_LABEL,
                              ROLE_LABEL=ROLE_LABEL, ROLE_HINT=ROLE_HINT, inr=inr, money=money, BUYER=BUYER, BUSINESS_TYPES=V.BUSINESS_TYPES, mask_pan=V.mask_pan, mask_account=V.mask_account,
                              tone=lambda s: sum(map(ord, s or "")) % 6)
@@ -557,7 +559,7 @@ def _form_context(demo: str, values: dict) -> dict:
 async def _collect_form(request: Request) -> tuple[dict, dict[str, tuple[str, bytes]], str]:
     data = await request.form()
     f = {k: (str(data.get(k) or "")).strip() for k in ("business_type", "legal_name", "proprietor_name", "gstin", "pan", "cin", "llpin", "address",
-                                                       "city", "state", "pin", "contact_name", "contact_email", "contact_phone", "bank_holder",
+                                                       "city", "state", "pin", "contact_name", "contact_email", "contact_phone", "alt_contact_name", "alt_contact_email", "alt_contact_phone", "bank_holder",
                                                        "bank_account", "ifsc", "udyam_no", "country")}
     for k in ("gstin", "pan", "cin", "llpin", "ifsc", "udyam_no"):
         f[k] = f[k].upper().replace(" ", "")
@@ -994,6 +996,8 @@ async def run_action(request: Request, run_id: int, action: str = Form(...), com
         await s.commit()
     from onboarding.intel.project import on_decision
     await on_decision(ha.id)   # Vendor Intelligence: evidence of the decision, closes the risk flags it addressed; never raises
+    from onboarding import mailer
+    mailer.start(run.id)       # email the vendor the message this decision released, in the background
     return RedirectResponse(f"/runs/{run_id}#actions", status_code=303)
 
 
@@ -1004,7 +1008,10 @@ async def outbox(request: Request):
         access.require_full(await _actor(request, s), "The outbox")
         rows = (await s.execute(select(Message, Run, Application).join(Run, Run.id == Message.run_id).join(Application, Application.id == Run.application_id)
                                 .where(Message.audience == "vendor").order_by(Message.id.desc()).limit(100))).all()
-        return await render(request, s, "outbox.html", rows=rows)
+        from onboarding.models import EmailDelivery
+        mails = {d.message_id: d for d in (await s.execute(select(EmailDelivery).where(EmailDelivery.message_id.in_([m.id for m, _, _ in rows] or [-1])))).scalars()}
+        from onboarding import mailer
+        return await render(request, s, "outbox.html", rows=rows, mails=mails, mail_on=mailer.configured())
 
 
 @router.get("/check", response_class=HTMLResponse)

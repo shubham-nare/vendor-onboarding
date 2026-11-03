@@ -19,6 +19,13 @@ class Settings(BaseSettings):
     db_direct: bool = True     # use Neon's direct endpoint even if DATABASE_URL is the -pooler one (faster; see db.engine_args)
     session_secret: str = ""   # signs vendor login cookies; if empty, derived from the database URL (also secret)
     intel_secret: str = ""
+    # email to vendors (off until set): SMTP server, sender, and an optional single inbox for demos
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    mail_from: str = ""
+    mail_redirect_to: str = ""
     demo_tools: bool = False   # development only: person switcher, demo scenarios, demo logins and sample files in the UI     # Vendor Intelligence: keys for identifier HMACs and encryption; if empty, derived like session_secret
 
 

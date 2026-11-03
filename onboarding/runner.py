@@ -21,6 +21,8 @@ async def _run(run_id: int, prefer_cache: bool) -> None:
             await run_pipeline(run_id, prefer_cache=prefer_cache, pace=PACE)
             from onboarding.intel.project import on_run_completed
             await on_run_completed(run_id)   # Vendor Intelligence; never raises
+            from onboarding import mailer
+            await mailer.deliver_for_run(run_id)   # email any message sent to the vendor; never raises
         except Exception as e:  # never lose a run silently
             log.exception("run %s failed", run_id)
             await mark_failed(run_id, type(e).__name__)

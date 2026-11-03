@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ 'Register and submit your bill' if (bill_mode or bill or values.get('bill_mode')) else 'Register as a vendor' }}{% endblock %}
 {% block content %}
+{% set REQ %}<span class="text-rose-600 ml-0.5" aria-hidden="true">*</span>{% endset %}
 <div class="reveal">
 {% set v = values %}
 {% set is_bill = bill_mode or bill or v.get('bill_mode') %}
@@ -45,61 +46,70 @@
     <input type="hidden" name="demo" value="{{ demo }}">
     {% if is_bill %}<input type="hidden" name="bill_mode" value="1">{% endif %}
     <input type="hidden" name="country" value="{{ v.get('country', 'India') }}">
+    <p class="text-[12.5px] text-slate-500">Fields marked <span class="text-rose-600 font-semibold">*</span> are required, and so are the documents.</p>
 
     <section class="bg-white rounded-xl border p-4 sm:p-5">
       <h2 class="text-xl flex items-baseline gap-3"><span class="mono text-[12px] text-indigo-600 tracking-widest">01</span>Business</h2>
       <div class="grid md:grid-cols-2 gap-4 mt-4 text-sm">
-        <label class="block">Type of business
-          <select name="business_type" id="bt" class="mt-1 w-full rounded-md border px-2 py-2" onchange="toggleType()">
+        <label class="block">Type of business{{ REQ }}
+          <select name="business_type" id="bt" required class="mt-1 w-full rounded-md border px-2 py-2" onchange="toggleType()">
             {% for code, label in BUSINESS_TYPES.items() %}<option value="{{ code }}" {{ 'selected' if v.get('business_type') == code }}>{{ label }}</option>{% endfor %}
           </select></label>
-        <label class="block">Legal name (as on your GST registration)<input name="legal_name" value="{{ v.get('legal_name', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
-        <label class="block" data-show="PROPRIETORSHIP">Proprietor's name (as on PAN)<input name="proprietor_name" value="{{ v.get('proprietor_name', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
-        <label class="block">GSTIN<input name="gstin" value="{{ v.get('gstin', '') }}" maxlength="15" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase" placeholder="15 characters"></label>
-        <label class="block">PAN of the business<input name="pan" value="{{ v.get('pan', '') }}" maxlength="10" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase" placeholder="10 characters"></label>
-        <label class="block" data-show="PVT_LTD PUBLIC_LTD">CIN (company registration number)<input name="cin" value="{{ v.get('cin', '') }}" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase"></label>
-        <label class="block" data-show="LLP">LLPIN<input name="llpin" value="{{ v.get('llpin', '') }}" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase"></label>
+        <label class="block">Legal name (as on your GST registration){{ REQ }}<input name="legal_name" required value="{{ v.get('legal_name', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
+        <label class="block" data-show="PROPRIETORSHIP">Proprietor's name (as on PAN){{ REQ }}<input name="proprietor_name" data-req value="{{ v.get('proprietor_name', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
+        <label class="block">GSTIN{{ REQ }}<input name="gstin" data-gst value="{{ v.get('gstin', '') }}" maxlength="15" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase" placeholder="15 characters"></label>
+        <label class="block">PAN of the business{{ REQ }}<input name="pan" required value="{{ v.get('pan', '') }}" maxlength="10" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase" placeholder="10 characters"></label>
+        <label class="block" data-show="PVT_LTD PUBLIC_LTD">CIN (company registration number){{ REQ }}<input name="cin" data-req value="{{ v.get('cin', '') }}" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase"></label>
+        <label class="block" data-show="LLP">LLPIN{{ REQ }}<input name="llpin" data-req value="{{ v.get('llpin', '') }}" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase"></label>
       </div>
-      <label class="mt-4 flex items-center gap-2 text-sm"><input type="checkbox" name="gst_registered" {{ 'checked' if v.get('gst_registered', True) }}> We are registered for GST in India</label>
+      <label class="mt-4 flex items-center gap-2 text-sm"><input type="checkbox" name="gst_registered" id="gst" onchange="toggleType()" {{ 'checked' if v.get('gst_registered', True) }}> We are registered for GST in India</label>
     </section>
 
     <section class="bg-white rounded-xl border p-4 sm:p-5">
       <h2 class="text-xl flex items-baseline gap-3"><span class="mono text-[12px] text-indigo-600 tracking-widest">02</span>Address &amp; contact</h2>
       <div class="grid md:grid-cols-2 gap-4 mt-4 text-sm">
-        <label class="block md:col-span-2">Registered address<input name="address" value="{{ v.get('address', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
-        <label class="block">City<input name="city" value="{{ v.get('city', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
+        <label class="block md:col-span-2">Registered address{{ REQ }}<input name="address" required value="{{ v.get('address', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
+        <label class="block">City{{ REQ }}<input name="city" required value="{{ v.get('city', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
         <div class="grid grid-cols-2 gap-3">
-          <label class="block">State
-            <select name="state" class="mt-1 w-full rounded-md border px-2 py-2"><option value=""></option>
+          <label class="block">State{{ REQ }}
+            <select name="state" required class="mt-1 w-full rounded-md border px-2 py-2"><option value=""></option>
               {% for st in states %}<option {{ 'selected' if v.get('state') == st }}>{{ st }}</option>{% endfor %}
             </select></label>
-          <label class="block">PIN<input name="pin" value="{{ v.get('pin', '') }}" maxlength="6" class="mt-1 w-full rounded-md border px-3 py-2"></label>
+          <label class="block">PIN code{{ REQ }}<input name="pin" required inputmode="numeric" value="{{ v.get('pin', '') }}" maxlength="6" class="mt-1 w-full rounded-md border px-3 py-2 mono"></label>
+          <span id="pin-msg" class="col-span-2 -mt-1 text-xs text-rose-700 empty:hidden" role="alert"></span>
         </div>
-        <label class="block">Contact person<input name="contact_name" value="{{ v.get('contact_name', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
-        <label class="block">Email<input name="contact_email" type="email" value="{{ v.get('contact_email', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
-        <label class="block">Phone<input name="contact_phone" value="{{ v.get('contact_phone', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
+        <label class="block">Contact person{{ REQ }}<input name="contact_name" required value="{{ v.get('contact_name', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
+        <label class="block">Email{{ REQ }}<input name="contact_email" type="email" required value="{{ v.get('contact_email', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
+        <label class="block">Phone <span class="text-slate-400 font-normal">(optional)</span><input name="contact_phone" value="{{ v.get('contact_phone', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
+        <div class="md:col-span-2 mt-1 pt-3 border-t border-dashed border-slate-200">
+          <div class="font-medium">Alternate contact <span class="text-slate-400 font-normal">(optional)</span></div>
+          <p class="text-xs text-slate-500 mt-0.5">Someone we can reach if the main contact is busy or away, for example your accounts team. They get a copy of our emails.</p>
+        </div>
+        <label class="block">Name<input name="alt_contact_name" value="{{ v.get('alt_contact_name', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
+        <label class="block">Email<input name="alt_contact_email" type="email" value="{{ v.get('alt_contact_email', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
+        <label class="block">Phone<input name="alt_contact_phone" value="{{ v.get('alt_contact_phone', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
       </div>
     </section>
 
     <section class="bg-white rounded-xl border p-4 sm:p-5">
       <h2 class="text-xl flex items-baseline gap-3"><span class="mono text-[12px] text-indigo-600 tracking-widest">03</span>Bank account for payments</h2>
       <div class="grid md:grid-cols-3 gap-4 mt-4 text-sm">
-        <label class="block">Account holder name<input name="bank_holder" value="{{ v.get('bank_holder', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
-        <label class="block">Account number<input name="bank_account" value="{{ v.get('bank_account', '') }}" class="mt-1 w-full rounded-md border px-3 py-2 mono"></label>
-        <label class="block">IFSC<input name="ifsc" value="{{ v.get('ifsc', '') }}" maxlength="11" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase"></label>
+        <label class="block">Account holder name{{ REQ }}<input name="bank_holder" required value="{{ v.get('bank_holder', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
+        <label class="block">Account number{{ REQ }}<input name="bank_account" required value="{{ v.get('bank_account', '') }}" class="mt-1 w-full rounded-md border px-3 py-2 mono"></label>
+        <label class="block">IFSC{{ REQ }}<input name="ifsc" required value="{{ v.get('ifsc', '') }}" maxlength="11" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase"></label>
       </div>
       <label class="mt-4 flex items-center gap-2 text-sm"><input type="checkbox" name="msme" id="msme" onchange="toggleType()" {{ 'checked' if v.get('msme') }}> We are MSME-registered (Udyam)</label>
-      <label class="block mt-3 text-sm max-w-sm" data-msme>Udyam registration number<input name="udyam_no" value="{{ v.get('udyam_no', '') }}" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase" placeholder="UDYAM-XX-00-0000000"></label>
+      <label class="block mt-3 text-sm max-w-sm" data-msme>Udyam registration number{{ REQ }}<input name="udyam_no" data-req value="{{ v.get('udyam_no', '') }}" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase" placeholder="UDYAM-XX-00-0000000"></label>
     </section>
 
     <section class="bg-white rounded-xl border p-4 sm:p-5">
       <h2 class="text-xl flex items-baseline gap-3"><span class="mono text-[12px] text-indigo-600 tracking-widest">04</span>Documents</h2>
-      <p class="text-xs text-slate-500 mt-1">PDF, JPG or PNG, up to 10 MB each. Please upload the original files: the GST certificate as downloaded from the GST portal, and clear photos or scans of the PAN card and a cancelled cheque.</p>
+      <p class="text-xs text-slate-500 mt-1">All documents are required. PDF, JPG or PNG, up to 10 MB each. Please upload the original files: the GST certificate as downloaded from the GST portal, and clear photos or scans of the PAN card and a cancelled cheque.</p>
       <div class="mt-4 space-y-3 text-sm">
         {% for slot in ['gst_certificate', 'pan_card', 'bank_proof', 'udyam_certificate'] %}
         <div class="grid gap-2 sm:grid-cols-[11rem_1fr] lg:grid-cols-[12rem_1fr_12rem] sm:items-center sm:gap-4 rounded-lg border px-3 py-3 sm:py-2.5" {{ 'data-msme' if slot == 'udyam_certificate' }}>
-          <div class="font-medium">{{ SLOT_LABEL[slot] }}</div>
-          <input type="file" name="{{ slot }}" aria-label="{{ SLOT_LABEL[slot] }}" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/*" class="text-xs min-w-0 max-w-full">
+          <div class="font-medium">{{ SLOT_LABEL[slot] }}{{ REQ }}</div>
+          <input type="file" name="{{ slot }}" {{ 'data-req' if not (prev_docs.get(slot) or demo_files.get(slot)) }} {{ 'data-gst' if slot == 'gst_certificate' }} aria-label="{{ SLOT_LABEL[slot] }}" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/*" class="text-xs min-w-0 max-w-full">
           <div class="text-xs text-slate-500 sm:col-span-2 lg:col-span-1 lg:text-right truncate empty:hidden">
             {%- if demo_files.get(slot) %}demo: <span class="mono">{{ demo_files[slot] }}</span>
             {%- elif prev_docs.get(slot) %}keeps: <span class="mono">{{ prev_docs[slot].filename }}</span>{% endif -%}
@@ -115,8 +125,8 @@
       <h2 class="text-xl flex items-baseline gap-3"><span class="mono text-[12px] text-indigo-600 tracking-widest">05</span>Your bill</h2>
       <p class="text-xs text-slate-500 mt-1">The tax invoice for the work, addressed to {{ BUYER.legal_name }} (GSTIN <span class="mono">{{ BUYER.gstin }}</span>).</p>
       <div class="mt-4 grid gap-2 sm:grid-cols-[11rem_1fr] lg:grid-cols-[12rem_1fr_12rem] sm:items-center sm:gap-4 rounded-lg border px-3 py-3 sm:py-2.5 text-sm">
-        <div class="font-medium">Bill (tax invoice)</div>
-        <input type="file" name="invoice" aria-label="Bill (tax invoice)" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/*" class="text-xs min-w-0 max-w-full">
+        <div class="font-medium">Bill (tax invoice){{ REQ }}</div>
+        <input type="file" name="invoice" {{ 'data-req' if not (prev_docs.get('invoice') or demo_files.get('invoice')) }} aria-label="Bill (tax invoice)" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/*" class="text-xs min-w-0 max-w-full">
         <div class="text-xs text-slate-500 sm:col-span-2 lg:col-span-1 lg:text-right truncate empty:hidden">
           {%- if demo_files.get('invoice') %}demo: <span class="mono">{{ demo_files['invoice'] }}</span>
           {%- elif prev_docs.get('invoice') %}keeps: <span class="mono">{{ prev_docs['invoice'].filename }}</span>{% endif -%}
@@ -124,14 +134,14 @@
       </div>
       <p class="mt-3 text-[12.5px] text-slate-500">We read the invoice number, date, amount and the work from your bill, so you don't need to type them.</p>
       <div class="grid md:grid-cols-3 gap-4 mt-3 text-sm">
-        <label class="block md:col-span-2">Who at {{ BUYER.short_name }} engaged you?<input name="bill_engaged_by" value="{{ v.get('bill_engaged_by', '') }}" class="mt-1 w-full rounded-md border px-3 py-2" placeholder="Their name or work email">
+        <label class="block md:col-span-2">Who at {{ BUYER.short_name }} engaged you?{{ REQ }}<input name="bill_engaged_by" required value="{{ v.get('bill_engaged_by', '') }}" class="mt-1 w-full rounded-md border px-3 py-2" placeholder="Their name or work email">
           <span class="block text-xs text-slate-500 mt-1">We'll ask them to confirm the work. Bills nobody here can confirm aren't paid.</span></label>
       </div>
     </section>
     {% endif %}
 
     <div class="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-4">
-      <p class="text-xs text-slate-500 max-w-md">By submitting you confirm these details are correct. We check them against your documents and official sources; you'll hear back on this page.</p>
+      <p class="text-xs text-slate-500 max-w-md">By submitting you confirm these details are correct. Your registration then stays <b class="text-orange-700">under review</b> while we check it against your documents and official sources; it is final only when our team confirms it. <b>We'll email the contact above</b> (and the alternate contact, if given) when it's confirmed, or if we need anything from you.</p>
       <button type="submit" class="w-full sm:w-auto shrink-0 rounded-md bg-indigo-600 text-white font-medium px-6 py-3 hover:bg-indigo-700 shadow-sm">{{ 'Resubmit' if prev else ('Register and submit bill' if is_bill else 'Submit for verification') }}</button>
     </div>
   </form>
@@ -142,8 +152,36 @@ function toggleType() {
   document.querySelectorAll('[data-show]').forEach(el => el.style.display = el.dataset.show.split(' ').includes(bt) ? '' : 'none');
   const m = document.getElementById('msme').checked;
   document.querySelectorAll('[data-msme]').forEach(el => el.style.display = m ? '' : 'none');
+  // required only when it applies: shown for this business type / MSME, and GST items only for GST-registered vendors
+  const gst = document.getElementById('gst'), g = !gst || gst.checked;
+  document.querySelectorAll('[data-req]').forEach(el => {
+    const box = el.closest('[data-show],[data-msme]');
+    el.required = (!box || box.style.display !== 'none') && (!el.hasAttribute('data-gst') || g);
+  });
+  document.querySelectorAll('[data-gst]:not([data-req])').forEach(el => el.required = g);
 }
 toggleType();
+
+// the PIN code must belong to the chosen state (same rule as our checks: R-ID-10)
+const PIN_SPECIFIC = {{ PIN_SPECIFIC | tojson }}, PIN_TWO = {{ PIN_TWO | tojson }};
+function checkPin() {
+  const pin = document.querySelector('[name=pin]'), st = document.querySelector('[name=state]'), msg = document.getElementById('pin-msg');
+  if (!pin || !st) return;
+  const v = pin.value.trim();
+  let why = '';
+  if (v) {
+    if (!/^[1-8][0-9]{5}$/.test(v)) why = 'A PIN code has 6 digits and starts with 1 to 8.';
+    else {
+      const states = PIN_SPECIFIC[v.slice(0, 3)] || PIN_TWO[v.slice(0, 2)] || [];
+      if (!states.length) why = `PIN code ${v} isn't used by any Indian state's postal region.`;
+      else if (st.value && !states.includes(st.value)) why = `PIN code ${v} is in ${states.join(' / ')}, not ${st.value}.`;
+    }
+  }
+  pin.setCustomValidity(why);
+  msg.textContent = why;
+}
+['input', 'change'].forEach(e => { document.querySelector('[name=pin]')?.addEventListener(e, checkPin); document.querySelector('[name=state]')?.addEventListener(e, checkPin); });
+checkPin();
 </script>
 </div>
 {% endblock %}

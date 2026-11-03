@@ -92,9 +92,24 @@ def read_session(value: str | None, purpose: str = "vendor") -> int | None:
         return None
 
 
+PASSWORD_RULE = f"At least {MIN_PASSWORD} characters, with an uppercase letter, a lowercase letter, a number and a symbol such as @"
+
+
 def password_problem(password: str) -> str:
+    """'' if the password is strong enough, otherwise what is missing."""
+    missing = []
     if len(password) < MIN_PASSWORD:
-        return f"Use at least {MIN_PASSWORD} characters."
-    if password.lower() in {"password", "password1", "12345678", "qwertyui"}:
+        missing.append(f"at least {MIN_PASSWORD} characters")
+    if not any(c.isupper() for c in password):
+        missing.append("an uppercase letter")
+    if not any(c.islower() for c in password):
+        missing.append("a lowercase letter")
+    if not any(c.isdigit() for c in password):
+        missing.append("a number")
+    if not any(not c.isalnum() for c in password):
+        missing.append("a symbol such as @")
+    if missing:
+        return "Your password needs " + ", ".join(missing[:-1]) + (" and " if len(missing) > 1 else "") + missing[-1] + "."
+    if password.lower() in {"password@1", "password1!", "p@ssw0rd", "p@ssword1", "welcome@123", "admin@123"}:
         return "That password is too easy to guess."
     return ""

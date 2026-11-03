@@ -210,7 +210,7 @@ def test_pan_is_masked_on_the_run_page(flows):
 
 
 def test_tejas_fix_and_resubmit(flows):
-    assert "We need something from you" in flows["tejas_status"] and "tax invoice" in flows["tejas_status"]
+    assert "Action needed" in flows["tejas_status"] and "tax invoice" in flows["tejas_status"]
     assert "Update your registration" in flows["tejas_resubmit_form"]
     assert "Submission 2" in flows["tejas_page2"] and "Approved" in flows["tejas_page2"] and "Resolved" in flows["tejas_page2"]
 

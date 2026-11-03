@@ -35,7 +35,8 @@ DOC_LABEL = {"GST_CERTIFICATE": "GST certificate", "PAN_CARD": "PAN card", "CANC
              "BANK_LETTER": "bank letter", "UDYAM_CERTIFICATE": "Udyam certificate", "TAX_INVOICE": "tax invoice",
              "AADHAAR": "Aadhaar card", "OTHER": "different document"}
 FIELD_LABEL = {"legal_name": "Legal name", "gstin": "GSTIN", "pan": "PAN", "address": "Address", "city": "City",
-               "state": "State", "contact_name": "Contact name", "contact_email": "Contact email",
+               "state": "State", "pin": "PIN code", "contact_name": "Contact name", "contact_email": "Contact email",
+               "alt_contact_name": "Alternate contact name", "alt_contact_email": "Alternate contact email", "alt_contact_phone": "Alternate contact phone",
                "bank_holder": "Account holder name", "bank_account": "Bank account number", "ifsc": "IFSC",
                "business_type": "Business type", "cin": "CIN", "llpin": "LLPIN", "proprietor_name": "Proprietor's name",
                "udyam_no": "Udyam number", "bill_invoice_number": "Invoice number", "bill_amount": "Bill amount",
@@ -126,7 +127,7 @@ def constitution_type(text: str) -> str | None:
 
 
 def required_fields(form: dict) -> list[str]:
-    req = ["legal_name", "gstin", "pan", "address", "city", "state", "contact_name", "contact_email",
+    req = ["legal_name", "gstin", "pan", "address", "city", "state", "pin", "contact_name", "contact_email",
            "bank_holder", "bank_account", "ifsc", "business_type"]
     bt = form.get("business_type")
     if bt in ("PVT_LTD", "PUBLIC_LTD"):
@@ -258,6 +259,13 @@ def evaluate(ctx: Context) -> list[R]:
         add(R("R-ID-05", "identifiers", PASS if okst else FAIL, f"GSTIN state ({sname}) " + ("matches" if okst else "differs from") + f" the declared state ({f.get('state')})", "VENDOR",
               {"gstin_state": sname, "declared": f.get("state")},
               vendor_text="" if okst else f"Your GSTIN is registered in {sname} (code {code}), but you gave a principal place of business in {f.get('state')}. Please provide the GSTIN for the state you'll invoice us from, with that state's address."))
+    pin = str(f.get("pin") or "").strip()
+    if pin:
+        from onboarding.pincode import pin_problem
+        why = pin_problem(pin, f.get("state", ""))
+        add(R("R-ID-10", "identifiers", FAIL if why else PASS, "PIN code fits the declared state" if not why else f"PIN code doesn't fit the address: {why}",
+              "VENDOR", {"pin": pin, "state": f.get("state")},
+              vendor_text=f"{why} Please check the PIN code and state of your registered address." if why else ""))
     if pan:
         okp = V.validate_pan(pan)
         add(R("R-ID-03", "identifiers", PASS if okp else FAIL, "PAN format" + ("" if okp else " is not standard"), "VENDOR", {"pan": pan},

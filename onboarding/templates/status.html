@@ -11,13 +11,13 @@
     <div class="mt-6 bg-white rounded-xl border p-5 text-sm">You haven't submitted yet. <a class="text-indigo-700 underline" href="/apply/{{ token }}">Start your registration</a>.</div>
   {% else %}
     {% set st = app.current_status %}
-    {% set label = {'IN_PROGRESS': ('We are checking your details', 'This usually takes under a minute.', 'bg-violet-50 border-violet-200'),
-                    'APPROVED': ('Checks passed', 'Your account is being activated by our team.', 'bg-emerald-50 border-emerald-200'),
-                    'ACTIVE': ('You are an active vendor', 'See the message below for your vendor ID.', 'bg-emerald-50 border-emerald-200'),
-                    'PENDING_VENDOR': ('We need something from you', 'See the message below, then update your submission.', 'bg-amber-50 border-amber-200'),
-                    'PENDING_REVIEW': ('Under review', 'No action is needed from you right now.', 'bg-slate-50 border-slate-200'),
+    {% set label = {'IN_PROGRESS': ('Under review', 'Submitted. We are checking your details and documents; it is final only when our team confirms it.', 'bg-orange-50 border-orange-200'),
+                    'APPROVED': ('Under review', 'Your checks are complete. Our team is confirming your registration; we will email you when it is done.', 'bg-orange-50 border-orange-200'),
+                    'ACTIVE': ('Confirmed: you are an active vendor', 'See the message below for your vendor ID.', 'bg-emerald-50 border-emerald-200'),
+                    'PENDING_VENDOR': ('Action needed', 'See the message below, then update your submission.', 'bg-amber-50 border-amber-200'),
+                    'PENDING_REVIEW': ('Under review', 'Our team is reviewing your registration. No action is needed from you; we will email you when it is decided.', 'bg-orange-50 border-orange-200'),
                     'REJECTED': ('Registration closed', 'See the message below.', 'bg-slate-50 border-slate-200')}.get(st, ('Under review', '', 'bg-slate-50 border-slate-200')) %}
-    {% if st == 'REJECTED' and not msgs %}{% set label = ('Under review', 'No action is needed from you right now.', 'bg-slate-50 border-slate-200') %}{% endif %}
+    {% if st == 'REJECTED' and not msgs %}{% set label = ('Under review', 'Our team is reviewing your registration. No action is needed from you; we will email you when it is decided.', 'bg-orange-50 border-orange-200') %}{% endif %}
     {# where you are, in plain words: submitted -> checked -> decided -> active #}
     {% set shown_st = 'PENDING_REVIEW' if (st == 'REJECTED' and not msgs) else st %}
     {% set at = {'IN_PROGRESS': 1, 'PENDING_VENDOR': 1, 'PENDING_REVIEW': 2, 'APPROVED': 3, 'ACTIVE': 4, 'REJECTED': 2}.get(shown_st, 1) %}
@@ -33,7 +33,7 @@
       {% endfor %}
     </ol>
     <div class="mt-4 rounded-xl border p-4 sm:p-5 {{ label[2] }}">
-      <div class="text-[20px] font-semibold tracking-tight">{{ label[0] }}</div>
+      <div class="text-[20px] font-semibold tracking-tight {{ 'text-orange-800' if 'orange' in label[2] }}">{{ label[0] }}</div>
       <div class="text-sm text-slate-600 mt-1">{{ label[1] }}</div>
       {% if st == 'PENDING_VENDOR' %}<a href="/apply/{{ token }}" class="block sm:inline-block text-center mt-4 rounded-md bg-indigo-600 text-white text-sm font-medium px-5 py-2.5 hover:bg-indigo-700 shadow-sm">Update my submission</a>{% endif %}
       {% if st == 'IN_PROGRESS' %}<script>setTimeout(() => location.reload(), 3000)</script>{% endif %}

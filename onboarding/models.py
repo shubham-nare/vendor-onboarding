@@ -160,6 +160,18 @@ class Fact(Base):
     live: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
+class EmailDelivery(Base):
+    """One email of one vendor message (added table). status: sent | failed | not_configured | no_address."""
+    __tablename__ = "email_deliveries"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    message_id: Mapped[int] = mapped_column(ForeignKey("messages.id"), index=True, unique=True)
+    to_addr: Mapped[str] = mapped_column(String(400), default="")
+    delivered_to: Mapped[str] = mapped_column(String(400), default="")
+    status: Mapped[str] = mapped_column(String(20), default="")
+    error: Mapped[str] = mapped_column(String(300), default="")
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
 class Message(Base):
     __tablename__ = "messages"
     id: Mapped[int] = mapped_column(primary_key=True)

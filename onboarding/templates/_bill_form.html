@@ -4,12 +4,12 @@
   <input type="hidden" name="demo" value="{{ demo }}">
   <div class="grid gap-2 sm:grid-cols-[11rem_1fr] lg:grid-cols-[12rem_1fr_12rem] sm:items-center sm:gap-4 rounded-lg border px-3 py-3 sm:py-2.5">
     <div class="font-medium">Bill (tax invoice)</div>
-    <input type="file" name="invoice" aria-label="Bill (tax invoice)" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/*" class="text-xs min-w-0 max-w-full">
+    <input type="file" name="invoice" required aria-label="Bill (tax invoice)" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/*" class="text-xs min-w-0 max-w-full">
     <div class="text-xs text-slate-500 sm:col-span-2 lg:col-span-1 lg:text-right truncate empty:hidden">{{ file_note }}</div>
   </div>
   <p class="text-[12.5px] text-slate-500">We read the invoice number, date, amount and the work from your bill, so you don't need to type them.</p>
   <div class="grid md:grid-cols-3 gap-4">
-    <label class="block md:col-span-2">Who at {{ BUYER.short_name }} asked for it?<input name="engaged_by" required value="{{ values.get('engaged_by', '') }}" placeholder="Their name or work email" class="mt-1 w-full rounded-md border px-3 py-2">
+    <label class="block md:col-span-2">Who at {{ BUYER.short_name }} asked for it?<span class="text-rose-600 ml-0.5" aria-hidden="true">*</span><input name="engaged_by" required value="{{ values.get('engaged_by', '') }}" placeholder="Their name or work email" class="mt-1 w-full rounded-md border px-3 py-2">
       <span class="block text-xs text-slate-500 mt-1">They confirm the work before the bill is approved.</span></label>
   </div>
   <div class="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3">

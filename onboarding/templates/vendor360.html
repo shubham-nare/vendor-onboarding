@@ -145,6 +145,13 @@
       {% else %}
         <tr><td class="px-6 py-6 text-[13px] text-slate-500">No identifiers recorded yet.</td></tr>
       {% endfor %}
+      {% set lf = (apps[-1].latest.form if apps and apps[-1].latest else {}) or {} %}
+      {% if lf.contact_name or lf.contact_email %}
+        <tr><td class="pl-4 sm:pl-6 pr-2 py-2.5 w-28 text-slate-500 whitespace-nowrap">Contact</td><td class="px-2 py-2.5 text-[12.5px]" colspan="2">{{ lf.contact_name }}{{ ' · ' ~ lf.contact_email if lf.contact_email }}{{ ' · ' ~ lf.contact_phone if lf.contact_phone }}</td></tr>
+      {% endif %}
+      {% if lf.alt_contact_name or lf.alt_contact_email %}
+        <tr><td class="pl-4 sm:pl-6 pr-2 py-2.5 w-28 text-slate-500 whitespace-nowrap">Alternate contact</td><td class="px-2 py-2.5 text-[12.5px]" colspan="2">{{ lf.alt_contact_name }}{{ ' · ' ~ lf.alt_contact_email if lf.alt_contact_email }}{{ ' · ' ~ lf.alt_contact_phone if lf.alt_contact_phone }}</td></tr>
+      {% endif %}
       </tbody>
     </table>
   </section>
