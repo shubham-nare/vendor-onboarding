@@ -145,7 +145,9 @@ def intel(tmp_path_factory):
             out["activate"] = (await c.post(f"/runs/{nil_run}/action", data={"action": "activate"})).status_code
             kav_run = parents["borrowed_gstin_kaveri"]
             c.cookies.set("actor", str(emp["checker"]))
+            out["kaveri_page_before"] = (await c.get(f"/runs/{kav_run}")).text
             out["confirm"] = (await c.post(f"/runs/{kav_run}/action", data={"action": "confirm_reject"})).status_code
+            out["kaveri_page_after"] = (await c.get(f"/runs/{kav_run}")).text
         async with sessions()() as s:
             out["nilgiri_after"] = (await s.get(Vendor, out["v_pk"]["happy_nilgiri"])).status
             out["kaveri_flags_after"] = [(r.status, r.resolution) for r in (await s.execute(select(RiskEvent).where(RiskEvent.vendor_pk == out["v_pk"]["borrowed_gstin_kaveri"]))).scalars()]
@@ -275,3 +277,12 @@ def test_simulation_refused_when_replay_is_not_exact(intel):
     assert "Simulation is off for this check" in intel["sim_refused"]
     assert "Simulation is off for this check" in intel["sim_refused_panel"]
     assert intel["sim_requester"] == 403
+
+
+def test_a_rejection_waits_for_a_person_to_confirm_it(intel):
+    """Until someone confirms, the rejected check offers 'confirm' and 'send to review'; afterwards it says it was confirmed."""
+    before, after = intel["kaveri_page_before"], intel["kaveri_page_after"]
+    assert 'value="confirm_reject"' in before and 'value="override_reject"' in before
+    assert "Rejection confirmed" not in before
+    assert "Rejection confirmed" in after and 'value="confirm_reject"' not in after
+

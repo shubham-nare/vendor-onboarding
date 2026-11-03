@@ -192,7 +192,7 @@
         <p class="mt-3 flex flex-wrap items-center gap-3"><span class="stamp text-emerald-600 text-sm" style="transform:rotate(-2deg)">Active vendor</span><span class="text-[15px]">Vendor <b class="mono">{{ vendor.vendor_id }}</b> added to the vendor master.</span></p>
       {% elif app.current_status == 'PENDING_VENDOR' %}
         <p class="mt-2 text-sm text-slate-600">Waiting for the vendor to fix and resubmit through their link. Nothing to do here.</p>
-      {% elif app.current_status == 'REJECTED' %}
+      {% elif app.current_status == 'REJECTED' and (actions | selectattr('0.run_id', 'equalto', run.id) | selectattr('0.action', 'in', ['confirm_reject', 'review_reject']) | list) %}
         <p class="mt-2 text-sm text-slate-600">Rejection confirmed; the vendor was told.</p>
       {% elif allowed %}
         {% if rights %}
