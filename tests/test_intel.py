@@ -233,7 +233,7 @@ def test_simulated_sources_stay_labelled(intel):
 
 def test_pages_and_navigation(intel):
     assert "Rangoli Print House" in intel["dir"] and "Deccan Office Supplies" in intel["dir"]
-    assert "Relationship alerts" in intel["dash"] and "Open vendor profile" in intel["run_page"]
+    assert "Waiting for you" in intel["dash"] and "Open vendor profile" in intel["run_page"]
     assert intel["missing"] == 404 and intel["accounts"] == 200
     assert "What to do next" in intel["rangoli_page"] and "Who:" in intel["rangoli_page"]
     assert "On record (vendor master)" in intel["deccan_page"] and "Rangoli Print House" in intel["deccan_page"]   # seen from the other side too

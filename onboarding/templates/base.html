@@ -157,6 +157,7 @@
     '/invoices': '<path d="M5 3h14v18l-2.3-1.5L14.3 21 12 19.5 9.7 21l-2.4-1.5L5 21z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
     '/purchase-orders': '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/>',
     '/audit': '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    '/documents': '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/>',
     '/help': '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6"/><path d="M12 17h.01"/>',
     '/console': '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
     '/bills': '<path d="M5 3h14v18l-2.3-1.5L14.3 21 12 19.5 9.7 21l-2.4-1.5L5 21z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
@@ -235,11 +236,10 @@
 
 
   {% else %}
-  {% set NAV = [('Workspace', [('/console', 'Dashboard'), ('/review', 'Review'), ('/vendors', 'Vendors'), ('/applications', 'Applications'), ('/relationships', 'Relationships'), ('/invites', 'Invites')]),
-                ('Payables', [('/invoices', 'Invoices'), ('/purchase-orders', 'Orders')]),
-                ('Records', [('/audit', 'History')]),
+  {% set NAV = [('Approvals', [('/console', 'Home'), ('/review', 'Review'), ('/invoices', 'Invoices'), ('/invites', 'Invites')]),
+                ('In depth', [('/vendors', 'Vendors'), ('/applications', 'Applications'), ('/purchase-orders', 'Orders'), ('/relationships', 'Relationships'), ('/audit', 'History'), ('/documents', 'Documents')]),
                 ('Settings', [('/supplier-accounts', 'Accounts'), ('/outbox', 'Outbox'), ('/check', 'Checker'), ('/system', 'System')])] %}
-  {% set REVIEWER_ONLY = ['/relationships', '/purchase-orders', '/audit', '/supplier-accounts', '/outbox', '/check', '/system'] %}
+  {% set REVIEWER_ONLY = ['/relationships', '/purchase-orders', '/audit', '/documents', '/supplier-accounts', '/outbox', '/check', '/system'] %}
   {% set reviewer = actor and actor.role in ('maker', 'checker') %}
   {# desktop sidebar #}
   <aside class="hidden lg:flex fixed inset-y-0 left-0 z-30 w-64 flex-col bg-[#0F1B2D] text-slate-200">
@@ -248,13 +248,19 @@
       {% for group, items in NAV %}
       {% set shown = items | rejectattr('0', 'in', REVIEWER_ONLY if not reviewer else []) | list %}
       {% if actor and shown %}
-      <div>
-        <div class="px-3 mb-1.5 text-[10.5px] font-semibold uppercase tracking-[.08em] text-slate-500">{{ group }}</div>
+      {% set open_group = shown | selectattr('0', 'equalto', path) | list or shown | selectattr('0', 'in', [path.rsplit('/', 1)[0]]) | list %}
+      {% if group == 'Settings' %}
+      <details class="group/set" {{ 'open' if open_group }}>
+        <summary class="px-3 mb-1.5 text-[10.5px] font-semibold uppercase tracking-[.08em] text-slate-500 cursor-pointer list-none flex items-center gap-1 hover:text-slate-300">{{ group }} <span class="transition-transform group-open/set:rotate-90">›</span></summary>
+      {% else %}
+      <div class="{{ 'pt-4 border-t border-white/10' if group == 'In depth' }}">
+        <div class="px-3 mb-1.5 text-[10.5px] font-semibold uppercase tracking-[.08em] {{ 'text-indigo-300' if group == 'Approvals' else 'text-slate-500' }}">{{ group }}</div>
+      {% endif %}
         {% for href, label in shown %}
         {% set on = path == href or (href != '/console' and path.startswith(href ~ '/')) or (href == '/console' and path.startswith('/runs/')) %}
-        <a href="{{ href }}" class="side-link" {{ 'aria-current=page' if on }}>{{ nav_icon(href) }}{{ label }}</a>
+        <a href="{{ href }}" class="side-link {{ '!text-[14.5px] !font-semibold' if group == 'Approvals' else '!text-[13px] opacity-90' }}" {{ 'aria-current=page' if on }}>{{ nav_icon(href) }}{{ label }}</a>
         {% endfor %}
-      </div>
+      {% if group == 'Settings' %}</details>{% else %}</div>{% endif %}
       {% endif %}
       {% endfor %}
     </nav>

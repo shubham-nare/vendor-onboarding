@@ -184,6 +184,8 @@ def flows(tmp_path_factory):
             out["cr_nonote"] = (await staff.post(f"/change-requests/{cr_id}/decide", data={"decision": "approve", "note": ""})).status_code
             out["cr_checker"] = (await staff.post(f"/change-requests/{cr_id}/decide", data={"decision": "approve", "note": "Called the number on record; Sneha confirmed"})).status_code
             out["profile_done"] = (await v.get("/vendor/profile")).text
+            out["documents"] = (await staff.get("/documents")).text
+            out["documents_bills"] = (await staff.get("/documents?kind=invoice&show=all")).text
             for path in ("/review", "/applications", "/relationships", "/audit?entity=change_request"):
                 out[path] = await staff.get(path)
             out["kesari_360_after_change"] = (await staff.get(f"/vendors/{vnd}")).text
@@ -444,4 +446,18 @@ def test_navigation_uses_short_names_and_help_replaces_sources(flows):
     for label in (">Review<", ">Invoices<", ">Orders<", ">History<", ">Help<"):
         assert label in page.replace("</svg>", ">"), label
     assert "Verification sources" not in page and "Decisions and audit" not in page and "Invoice verification" not in page
+
+
+def test_home_is_only_what_needs_approving(flows):
+    page = flows["console_page"]
+    assert "Waiting for you" in page and "Vendors to approve" in page and "Invoices to approve" in page
+    for gone in ("Where applications stand", "Recent decisions", "Recent checks", "Relationship alerts"):
+        assert gone not in page, gone
+    assert ">Approvals<" in page and ">In depth<" in page and ">Documents<" in page.replace("</svg>", ">")
+
+
+def test_documents_page_lists_every_upload(flows):
+    page = flows["documents"]
+    assert "Documents" in page and "GST certificate" in page and "/files/" in page and "Kesari" in page
+    assert "Onboarding bill" in flows["documents_bills"] and "GST certificate</div>" not in flows["documents_bills"]
 

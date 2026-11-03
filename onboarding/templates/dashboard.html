@@ -1,265 +1,89 @@
 {% extends "base.html" %}
 {% from "_macros.html" import status_badge, tier_chip, icon %}
-{% block title %}Dashboard{% endblock %}
+{% block title %}Home{% endblock %}
 {% block content %}
 {% set TONES = ['bg-indigo-100 text-indigo-700', 'bg-emerald-100 text-emerald-700', 'bg-amber-100 text-amber-800', 'bg-rose-100 text-rose-700', 'bg-violet-100 text-violet-700', 'bg-sky-100 text-sky-700'] %}
 {% macro mono(name, size='h-9 w-9 text-[12px]') -%}
   {%- set w = (name or '?').split() -%}
   <span class="{{ size }} {{ TONES[tone(name)] }} shrink-0 inline-flex items-center justify-center rounded-lg font-semibold" aria-hidden="true">{{ w[0][0] }}{{ w[1][0] if w | length > 1 else '' }}</span>
 {%- endmacro %}
+{% set vendor_items = todo | rejectattr('status', 'equalto', 'BILL') | list %}
+{% set invoice_items = todo | selectattr('status', 'equalto', 'BILL') | list %}
+{% set checker = actor and actor.role == 'checker' %}
 <div class="reveal space-y-6">
 
 <div class="flex flex-wrap items-end justify-between gap-4">
   <div>
-    <p class="text-[13px] font-medium text-slate-500">Vendor onboarding · {{ BUYER.legal_name }}</p>
-    <h1 class="mt-1">{% if actor %}Welcome back, {{ actor.name.split()[0] }}{% else %}Dashboard{% endif %}</h1>
-    <p class="text-slate-500 text-[14.5px] mt-1.5 max-w-2xl">Every vendor an employee asked for, checked document by document. Rules decide, the AI only reads, and people activate vendors and confirm rejections.</p>
+    <h1>{% if actor %}Welcome back, {{ actor.name.split()[0] }}{% else %}Home{% endif %}</h1>
+    <p class="text-slate-500 text-[14.5px] mt-1.5">{% if todo %}{{ todo | length }} thing{{ 's' if todo | length != 1 }} waiting for your decision.{% else %}Nothing is waiting for your decision.{% endif %}</p>
     {% if not full %}<p class="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[12.5px] text-amber-900">{{ icon('lock', 'h-3.5 w-3.5') }} Requester view: only the vendors you asked for, and bills that name you.</p>{% endif %}
   </div>
-  <div class="flex w-full sm:w-auto gap-2">
-    <a href="/vendors" class="flex-1 sm:flex-none justify-center inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white text-slate-700 text-sm font-medium px-4 py-2.5 hover:bg-slate-50 shadow-card">{{ icon('building') }} Vendors</a>
-    <a href="/invites" class="flex-1 sm:flex-none justify-center inline-flex items-center gap-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold px-4 py-2.5 hover:bg-indigo-700 shadow-sm">{{ icon('plus') }} Invite a vendor</a>
-  </div>
+  <a href="/invites" class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold px-4 py-2.5 hover:bg-indigo-700 shadow-sm">{{ icon('plus') }} Invite a vendor</a>
 </div>
 
-{# key numbers #}
-<div class="grid grid-cols-2 md:grid-cols-3 2xl:grid-cols-6 gap-3">
-  {% for label, value, note, href, tone in [
-      ('Reviews awaiting you', work.reviews, 'vendor decisions you can take', '/review', 'indigo' if work.reviews else 'slate'),
-      ('Waiting on vendors', work.waiting, 'applications and invoices', '/applications?status=PENDING_VENDOR', 'slate'),
-      ('High-risk relationships', work.high_risk, 'open fraud-class flags', '/relationships', 'rose' if work.high_risk else 'slate'),
-      ('Invoices needing review', work.inv_review, (inr(work.inv_review_amt) if work.inv_review else 'blocked or with discrepancies'), '/invoices?status=Needs internal review', 'amber' if work.inv_review else 'slate'),
-      ('Payment holds', work.holds, (inr(work.holds_amt) if work.holds else 'none'), '/invoices?status=Payment on hold', 'amber' if work.holds else 'slate'),
-      ('Approved, not yet paid', work.unpaid, (inr(work.unpaid_amt) if work.unpaid else 'nothing to release'), '/invoices?status=Approved for payment', 'indigo' if work.unpaid else 'slate')] %}
-  {% if full or loop.index <= 2 %}
-  <a href="{{ href }}" class="bg-white border rounded-xl px-4 py-3.5 hover:border-indigo-300 transition">
-    <div class="text-[12.5px] font-medium text-slate-500">{{ label }}</div>
-    <div class="mt-1 text-[28px] font-semibold tracking-tight leading-none tabular-nums {{ COLOR[tone] }}">{{ value }}</div>
-    <div class="mt-1.5 text-[12px] text-slate-500 truncate">{{ note }}</div>
+{# what needs approving: two or three numbers, nothing else #}
+<div class="grid sm:grid-cols-2 {{ 'lg:grid-cols-3' if checker }} gap-3">
+  {% for label, n, note, href in [
+      ('Vendors to approve', vendor_items | length, 'registrations waiting for your decision', '/review'),
+      ('Invoices to approve', invoice_items | length, 'bills waiting for your decision', '/review')] + ([('Payments to release', work.unpaid, (inr(work.unpaid_amt) ~ ' approved, not yet paid') if work.unpaid else 'nothing approved and unpaid', '/invoices?status=Approved for payment')] if checker else []) %}
+  <a href="{{ href }}" class="bg-white border rounded-xl px-5 py-4 hover:border-indigo-300 transition">
+    <div class="text-[13px] font-medium text-slate-500">{{ label }}</div>
+    <div class="mt-1 text-[34px] font-semibold tracking-tight leading-none tabular-nums {{ 'text-amber-700' if n else 'text-emerald-700' }}">{{ n }}</div>
+    <div class="mt-1.5 text-[12.5px] {{ 'text-slate-500' if n else 'text-emerald-700' }}">{{ note if n else 'All clear' }}</div>
   </a>
-  {% endif %}
   {% endfor %}
 </div>
 
-<div class="grid lg:grid-cols-3 gap-4 sm:gap-6">
-  {# needs your action #}
-  <section class="bg-white border rounded-xl lg:col-span-2 min-w-0">
-    <div class="px-4 sm:px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
-      <div>
-        <h2 class="text-[16px]">Needs your action {% if todo %}<span class="ml-1.5 inline-flex items-center justify-center rounded-full bg-indigo-600 text-white text-[11.5px] font-semibold h-5 min-w-[20px] px-1.5 align-middle">{{ todo | length }}</span>{% endif %}</h2>
-        <p class="text-[12.5px] text-slate-500 mt-0.5">{% if actor %}What {{ actor.name.split()[0] }} can do right now, as {{ ROLE_LABEL[actor.role] }}.{% else %}Pick who you're acting as.{% endif %}</p>
-      </div>
-    </div>
-    {% if todo %}
-    <ul class="divide-y divide-slate-100">
-      {% for t in todo %}
-      <li><a href="{{ t.href }}" class="group flex items-center gap-3 px-4 sm:px-5 py-3 hover:bg-slate-50">
-        {{ mono(t.name) }}
-        <span class="flex-1 min-w-0">
-          <span class="block text-[14px] font-medium truncate">{{ t.name }}</span>
-          <span class="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[12px] text-slate-500">
-            <span class="mono">{{ t.ref }}</span>
-            {% if t.status == 'BILL' %}<span class="tag text-sky-700">{{ t.detail }}{{ ' · ' ~ inr(money(t.amount)) if t.amount }}</span>{% else %}{{ status_badge(t.status) }}{% endif %}
-            {% if t.fraud and full %}<span class="tag text-rose-600">fraud class</span>{% endif %}
-            {{ tier_chip(t.risk) }}
-            {% if t.waiting %}<span class="text-slate-400">{{ t.waiting }}</span>{% endif %}
-          </span>
-        </span>
-        <span class="hidden sm:inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-slate-700 group-hover:border-indigo-300 group-hover:text-indigo-700">{{ t.verb }} {{ icon('chev', 'h-3.5 w-3.5') }}</span>
-        <span class="sm:hidden text-slate-400">{{ icon('chev') }}</span>
-      </a></li>
-      {% endfor %}
-    </ul>
-    {% else %}
-    <div class="px-5 py-10 text-center">
-      <span class="mx-auto h-11 w-11 rounded-full bg-emerald-50 text-emerald-600 grid place-items-center">{{ icon('check', 'h-5 w-5') }}</span>
-      <p class="mt-3 text-[14px] font-medium">You're all caught up</p>
-      <p class="mt-1 text-[12.5px] text-slate-500">{% if actor and actor.role == 'sponsor' %}Invite a vendor when your team needs one.{% else %}Nothing is waiting for you right now.{% endif %}</p>
-    </div>
-    {% endif %}
-  </section>
-
-  {# decision mix #}
-  {% set SEG = [('Active / approved', counts.ACTIVE + counts.APPROVED, '#10B981'), ('Waiting on vendor', counts.PENDING_VENDOR, '#F59E0B'),
-                ('Internal review', counts.PENDING_REVIEW, '#8B5CF6'), ('Rejected', counts.REJECTED, '#F43F5E')] %}
-  {% set total = SEG | sum(attribute=1) %}
-  <section class="bg-white border rounded-xl p-4 sm:p-5">
-    <h2 class="text-[16px]">Where applications stand</h2>
-    <p class="text-[12.5px] text-slate-500 mt-0.5">Current status of every application{{ '' if full else ' you asked for' }}.</p>
-    <div class="mt-4 flex items-center gap-5">
-      <svg viewBox="0 0 42 42" class="h-32 w-32 shrink-0 -rotate-90" role="img" aria-label="Status breakdown">
-        <circle cx="21" cy="21" r="15.9155" fill="none" stroke="#F1F5F9" stroke-width="5.5"/>
-        {% set ns = namespace(acc=0) %}
-        {% for label, n, color in SEG if n and total %}
-          {% set p = n / total * 100 %}
-          <circle cx="21" cy="21" r="15.9155" fill="none" stroke="{{ color }}" stroke-width="5.5" stroke-dasharray="{{ '%.2f' % (p - (1.2 if p < 100 else 0)) }} {{ '%.2f' % (100 - p + (1.2 if p < 100 else 0)) }}" stroke-dashoffset="{{ '%.2f' % (-ns.acc) }}"><title>{{ label }}: {{ n }}</title></circle>
-          {% set ns.acc = ns.acc + p %}
-        {% endfor %}
-        <text x="21" y="21" transform="rotate(90 21 21)" text-anchor="middle" dominant-baseline="central" font-size="9" font-weight="650" fill="#0F172A" font-family="Geist, sans-serif">{{ total }}</text>
-      </svg>
-      <ul class="flex-1 min-w-0 space-y-2.5 text-[13px]">
-        {% for label, n, color in SEG %}
-        <li class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full shrink-0" style="background: {{ color }}"></span><span class="flex-1 truncate text-slate-600">{{ label }}</span><span class="font-semibold tabular-nums">{{ n }}</span></li>
-        {% endfor %}
-      </ul>
-    </div>
-    <div class="mt-5 grid grid-cols-2 gap-3 border-t border-slate-100 pt-4">
-      <div><div class="text-[12px] text-slate-500">Avg. time per check</div><div class="mt-0.5 text-[18px] font-semibold tabular-nums">{{ stats.avg_seconds if stats.avg_seconds is not none else '–' }}<span class="text-[13px] font-medium text-slate-400"> s</span></div></div>
-      <div><div class="text-[12px] text-slate-500">Approved first time</div><div class="mt-0.5 text-[18px] font-semibold tabular-nums">{{ stats.first_pass }}<span class="text-[13px] font-medium text-slate-400"> of {{ stats.applications }}</span></div></div>
-    </div>
-  </section>
-</div>
-
-{% if full and work.recent %}
-<section class="bg-white border rounded-xl overflow-hidden">
-  <div class="px-4 sm:px-5 py-4 border-b border-slate-100 flex items-center justify-between"><h2 class="text-[16px]">Recent decisions</h2><a href="/audit" class="text-[12.5px] font-medium text-indigo-700 hover:underline">History</a></div>
-  <ul class="divide-y divide-slate-100 text-[13px]">
-    {% for d in work.recent %}<li class="px-4 sm:px-5 py-2.5 flex flex-wrap items-baseline gap-x-3 gap-y-0.5"><span class="text-[12px] text-slate-500 w-28 shrink-0">{{ d.at | dt }}</span><span class="font-medium text-slate-800">{{ d.what }}</span>{% if d.href %}<a class="text-indigo-700 hover:underline mono text-[12px]" href="{{ d.href }}">{{ d.label }}</a>{% else %}<span class="mono text-[12px]">{{ d.label }}</span>{% endif %}<span class="text-slate-500">· {{ d.who }}</span>{% if d.override %}<span class="tag text-amber-700">override</span>{% endif %}</li>{% endfor %}
-  </ul>
-</section>
-{% endif %}
-
-{% if full and alerts %}
-<section class="bg-white border rounded-xl overflow-hidden">
-  <div class="px-4 sm:px-5 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
-    <div>
-      <h2 class="text-[16px]">Relationship alerts <span class="ml-1.5 inline-flex items-center justify-center rounded-full bg-rose-600 text-white text-[11.5px] font-semibold h-5 min-w-[20px] px-1.5 align-middle">{{ alerts | length }}</span></h2>
-      <p class="text-[12.5px] text-slate-500 mt-0.5">Shared bank accounts, reused documents and identity conflicts that an onboarding rule flagged. A shared detail is a question for a reviewer, not proof of fraud.</p>
-    </div>
-    <a href="/vendors" class="text-[12.5px] font-medium text-indigo-700 hover:underline">All vendors</a>
+{# the one list that matters #}
+<section class="bg-white border rounded-xl min-w-0">
+  <div class="px-4 sm:px-5 py-4 border-b border-slate-100">
+    <h2 class="text-[16px]">Waiting for you {% if todo %}<span class="ml-1.5 inline-flex items-center justify-center rounded-full bg-amber-500 text-white text-[11.5px] font-semibold h-5 min-w-[20px] px-1.5 align-middle">{{ todo | length }}</span>{% endif %}</h2>
+    <p class="text-[12.5px] text-slate-500 mt-0.5">{% if actor %}What you can decide now, as {{ ROLE_LABEL[actor.role] }}. Most urgent first.{% else %}Sign in to see your queue.{% endif %}</p>
   </div>
+  {% if todo %}
   <ul class="divide-y divide-slate-100">
-    {% for a in alerts %}
-    <li><a href="/vendors/{{ a.vendor.vendor_id }}#risk" class="group flex items-center gap-3 px-4 sm:px-5 py-3 hover:bg-slate-50">
-      <span class="h-8 w-8 shrink-0 rounded-lg grid place-items-center {{ 'bg-rose-50 text-rose-600' if a.ev.severity == 'fraud' else 'bg-amber-50 text-amber-600' }}">{{ icon('flag') }}</span>
+    {% for t in todo %}
+    <li><a href="{{ t.href }}" class="group flex items-center gap-3 px-4 sm:px-5 py-3 hover:bg-slate-50">
+      {{ mono(t.name) }}
       <span class="flex-1 min-w-0">
-        <span class="block text-[14px] font-medium truncate">{{ a.vendor.display_name }}{% if a.related %} <span class="font-normal text-slate-500">↔ {{ a.related[1] }}</span>{% endif %}</span>
-        <span class="block text-[12px] text-slate-500 truncate">{{ a.ev.title }} · rule {{ a.ev.rule_id }}</span>
+        <span class="block text-[14px] font-medium truncate">{{ t.name }}</span>
+        <span class="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[12px] text-slate-500">
+          <span class="mono">{{ t.ref }}</span>
+          {% if t.status == 'BILL' %}<span class="tag text-amber-700">{{ t.detail }}{{ ' · ' ~ inr(money(t.amount)) if t.amount }}</span>{% else %}{{ status_badge(t.status) }}{% endif %}
+          {% if t.fraud and full %}<span class="tag text-rose-700">fraud class</span>{% endif %}
+          {{ tier_chip(t.risk) }}
+          {% if t.waiting %}<span class="text-slate-400">{{ t.waiting }}</span>{% endif %}
+        </span>
       </span>
-      <span class="hidden sm:inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-slate-700 group-hover:border-indigo-300 group-hover:text-indigo-700">Open vendor {{ icon('chev', 'h-3.5 w-3.5') }}</span>
+      <span class="hidden sm:inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 py-1.5 text-[12.5px] font-semibold text-white group-hover:bg-indigo-700">{{ t.verb }} {{ icon('chev', 'h-3.5 w-3.5') }}</span>
+      <span class="sm:hidden text-slate-400">{{ icon('chev') }}</span>
     </a></li>
     {% endfor %}
   </ul>
+  {% else %}
+  <div class="px-5 py-12 text-center">
+    <span class="mx-auto h-11 w-11 rounded-full bg-emerald-50 text-emerald-600 grid place-items-center">{{ icon('check', 'h-5 w-5') }}</span>
+    <p class="mt-3 text-[14px] font-medium">You're all caught up</p>
+    <p class="mt-1 text-[12.5px] text-slate-500">{% if actor and actor.role == 'sponsor' %}Invite a vendor when your team needs one.{% else %}New registrations and invoices appear here when they need you.{% endif %}</p>
+  </div>
+  {% endif %}
 </section>
-{% endif %}
+<!-- /waiting -->
 
-<div class="grid xl:grid-cols-[1fr_340px] 2xl:grid-cols-[1fr_380px] gap-4 sm:gap-6">
-  <section class="bg-white rounded-xl border min-w-0 self-start overflow-hidden">
-    <div class="px-4 sm:px-5 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-      <div>
-        <h2 class="text-[16px]">Recent checks <span id="filtername" class="ml-1 text-[13px] font-medium text-indigo-700"></span></h2>
-        <p class="text-[12.5px] text-slate-500 mt-0.5">Newest first. Open one to see every reason. Click a number above to filter.</p>
-      </div>
-      {% if runs %}<label class="relative w-full sm:w-64"><span class="sr-only">Search vendors</span>
-        <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-        <input id="runsearch" type="search" placeholder="Search vendor or reference" class="w-full rounded-lg border pl-8 pr-3 py-2 text-[13px]"></label>{% endif %}
-    </div>
-    {% if not runs %}
-      <div class="px-5 py-12 text-center">
-        <span class="mx-auto h-11 w-11 rounded-full bg-indigo-50 text-indigo-600 grid place-items-center">{{ icon('doc', 'h-5 w-5') }}</span>
-        <p class="mt-3 text-[14px] font-medium">No checks yet</p>
-        <p class="mt-1 text-[12.5px] text-slate-500">Checks appear here when a vendor submits an application.</p>
-      </div>
-    {% else %}
-    <ul class="md:hidden divide-y divide-slate-100">
-    {% for r in runs %}
-      <li class="runrow" data-status="{{ r.app.current_status }}" data-fraud="{{ 1 if r.fraud and full else 0 }}" data-text="{{ (r.app.legal_name ~ ' ' ~ r.app.ref) | lower }}"><a href="/runs/{{ r.run.id }}" class="flex gap-3 px-4 py-3.5 active:bg-slate-50">
-        {{ mono(r.app.legal_name) }}
-        <span class="flex-1 min-w-0">
-          <span class="flex items-center justify-between gap-3 text-[11.5px] text-slate-500">
-            <span class="mono">{{ r.app.ref }}{% if r.resubmission %} · resubmitted{% endif %}</span>
-            <span class="whitespace-nowrap">{{ r.run.started_at | dt }}</span>
-          </span>
-          <span class="block mt-0.5 text-[14.5px] font-medium leading-snug">{{ r.app.legal_name }}</span>
-          <span class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            {% if r.run.state == 'done' %}{{ status_badge(r.run.status) }}{% if r.app.current_status != r.run.status %}<span class="text-[11.5px] text-slate-500">now {{ STATUS_LABEL.get(r.app.current_status, r.app.current_status) | lower }}</span>{% endif %}
-            {% elif r.run.state in ('failed', 'interrupted') %}<span class="tag text-rose-600">{{ r.run.state }}</span>
-            {% else %}<span class="inline-flex items-center gap-2 text-xs text-indigo-700"><span class="ink-dot !h-2 !w-2"></span>running</span>{% endif %}
-            {{ tier_chip(r.run.risk_tier) }}
-            {% if r.fraud and full %}<span class="tag text-rose-600">fraud class</span>{% endif %}
-          </span>
-        </span>
-      </a></li>
+{% if full %}<p class="text-[12.5px] text-slate-500">Everything else is under <b class="font-medium text-slate-600">In depth</b> in the menu: <a class="text-indigo-700 hover:underline" href="/vendors">Vendors</a> · <a class="text-indigo-700 hover:underline" href="/applications">Applications</a> · <a class="text-indigo-700 hover:underline" href="/relationships">Relationships</a> · <a class="text-indigo-700 hover:underline" href="/audit">History</a> · <a class="text-indigo-700 hover:underline" href="/documents">Documents</a></p>{% endif %}
+
+{% if DEMO_TOOLS %}
+<details class="bg-white rounded-xl border overflow-hidden">
+  <summary class="px-4 sm:px-5 py-3 cursor-pointer text-[14px] font-medium">Try a scenario <span class="text-slate-400 font-normal">(development)</span></summary>
+  <ol class="grid md:grid-cols-2 xl:grid-cols-3 p-1.5 border-t border-slate-100">
+    {% for key, sc in catalog.items() if not sc.resubmission_of %}
+    <li><a href="/demo/{{ key }}" class="group flex items-start gap-3 rounded-lg px-3 py-2.5 h-full hover:bg-slate-50">
+      <span class="flex-1 min-w-0"><span class="block text-[13.5px] font-medium leading-snug group-hover:text-indigo-700">{{ sc.title }}</span>
+        <span class="mt-1.5 flex flex-wrap items-center gap-2">{{ status_badge(sc.expected) }}</span></span>
+    </a></li>
     {% endfor %}
-    </ul>
-    <div class="hidden md:block overflow-x-auto">
-    <table class="w-full text-sm">
-      <thead class="text-left text-slate-500 bg-slate-50/70 border-b border-slate-100">
-        <tr><th class="pl-5 pr-2 py-2.5">Vendor</th><th class="px-2">Decision</th><th class="px-2">Risk</th><th class="px-2 hidden lg:table-cell">Requested by</th><th class="pr-5 pl-2 text-right">When</th></tr>
-      </thead>
-      <tbody class="divide-y divide-slate-100">
-      {% for r in runs %}
-        <tr class="runrow group hover:bg-slate-50/80 cursor-pointer" data-status="{{ r.app.current_status }}" data-fraud="{{ 1 if r.fraud and full else 0 }}" data-text="{{ (r.app.legal_name ~ ' ' ~ r.app.ref) | lower }}" onclick="location.href='/runs/{{ r.run.id }}'">
-          <td class="pl-5 pr-2 py-3 min-w-[15rem]">
-            <div class="flex items-center gap-3">
-              {{ mono(r.app.legal_name) }}
-              <div class="min-w-0">
-                <a href="/runs/{{ r.run.id }}" class="block font-medium text-slate-900 group-hover:text-indigo-700 leading-snug">{{ r.app.legal_name }}</a>
-                <div class="mt-0.5 flex items-center gap-2 text-[11.5px] text-slate-500"><span class="mono">{{ r.app.ref }}</span>{% if r.resubmission %}<span>· resubmitted</span>{% endif %}{% if r.fraud and full %}<span class="tag text-rose-600 !text-[10.5px] !py-0">fraud class</span>{% endif %}</div>
-              </div>
-            </div>
-          </td>
-          <td class="px-2 py-3">
-            {% if r.run.state == 'done' %}{{ status_badge(r.run.status) }}
-              {% if r.app.current_status != r.run.status %}<div class="mt-1 text-[11.5px] text-slate-500">now {{ STATUS_LABEL.get(r.app.current_status, r.app.current_status) | lower }}</div>{% endif %}
-            {% elif r.run.state in ('failed', 'interrupted') %}<span class="tag text-rose-600">{{ r.run.state }}</span>
-            {% else %}<span class="inline-flex items-center gap-2 text-xs text-indigo-700"><span class="ink-dot !h-2 !w-2"></span>running</span>{% endif %}</td>
-          <td class="px-2 py-3">{{ tier_chip(r.run.risk_tier) }}</td>
-          <td class="px-2 py-3 text-[13px] text-slate-600 whitespace-nowrap hidden lg:table-cell">{{ r.sponsor or '—' }}</td>
-          <td class="pr-5 pl-2 py-3 text-[12px] text-slate-500 text-right whitespace-nowrap">{{ r.run.started_at | dt }}<div class="text-slate-400 text-[11.5px]">{{ '%.1f s' % r.seconds if r.seconds is not none else '' }}{% if r.reads == 'saved' %} · <span class="text-amber-700">saved reading</span>{% endif %}</div></td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-    </div>
-    <p id="nomatch" class="hidden px-5 py-8 text-center text-[13px] text-slate-500">No checks match. <button type="button" id="clearfilter" class="font-medium text-indigo-700 hover:underline">Show all</button></p>
-    {% endif %}
-  </section>
-
-  {% if DEMO_TOOLS %}  <section class="bg-white rounded-xl border self-start overflow-hidden">
-    <div class="px-4 sm:px-5 py-4 border-b border-slate-100">
-      <h2 class="text-[16px] flex items-center gap-2"><span class="h-7 w-7 rounded-lg bg-indigo-50 text-indigo-600 grid place-items-center">{{ icon('play', 'h-3.5 w-3.5') }}</span>Try a scenario</h2>
-      <p class="text-[12.5px] text-slate-500 mt-1.5">Opens the vendor form through a fresh invite, pre-filled. Swap in your own files before submitting.</p>
-    </div>
-    <ol class="grid md:grid-cols-2 xl:grid-cols-1 p-1.5">
-      {% for key, sc in catalog.items() if not sc.resubmission_of %}
-      <li>
-        <a href="/demo/{{ key }}" class="group flex items-start gap-3 rounded-lg px-3 py-2.5 h-full hover:bg-slate-50">
-          <span class="mt-0.5 h-6 w-6 shrink-0 rounded-md bg-slate-100 text-[11px] font-semibold text-slate-500 grid place-items-center group-hover:bg-indigo-600 group-hover:text-white">{{ loop.index }}</span>
-          <span class="flex-1 min-w-0">
-            <span class="block text-[13.5px] font-medium leading-snug group-hover:text-indigo-700">{{ sc.title }}</span>
-            <span class="mt-1.5 flex flex-wrap items-center gap-2">{{ status_badge(sc.expected) }}
-              {% if sc.private %}<span class="text-[11px] text-slate-500">real-world file</span>{% endif %}</span>
-          </span>
-          <span class="text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-transform pt-1">{{ icon('chev') }}</span>
-        </a>
-      </li>
-      {% endfor %}
-    </ol>
-    <p class="px-4 sm:px-5 py-3 border-t border-slate-100 text-[12px] text-slate-500">Tejas's fix-and-resubmit happens from the vendor's own link after the first run asks for changes.
-      Vendors who already did work for us register at <a class="font-medium text-indigo-700 hover:underline" href="/bill">/bill</a> with their invoice; the employee they name must confirm.</p>
-  </section>{% endif %}
+  </ol>
+</details>
+{% endif %}
 </div>
-</div>
-<script>
-{ /* the numbers filter the list; the search narrows it further */
-  const rows = [...document.querySelectorAll('.runrow')], cards = [...document.querySelectorAll('.kpi[data-filter]')];
-  const label = document.getElementById('filtername'), search = document.getElementById('runsearch'), none = document.getElementById('nomatch');
-  let filt = 'all';
-  const NAMES = {all: '', ok: '· active / approved', PENDING_VENDOR: '· waiting on vendor', PENDING_REVIEW: '· internal review', REJECTED: '· rejected', fraud: '· fraud-class flags'};
-  const match = r => (filt === 'all' || (filt === 'ok' ? ['ACTIVE', 'APPROVED'].includes(r.dataset.status) : filt === 'fraud' ? r.dataset.fraud === '1' : r.dataset.status === filt))
-                     && (!search || !search.value || r.dataset.text.includes(search.value.trim().toLowerCase()));
-  const apply = () => {
-    let shown = 0;
-    rows.forEach(r => { const ok = match(r); r.hidden = !ok; if (ok && r.offsetParent !== null) shown++; });
-    cards.forEach(c => c.setAttribute('aria-pressed', String(c.dataset.filter === filt)));
-    if (label) label.textContent = NAMES[filt] || '';
-    if (none) none.classList.toggle('hidden', rows.some(r => !r.hidden));
-  };
-  cards.forEach(c => c.addEventListener('click', () => { filt = (filt === c.dataset.filter ? 'all' : c.dataset.filter); apply();
-    document.getElementById('nomatch')?.closest('section')?.scrollIntoView({behavior: 'smooth', block: 'start'}); }));
-  search && search.addEventListener('input', apply);
-  document.getElementById('clearfilter')?.addEventListener('click', () => { filt = 'all'; if (search) search.value = ''; apply(); });
-}
-</script>
 {% endblock %}

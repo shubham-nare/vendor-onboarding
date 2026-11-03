@@ -177,7 +177,7 @@ def flows(tmp_path_factory):
             for who in ("maker", "checker", "Rahul Desai"):  # each person's "Needs your action" queue
                 await as_(who)
                 page = (await c.get("/console")).text
-                out[f"todo_{who}"] = page.split("Needs your action", 1)[1].split("Where applications stand", 1)[0]
+                out[f"todo_{who}"] = page.split("Waiting for you", 1)[1].split("<!-- /waiting -->", 1)[0]
         await dbm.engine().dispose()
 
     asyncio.run(go())

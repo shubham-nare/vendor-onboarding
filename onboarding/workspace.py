@@ -11,7 +11,7 @@ from onboarding import access
 from onboarding import bills as B
 from onboarding.ap.models import ChangeRequest, InvoiceCase
 from onboarding.intel.models import GraphEdge, GraphNode, RiskEvent, Vendor, VendorApplication
-from onboarding.models import Application, Bill, HumanAction, Invite, Run, VendorBill, VendorMaster
+from onboarding.models import Application, Bill, Document, HumanAction, Invite, Run, VendorBill, VendorMaster
 from onboarding.pipeline import read_sessions
 from onboarding.web import _actor, _all, _employees, _reads, _rows, _todo, render
 
@@ -104,3 +104,28 @@ async def relationships(request: Request):
         shared.sort(key=lambda d: (d["node"].kind not in ("BANK_ACCOUNT", "DOCUMENT"), d["node"].kind))
         risks = sorted(r["risks"], key=lambda x: (x.status != "open", x.severity != "fraud"))
         return await render(request, s, "ws_relationships.html", risks=risks, shared=shared, vendors=vendors)
+
+
+@router.get("/documents", response_class=HTMLResponse)
+async def documents(request: Request, q: str = "", kind: str = "", show: str = ""):
+    """Every file vendors uploaded, newest first; documents from older submissions are marked replaced."""
+    async with read_sessions()() as s:
+        actor = await _actor(request, s)
+        access.require_full(actor, "Documents")
+        latest = select(func.max(Run.id)).group_by(Run.application_id)
+        r = await _reads(rows=_rows(select(Document, Run, Application).join(Run, Run.id == Document.run_id).join(Application, Application.id == Run.application_id)
+                                    .order_by(Document.id.desc())),
+                         latest=_rows(latest),
+                         links=_rows(select(VendorApplication.application_id, Vendor).join(Vendor, Vendor.id == VendorApplication.vendor_pk)))
+        newest = {x for (x,) in r["latest"]}
+        vendors = dict(r["links"])
+        rows = [dict(doc=d, run=run, app=app, vendor=vendors.get(app.id), current=run.id in newest) for d, run, app in r["rows"]]
+        kinds = sorted({x["doc"].slot for x in rows})
+        if not show:
+            rows = [x for x in rows if x["current"]]
+        if kind:
+            rows = [x for x in rows if x["doc"].slot == kind]
+        if q:
+            rows = [x for x in rows if q.lower() in f"{x['app'].legal_name} {x['doc'].filename} {x['app'].ref}".lower()]
+        return await render(request, s, "ws_documents.html", rows=rows, kinds=kinds, q=q, kind=kind, show=show)
+
