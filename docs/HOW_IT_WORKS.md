@@ -716,16 +716,62 @@ Onboarding decides on one **application**. Vendor Intelligence connects everythi
 
 Screens: **Vendors** (directory) → **Vendor 360** (`/vendors/VND-…`); **Relationship alerts** on the dashboard; **Open vendor profile** on every check. The old list of supplier portal logins is now **Supplier accounts** (`/supplier-accounts`).
 
+## 23c. Payables: purchase orders, invoice verification, payment release
+
+Approving a vendor is not paying it. Five separate steps, each with its own owner and its own record:
+
+| Step | What it decides | Who |
+|---|---|---|
+| Onboarding approval | Is this business who it says it is? (sections 6–14) | Procurement reviewer; Finance controller for high risk |
+| Supplier-master activation | May we buy from it? Gives the ERP vendor ID | Finance controller |
+| Invoice approval | Is this invoice right? (three-way match below) | Procurement reviewer; Finance controller for overrides |
+| Payment release | Send the money (maker-checker) | Finance controller, never the person who approved the invoice |
+| Fraud investigation | A blocked invoice or a fraud-class flag | Finance controller |
+
+**Purchase orders** (`/purchase-orders`). An employee raises a PO for an active vendor, with lines (description, quantity, unit price, GST rate). The requester records what arrived (a goods receipt or service confirmation) on the PO page, per line.
+
+**Invoices.** The vendor uploads the invoice in the portal (`/vendor/bills/new`), picking one of its open POs. The AI reads the invoice number, dates, amounts, GST, PO number and line items. The vendor then sees a **draft** with what was read and checks it before sending (`/vendor/bills/{id}/send`). Nothing is retyped.
+
+**Three-way match** (invoice ↔ PO ↔ receipt), all deterministic:
+
+| Rule | Checks |
+|---|---|
+| R-PO-01 | The PO exists, was issued to this vendor, and is open |
+| R-PO-02 | The PO printed on the invoice is the one the vendor chose |
+| R-PO-03 | Delivery was confirmed (a receipt is recorded) |
+| R-PO-04 | Billed quantities are within what was ordered and confirmed |
+| R-PO-05 | Unit prices match the order |
+| R-PO-06 | The total matches the order and receipt |
+| R-PO-07 | The GST rate matches the order |
+| R-DUP-FILE | The same file was not submitted before |
+| R-DUP-PATTERN | No other invoice with the same amount and PO |
+
+Together with the existing bill checks (supplier and buyer GSTIN, tax type, arithmetic, dates, bank account matches the verified one) that makes the 12 checks shown on the invoice record. A duplicate of an invoice already approved or paid **blocks** the invoice for investigation.
+
+**Statuses.** Internal: Draft, Being checked, Needs vendor information, Needs internal review, Approved for payment, Payment in progress, Payment on hold, Paid, Rejected, Blocked for investigation. The vendor sees safer wording (for example "Under review" instead of "Blocked for investigation").
+
+**Approving over a failing check** needs the Finance controller and a written reason, recorded as an override. **Payment release** is maker-checker: the person who approved cannot release. **Paid** is recorded by hand with the bank reference (UTR), since there is no bank integration. Hold, release hold, block and unblock each need a reason. Every action writes to **Decisions and audit** (`/audit`).
+
+**Vendor profile and change requests** (`/vendor/profile`). The vendor sees its company profile as we hold it, with each fact's verification state. It asks for a change (address, contact, bank account) instead of editing. A **new bank account never inherits the old one's verification**: the Finance controller must approve it after a callback, the new account is recorded as a fresh fact at A1 ("a person confirmed it"), and the old account and IFSC are kept as previous.
+
+**Vendor 360** shows, per vendor: onboarding, supplier-master and payment-eligibility states; PAN and GSTINs; current and previous bank accounts; documents; fact history; relationships; POs, invoices and payments (outstanding, on hold, paid); and the next best action.
+
+**Workspace pages:** Applications (`/applications`), Review queue (`/review`: vendor decisions, invoices and change requests waiting on you, blocked first), Relationships (`/relationships`). The dashboard shows only work: reviews awaiting you, waiting on vendors, high-risk relationships, invoices needing review, payment holds, approved but not paid, and recent decisions.
+
+## 23d. Production mode and demo tools
+
+By default the app runs as a product: you sign in as yourself and see your own work. The person switcher, the demo scenarios, the demo logins on the sign-in pages and the PO fixtures are **demo tools**, switched on only with `DEMO_TOOLS=true` in `.env`. With it off, `/act-as` and `/demo` return 404. The test suite turns demo tools on. A simulated source (GST, PAN, penny-drop) is disclosed in the evidence detail where it applies, not in a banner across every page.
+
 ---
 
 ## 24. Known limits and the production path
 
 - **Plug in the real sources** (GSTN, PAN, penny-drop, MCA, Udyam) through a KYB provider. The adapters already share one shape, and facts would then reach A4.
 - **Signature trust chain:** check that the signer certificate chains to the CCA India root at signing time, with revocation data.
-- **Single sign-on** for employees instead of demo passwords and the "Acting as" menu; password reset and email verification for vendors; email delivery instead of the Outbox.
-- **Re-verification over time:** GST status, blocklist and sanctions on a schedule. **Bank change requests**, the biggest fraud vector after onboarding, should go through the same checks.
+- **Single sign-on** for employees instead of passwords; password reset and email verification for vendors; email delivery instead of the Outbox.
+- **Re-verification over time:** GST status, blocklist and sanctions on a schedule. Bank change requests exist (section 23c) but rely on a person's callback; a real penny-drop would take the new account to A4.
 - **ERP sync** of activated vendors.
-- **Approval is not payment.** Invoices are still paid only after purchase-order and goods-receipt matching, which is outside this tool.
+- **Payments are recorded, not made.** Release and "paid" are recorded by hand with the UTR; a bank or ERP payment integration is needed. POs are entered by hand (no ERP or CSV import). Invoices sent with a registration (bill-first) are not PO-matched.
 
 ---
 

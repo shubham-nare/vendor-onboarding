@@ -457,10 +457,22 @@ On the real (Neon) data, the startup catch-up projected the 9 existing checks an
 - Alembic and the insert-only triggers.
 - Risk-flag lifecycle actions (acknowledge or dismiss without a decision).
 - Human merge and split.
-- The bank change request workflow.
+- ~~The bank change request workflow.~~ Built in milestone 2 (section 14).
 - Freshness badges beyond the IFSC re-check date.
 - The AI investigation assistant.
 - Monitoring jobs.
 - Tenants with row-level security.
 - The Trust Passport.
 
+## 14. Implementation status (milestone 2: the product upgrade, 3 Nov 2026)
+
+Built after the "Vendor Intelligence product upgrade" brief. All additive; existing tables unchanged.
+
+- **New tables** (`onboarding/ap/models.py`): `purchase_orders`, `po_lines`, `goods_receipts`, `receipt_lines`, `invoice_cases`, `change_requests`, `audit_events`. Created by `create_all` at startup, like milestone 1. Alembic is still the step before any change to an existing table.
+- **Three-way match** (`ap/match.py`), invoice statuses and the payment lifecycle with maker-checker (`bills.py`); see `HOW_IT_WORKS.md` section 23c.
+- **Vendor portal:** company profile with change requests (a new bank account starts unverified and is recorded as a new A1 fact when approved); invoices as a draft the vendor checks before sending, against a chosen PO.
+- **Internal pages:** Purchase orders (list, new, detail, receipts), Invoice verification, Decisions and audit, Applications, Review queue, Relationships; the dashboard as work tiles; Vendor 360 with states, invoices, payments and documents.
+- **Production mode:** demo tools (person switcher, scenarios, demo logins, PO fixtures) only with `DEMO_TOOLS=true`.
+- **Login fix:** password hashing runs off the event loop (`auth.hash_password_async`), so a login no longer freezes every other request.
+- **Tests:** 153 pass (`test_login.py` 6, `test_portal.py` journeys, `test_intel.py` 16, plus the earlier suites).
+- **Still not built:** a Settings page; PO import from an ERP; payment integration; PO matching for bill-first registrations; the items in 13.3 other than the bank change request.
