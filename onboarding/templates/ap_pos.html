@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, empty %}
+{% block title %}Purchase orders{% endblock %}
+{% block content %}
+<div class="reveal space-y-6">
+  <div class="flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <h1>Purchase orders</h1>
+      <p class="text-slate-500 text-[14px] mt-1.5 max-w-3xl">The company's orders and what was delivered against them. Invoices are matched to these records before anyone can approve them.</p>
+    </div>
+    <div class="flex gap-2 w-full sm:w-auto">
+      <form method="get" class="flex-1"><input name="q" value="{{ q }}" type="search" placeholder="PO number, vendor or cost centre" aria-label="Search purchase orders" class="w-full sm:w-64 rounded-lg border px-3 py-2 text-[13px]"></form>
+      <a href="/purchase-orders/new" class="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 text-white text-sm font-semibold px-4 py-2 hover:bg-indigo-700">{{ icon('plus') }} New PO</a>
+    </div>
+  </div>
+  <section class="bg-white border rounded-xl overflow-hidden">
+    {% if rows %}
+    <div class="overflow-x-auto">
+    <table class="rtable w-full text-sm">
+      <thead class="text-left text-slate-500 bg-slate-50/70 border-b border-slate-100">
+        <tr><th class="pl-5 pr-2 py-2.5">PO</th><th class="px-2">Vendor</th><th class="px-2">Requested by</th><th class="px-2 text-right">Order value</th><th class="px-2 text-right">Delivered</th><th class="px-2 text-right">Invoiced</th><th class="pr-5 pl-2 text-right">Paid</th></tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+      {% for d in rows %}{% set po = d.po %}
+        <tr class="group hover:bg-slate-50/80 cursor-pointer" onclick="location.href='/purchase-orders/{{ po.id }}'">
+          <td class="pl-5 pr-2 py-3 whitespace-nowrap"><a href="/purchase-orders/{{ po.id }}" class="mono text-[12.5px] font-medium group-hover:text-indigo-700">{{ po.po_number }}</a><div class="text-[11.5px] text-slate-500">{{ po.cost_centre }} · {{ po.status }}</div></td>
+          <td class="px-2 py-3" data-label="Vendor">{{ po.vendor_name }}<div class="text-[11.5px] text-slate-500 mono">{{ po.vendor_gstin }}</div></td>
+          <td class="px-2 py-3 text-[13px]" data-label="Requested by">{{ emps[po.requester_id].name if po.requester_id in emps else '—' }}</td>
+          <td class="px-2 py-3 text-right tabular-nums" data-label="Order value">{{ inr(d.total) }}</td>
+          <td class="px-2 py-3 text-right tabular-nums {{ 'text-amber-700' if d.delivered_value < d.total }}" data-label="Delivered">{{ inr(d.delivered_value) }}{% if not d.receipts %}<div class="text-[11.5px] text-amber-700">not recorded</div>{% endif %}</td>
+          <td class="px-2 py-3 text-right tabular-nums" data-label="Invoiced">{{ inr(d.invoiced) if d.invoices else '—' }}</td>
+          <td class="pr-5 pl-2 py-3 text-right tabular-nums" data-label="Paid">{{ inr(d.paid) if d.paid else '—' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+      {{ empty('doc', 'No purchase orders' if not q else 'No purchase order matches', 'Create one with "New PO". Invoices from active vendors are matched against them.' if not q else 'Try another search.') }}
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

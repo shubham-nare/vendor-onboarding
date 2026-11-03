@@ -12,7 +12,7 @@
 
   {# ---- header ---- #}
   <div>
-    <div class="text-[13px] font-medium text-slate-500 flex items-center gap-1.5"><a href="/bills" class="hover:text-slate-900">Invoices</a> {{ icon('chev', 'h-3.5 w-3.5 text-slate-400') }} <span class="mono text-slate-800">{{ b.ref }}</span></div>
+    <div class="text-[13px] font-medium text-slate-500 flex items-center gap-1.5"><a href="/invoices" class="hover:text-slate-900">Invoices</a> {{ icon('chev', 'h-3.5 w-3.5 text-slate-400') }} <span class="mono text-slate-800">{{ b.ref }}</span></div>
     <div class="mt-1.5 flex flex-wrap items-start justify-between gap-4">
       <div class="min-w-0">
         <h1 class="break-words">Invoice {{ b.invoice_number or '(number not read yet)' }}</h1>
@@ -32,6 +32,8 @@
         <div class="text-[11.5px] text-slate-400">read from the bill · submitted {{ b.created_at | dt }}</div>
       </div>
     </div>
+    {% set na = B.next_action(b, case) %}
+    {% if na[0] and full %}<div class="mt-3 rounded-lg border {{ 'border-rose-200 bg-rose-50' if st == 'Blocked for investigation' else ('border-amber-200 bg-amber-50' if st in ('Needs internal review', 'Payment on hold') else 'border-indigo-200 bg-indigo-50/60') }} px-4 py-2.5 text-[14px]"><b>Next action:</b> {{ na[0] }}.{% if na[1] %} <span class="text-slate-600">{{ na[1] }}</span>{% endif %}</div>{% endif %}
     <p class="mt-3 text-[12.5px] text-slate-500 max-w-3xl">Approving this invoice is not paying it. Payment is released separately by Finance, by someone other than the approver, and only after the checks below are satisfied.</p>
   </div>
 

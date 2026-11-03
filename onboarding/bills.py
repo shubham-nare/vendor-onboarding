@@ -281,3 +281,54 @@ def parse_date(text: str) -> datetime | None:
         except (TypeError, ValueError):
             continue
     return None
+
+
+def next_action(b, case=None) -> tuple[str, str]:
+    """The specific next step for an invoice, and why (plain language)."""
+    st = invoice_status(b, case)
+    fails = [r for r in (b.rules or []) if r.get("result") in ("FAIL", "ERROR")]
+    first = lambda pref: next((r for r in fails if r.get("rule_id", "").startswith(pref)), None)  # noqa: E731
+    if st == "Blocked for investigation":
+        return f"Investigate before anything is paid", (case.blocked_reason if case and case.blocked_reason else "Blocked by a reviewer.")
+    if st == "Needs vendor information":
+        return "Waiting for the vendor", "; ".join(b.vendor_items or []) or "The vendor was asked to correct the bill."
+    if st == "Needs internal review":
+        for pref, verb in (("R-BILL-10", "Confirm the bank account by phone before paying"), ("R-DUP", "Check for a duplicate before paying"),
+                           ("R-BILL-08", "Check for a duplicate before paying"), ("R-PO-04", f"Hold {b.invoice_number or b.ref}: billed quantity exceeds confirmed receipt"),
+                           ("R-PO-05", "Check the agreed price with the requester"), ("R-PO-06", "Check the total against the order"),
+                           ("R-PO-03", "Ask the requester to record the delivery"), ("R-PO-01", "Find the right purchase order")):
+            r = first(pref)
+            if r:
+                return verb, r.get("title", "")
+        if b.confirmation == "awaiting":
+            return "Waiting for the work to be confirmed", "The person who engaged the vendor must confirm, or the delivery must be recorded on the PO."
+        return "Review the discrepancies and decide", fails[0].get("title", "") if fails else ""
+    if st == "Matched and ready for approval":
+        return f"Approve {b.invoice_number or b.ref}", "PO, delivery, vendor identity, GSTIN, tax and bank account checks match."
+    if st == "Approved for payment":
+        return "Release the payment", "Approved; Finance releases it (someone other than the approver)."
+    if st == "Payment on hold":
+        return "Resolve the hold", case.hold_reason if case else ""
+    if st == "Payment in progress":
+        return "Record the bank payment reference", "Released; confirm it left the bank."
+    if st == "Being checked":
+        return "Checking", "Reading the bill and matching it."
+    return "", ""
+
+
+async def read_draft(bill_id: int, *, prefer_cache: bool = False) -> None:
+    """Read an uploaded bill straight away, so the vendor can check what was read (and pick the PO) before sending."""
+    from onboarding.rules import bill_fields_from_read
+    async with sessions()() as s:
+        b = await s.get(VendorBill, bill_id)
+        sf = await s.get(StoredFile, b.sha256)
+        res, origin = await read_with_cache(sf.data, sf.mime, prefer="cache" if prefer_cache else "live")
+        read = res.read if res.ok else None
+        b.read = {"origin": origin, "model": res.model, "seconds": res.seconds, **(read.model_dump() if read else {"error": res.error})}
+        got = bill_fields_from_read(read if read and read.doc_type == "TAX_INVOICE" else None)
+        b.invoice_number, b.invoice_date, b.amount = got["bill_invoice_number"], got["bill_invoice_date"], got["bill_amount"]
+        b.description = got["bill_description"]
+        if not b.po_number:
+            b.po_number = got["bill_po"]
+        await s.commit()
+

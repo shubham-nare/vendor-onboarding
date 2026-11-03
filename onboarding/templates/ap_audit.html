@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% from "_macros.html" import empty %}
+{% block title %}Decisions and audit{% endblock %}
+{% block content %}
+<div class="reveal space-y-6">
+  <div>
+    <h1>Decisions and audit history</h1>
+    <p class="text-slate-500 text-[14px] mt-1.5 max-w-3xl">Every material decision, override, invoice disposition, hold, payment, purchase order and delivery record. Entries are written once and never edited.</p>
+  </div>
+  <div class="flex flex-wrap gap-2 text-[12.5px]">
+    {% for key, label in [('', 'Everything'), ('application', 'Vendor decisions'), ('invoice', 'Invoices and payments'), ('purchase_order', 'Purchase orders'), ('receipt', 'Deliveries'), ('change_request', 'Change requests')] %}
+    <a href="/audit{{ '?entity=' ~ key if key }}" class="rounded-lg border px-3 py-1.5 {{ 'border-indigo-500 bg-indigo-50 text-indigo-700 font-semibold' if entity == key else 'border-slate-200 bg-white text-slate-600 hover:border-slate-300' }}">{{ label }}</a>
+    {% endfor %}
+  </div>
+  <section class="bg-white border rounded-xl overflow-hidden">
+    {% if rows %}
+    <div class="overflow-x-auto">
+    <table class="rtable w-full text-[13px]">
+      <thead class="text-left text-slate-500 bg-slate-50/70 border-b border-slate-100"><tr><th class="pl-5 pr-2 py-2.5">When</th><th class="px-2">Who</th><th class="px-2">What</th><th class="px-2">Record</th><th class="pr-5 pl-2">Reason</th></tr></thead>
+      <tbody class="divide-y divide-slate-100">
+      {% for r in rows %}
+        <tr class="{{ 'bg-amber-50/50' if r.override }}">
+          <td class="pl-5 pr-2 py-2.5 whitespace-nowrap text-slate-500">{{ r.at | dt }}</td>
+          <td class="px-2 py-2.5" data-label="Who">{{ r.who }}</td>
+          <td class="px-2 py-2.5" data-label="What">{{ labels.get(r.action, r.action.replace('_', ' ')) }}{% if r.override %} <span class="tag text-amber-700">override</span>{% endif %}</td>
+          <td class="px-2 py-2.5" data-label="Record">{% if r.href %}<a class="text-indigo-700 hover:underline" href="{{ r.href }}">{{ r.label }}</a>{% else %}{{ r.label }}{% endif %}{% if r.vendor %} · <a class="text-slate-500 hover:underline" href="/vendors/{{ r.vendor.vendor_id }}">{{ r.vendor.display_name }}</a>{% endif %}</td>
+          <td class="pr-5 pl-2 py-2.5 text-slate-600" data-label="Reason">{{ r.reason or '—' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}{{ empty('doc', 'Nothing recorded yet', 'Decisions appear here as people take them.') }}{% endif %}
+  </section>
+</div>
+{% endblock %}

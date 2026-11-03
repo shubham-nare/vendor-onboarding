@@ -208,7 +208,9 @@ async def _portfolio(s, acct: VendorAccount) -> dict:
     regs = [x for x in parts if isinstance(x, dict)]
     pending_invites = [x for x in parts if isinstance(x, Invite)]
     active = next((g for g in regs if g["vendor"] and g["app"].current_status == "ACTIVE"), None)
-    return dict(regs=regs, pending_invites=pending_invites, vbills=r["vbills"], active=active)
+    from onboarding.ap.models import InvoiceCase
+    vcases = {c.bill_id: c for c in (await s.execute(select(InvoiceCase).where(InvoiceCase.bill_id.in_([b.id for b in r["vbills"]] or [-1])))).scalars()}
+    return dict(regs=regs, pending_invites=pending_invites, vbills=r["vbills"], active=active, vcases=vcases)
 
 
 @router.get("/vendor", response_class=HTMLResponse)
@@ -294,13 +296,33 @@ async def vendor_bill_submit(request: Request):
                        invoice_number="", invoice_date="", amount="", description="",   # filled from the bill when it's read
                        engaged_by_text=f["engaged_by"], engaged_employee_id=emp.id if emp else None, po_number="",
                        filename=file[0], sha256=await _store(s, *file))
+        b.status = "draft"
         s.add(b)
         await s.flush()
-        B.trail(b, acct.contact_name or acct.email, "Vendor", "submitted", file[0])
+        B.trail(b, acct.contact_name or acct.email, "Vendor", "uploaded", file[0])
         await s.commit()
         bid = b.id
-    B.start_check(bid, prefer_cache=bool(demo))
+    await B.read_draft(bid, prefer_cache=bool(demo))   # read now: the vendor checks it before sending
     return RedirectResponse(f"/vendor/bills/{bid}", status_code=303)
+
+
+@router.post("/vendor/bills/{bill_id}/send")
+async def vendor_bill_send(request: Request, bill_id: int, po_number: str = Form(""), engaged_by: str = Form("")):
+    """The vendor confirms what was read and which purchase order the bill is for; then it's checked."""
+    async with sessions()() as s:
+        acct = await vendor_account(request, s)
+        b = await _own_bill(s, acct, bill_id)
+        if b.status != "draft":
+            raise HTTPException(409, "This bill has already been sent.")
+        b.po_number = po_number.strip().upper()
+        if engaged_by.strip():
+            emp = await _resolve_employee(s, engaged_by.strip())
+            b.engaged_by_text, b.engaged_employee_id = engaged_by.strip(), emp.id if emp else None
+        b.status = "checking"
+        B.trail(b, acct.contact_name or acct.email, "Vendor", "submitted", f"PO {b.po_number}" if b.po_number else "no PO given")
+        await s.commit()
+    B.start_check(bill_id, prefer_cache=True)   # the draft reading is already saved
+    return RedirectResponse(f"/vendor/bills/{bill_id}", status_code=303)
 
 
 async def _own_bill(s, acct: VendorAccount | None, bill_id: int) -> VendorBill:
@@ -317,7 +339,12 @@ async def vendor_bill(request: Request, bill_id: int):
         if not acct:
             return RedirectResponse(f"/vendor/login?next=/vendor/bills/{bill_id}", status_code=303)
         b = await _own_bill(s, acct, bill_id)
-        return await render(request, s, "vendor_bill.html", acct=acct, b=b, B=B)
+        from onboarding.ap.models import InvoiceCase, PurchaseOrder
+        case = (await s.execute(select(InvoiceCase).where(InvoiceCase.bill_id == b.id))).scalar_one_or_none()
+        vm = (await s.execute(select(VendorMaster).where(VendorMaster.vendor_id == b.vendor_id))).scalar_one_or_none()
+        pos = (await s.execute(select(PurchaseOrder).where(PurchaseOrder.vendor_gstin == (vm.gstin if vm else ""), PurchaseOrder.status == "open")
+                               .order_by(PurchaseOrder.id.desc()))).scalars().all() if b.status == "draft" else []
+        return await render(request, s, "vendor_bill.html", acct=acct, b=b, B=B, case=case, pos=pos)
 
 
 @router.post("/vendor/bills/{bill_id}")

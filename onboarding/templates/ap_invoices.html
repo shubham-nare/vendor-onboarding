@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, empty %}
+{% block title %}Invoice verification{% endblock %}
+{% block content %}
+{% set TONE = {'slate': 'text-slate-600', 'indigo': 'text-indigo-700', 'amber': 'text-amber-700', 'emerald': 'text-emerald-700', 'rose': 'text-rose-700'} %}
+<div class="reveal space-y-6">
+  <div class="flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <h1>Invoice verification</h1>
+      <p class="text-slate-500 text-[14px] mt-1.5 max-w-3xl">Every invoice from an active vendor, matched against its purchase order and the delivery we confirmed. Payment is released separately, by Finance, after approval.</p>
+    </div>
+    <form method="get" class="flex gap-2 w-full sm:w-auto">
+      {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
+      <input name="q" value="{{ q }}" type="search" placeholder="Vendor, invoice, PO or BILL-number" aria-label="Search invoices" class="w-full sm:w-72 rounded-lg border px-3 py-2 text-[13px]">
+    </form>
+  </div>
+
+  <div class="flex flex-wrap gap-2 text-[12.5px]" role="tablist" aria-label="Filter by status">
+    <a href="/invoices{{ '?q=' ~ q if q }}" class="rounded-lg border px-3 py-1.5 {{ 'border-indigo-500 bg-indigo-50 text-indigo-700 font-semibold' if not status else 'border-slate-200 bg-white text-slate-600 hover:border-slate-300' }}">All</a>
+    {% for s_ in STATUS_ORDER if counts.get(s_) %}
+    <a href="/invoices?status={{ s_ | urlencode }}{{ '&q=' ~ q if q }}" class="rounded-lg border px-3 py-1.5 {{ 'border-indigo-500 bg-indigo-50 text-indigo-700 font-semibold' if status == s_ else 'border-slate-200 bg-white text-slate-600 hover:border-slate-300' }}">{{ s_ }} <span class="tabular-nums text-slate-400">{{ counts[s_] }}</span>{% if full and s_ in ('Approved for payment', 'Payment on hold', 'Needs internal review', 'Blocked for investigation') %} · <span class="tabular-nums">{{ inr(sums[s_]) }}</span>{% endif %}</a>
+    {% endfor %}
+  </div>
+
+  <section class="bg-white border rounded-xl overflow-hidden">
+    {% if rows %}
+    <div class="overflow-x-auto">
+    <table class="rtable w-full text-sm">
+      <thead class="text-left text-slate-500 bg-slate-50/70 border-b border-slate-100">
+        <tr><th class="pl-5 pr-2 py-2.5">Invoice</th><th class="px-2">Vendor</th><th class="px-2">PO</th><th class="px-2 text-right">Amount</th><th class="px-2">Status</th><th class="pr-5 pl-2">Next action</th></tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+      {% for x in rows %}{% set b = x.b %}
+        <tr class="group hover:bg-slate-50/80 cursor-pointer" onclick="location.href='/bills/{{ b.id }}'">
+          <td class="pl-5 pr-2 py-3 whitespace-nowrap"><a href="/bills/{{ b.id }}" class="font-medium text-slate-900 group-hover:text-indigo-700 mono text-[12.5px]">{{ b.invoice_number or 'being read…' }}</a><div class="text-[11.5px] text-slate-500"><span class="mono">{{ b.ref }}</span> · {{ b.created_at | dt }}</div></td>
+          <td class="px-2 py-3" data-label="Vendor">{% if x.vendor and full %}<a href="/vendors/{{ x.vendor.vendor_id }}" onclick="event.stopPropagation()" class="hover:text-indigo-700">{{ x.name }}</a>{% else %}{{ x.name }}{% endif %}<div class="text-[11.5px] text-slate-500 mono">{{ b.vendor_id }}</div></td>
+          <td class="px-2 py-3 mono text-[12px]" data-label="PO">{{ b.po_number or '—' }}</td>
+          <td class="px-2 py-3 text-right tabular-nums whitespace-nowrap" data-label="Amount">{{ inr(x.amount) if b.amount else '—' }}</td>
+          <td class="px-2 py-3" data-label="Status"><span class="tag dot {{ TONE[B.INVOICE_TONE.get(x.status, 'slate')] }}">{{ x.status }}</span></td>
+          <td class="pr-5 pl-2 py-3 text-[12.5px] max-w-[22rem]" data-label="Next action">{% if x.next[0] %}<div class="font-medium text-slate-800">{{ x.next[0] }}</div><div class="text-slate-500 line-clamp-2">{{ x.next[1] }}</div>{% else %}<span class="text-slate-400">—</span>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+      {{ empty('receipt', 'No invoices match' if (status or q) else 'No invoices yet', 'Try another filter.' if (status or q) else 'Active vendors submit invoices from their portal; each is checked against its purchase order here.') }}
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

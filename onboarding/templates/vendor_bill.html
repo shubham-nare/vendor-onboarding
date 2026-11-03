@@ -2,26 +2,69 @@
 {% from "_macros.html" import icon %}
 {% block title %}{{ b.ref }} · your bill{% endblock %}
 {% block content %}
-{% set tone = {'approved': 'bg-emerald-50 border-emerald-200', 'rejected': 'bg-rose-50 border-rose-200', 'vendor_fix': 'bg-amber-50 border-amber-200', 'checking': 'bg-violet-50 border-violet-200'}.get(b.status, 'bg-slate-50 border-slate-200') %}
+{% set vs = B.vendor_invoice_status(b, case) %}
+{% set tone = {'Paid': 'bg-emerald-50 border-emerald-200', 'Approved for payment': 'bg-emerald-50 border-emerald-200', 'Rejected': 'bg-rose-50 border-rose-200',
+               'More information required': 'bg-amber-50 border-amber-200', 'Draft': 'bg-white border-indigo-200'}.get(vs, 'bg-slate-50 border-slate-200') %}
+{% set r = b.read or {} %}
 <div class="reveal max-w-3xl mx-auto">
-  <div class="kicker"><a href="/vendor" class="hover:text-slate-900">My account</a> / <span class="mono">{{ b.ref }}</span></div>
-  <h1 class="text-[30px] sm:text-[38px] leading-tight mt-1">Bill <span class="mono text-[24px] sm:text-[30px]">{{ b.invoice_number }}</span></h1>
-  <p class="text-slate-600 text-sm mt-1">{{ inr(money(b.amount)) }} · {{ b.description }}</p>
+  <div class="text-[13px] font-medium text-slate-500 flex items-center gap-1.5"><a href="/vendor" class="hover:text-slate-900">My account</a> {{ icon('chev', 'h-3.5 w-3.5 text-slate-400') }} <span class="mono">{{ b.ref }}</span></div>
+  <h1 class="mt-1">Bill <span class="mono">{{ b.invoice_number or b.filename }}</span></h1>
+  <p class="text-slate-600 text-sm mt-1">{{ inr(money(b.amount)) if b.amount else 'Amount not read' }}{% if b.description %} · {{ b.description }}{% endif %}</p>
 
+  {% if b.status == 'draft' %}
+  <section class="mt-6 rounded-xl border border-indigo-200 bg-white p-5">
+    <div class="text-[18px] font-semibold">Check what we read from your bill</div>
+    <p class="text-sm text-slate-600 mt-1">Nothing has been sent yet. If something is wrong, upload a corrected bill instead.</p>
+    <dl class="mt-4 text-[14px] grid grid-cols-[9rem_1fr] gap-x-3 gap-y-1.5">
+      <dt class="text-slate-500">Invoice number</dt><dd class="mono">{{ b.invoice_number or 'couldn\'t read it' }}</dd>
+      <dt class="text-slate-500">Invoice date</dt><dd>{{ b.invoice_date or 'couldn\'t read it' }}</dd>
+      <dt class="text-slate-500">Total incl. GST</dt><dd class="font-semibold">{{ inr(money(b.amount)) if b.amount else 'couldn\'t read it' }}</dd>
+      <dt class="text-slate-500">Work</dt><dd>{{ b.description or '—' }}</dd>
+    </dl>
+    {% if r.line_items %}
+    <table class="mt-4 w-full text-[13px]">
+      <thead class="text-left text-slate-500"><tr><th class="py-1 font-medium">Line</th><th class="py-1 text-right font-medium">Qty</th><th class="py-1 text-right font-medium">Rate</th><th class="py-1 text-right font-medium">Amount</th></tr></thead>
+      {% for li in r.line_items %}<tr class="border-t border-slate-100"><td class="py-1.5">{{ li.description }}</td><td class="py-1.5 text-right">{{ li.quantity }}</td><td class="py-1.5 text-right">{{ li.unit_price }}</td><td class="py-1.5 text-right">{{ li.amount }}</td></tr>{% endfor %}
+    </table>
+    {% endif %}
+    <form method="post" action="/vendor/bills/{{ b.id }}/send" class="mt-5 space-y-3 text-sm">
+      <label class="block">Purchase order
+        {% if pos %}<select name="po_number" class="mt-1 w-full rounded-md border px-3 py-2">
+          <option value="">I don't have a purchase order</option>
+          {% for po in pos %}<option value="{{ po.po_number }}" {{ 'selected' if b.po_number and po.po_number.replace('-', '') == b.po_number.replace('-', '') }}>{{ po.po_number }}{{ ' · ' ~ po.cost_centre if po.cost_centre }}</option>{% endfor %}
+        </select>
+        {% else %}<input name="po_number" value="{{ b.po_number }}" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase" placeholder="The PO number on our order">{% endif %}
+        {% if b.po_number %}<span class="block text-xs text-slate-500 mt-1">We found {{ b.po_number }} printed on your bill.</span>{% endif %}
+      </label>
+      <label class="block">Who at {{ BUYER.short_name }} asked for the work?<input name="engaged_by" value="{{ b.engaged_by_text }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
+      <div class="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 pt-1">
+        <a href="/vendor/bills/new" class="text-[13px] text-slate-600 underline underline-offset-4">Upload a corrected bill instead</a>
+        <button class="rounded-md bg-indigo-600 text-white font-semibold px-6 py-2.5 hover:bg-indigo-700">Send this bill</button>
+      </div>
+    </form>
+  </section>
+  {% else %}
   <section class="mt-6 rounded-xl border p-5 {{ tone }}">
-    <div class="font-display text-[24px] leading-tight">{{ {'approved': 'Approved for payment', 'rejected': 'Not payable', 'vendor_fix': 'We need you to fix something', 'checking': 'Checking your bill'}.get(b.status, 'With our team') }}</div>
-    <div class="text-sm text-slate-600 mt-1">{{ B.VENDOR_TEXT.get(b.status, '') }}</div>
+    <div class="text-[20px] font-semibold tracking-tight">{{ vs }}</div>
+    <div class="text-sm text-slate-600 mt-1">{{ {'Received': 'We are checking your bill against our order and delivery records. This takes under a minute.',
+          'Under review': 'Our team is reviewing your bill. No action is needed from you.',
+          'More information required': 'We need something from you (see below).',
+          'Approved for payment': 'Approved. It will be paid to your verified bank account.',
+          'Paid': 'Paid to your verified bank account.',
+          'Rejected': "We're unable to pay this bill. Please contact the person who asked for the work."}.get(vs, '') }}</div>
+    {% if vs == 'Paid' and case %}<div class="mt-2 text-sm text-slate-700">Payment reference <span class="mono">{{ case.payment_reference }}</span> · {{ case.paid_at | dt }}</div>{% endif %}
     {% if b.status == 'checking' %}<script>setTimeout(() => location.reload(), 2500)</script>{% endif %}
     {% if b.status == 'vendor_fix' and b.vendor_items %}
       <ol class="mt-3 space-y-2 text-[14.5px] list-decimal pl-5 text-slate-800">{% for it in b.vendor_items %}<li>{{ it }}</li>{% endfor %}</ol>
     {% endif %}
   </section>
+  {% endif %}
 
   {% if b.status == 'vendor_fix' %}
-  <h2 class="mt-8 text-2xl">Correct and resubmit</h2>
-  <p class="text-sm text-slate-500 mt-1">Upload the corrected invoice (or leave the file empty to keep {{ b.filename }}) and fix the details.</p>
+  <h2 class="mt-8 text-xl">Correct and resubmit</h2>
+  <p class="text-sm text-slate-500 mt-1">Upload the corrected invoice, or leave the file empty to keep {{ b.filename }}.</p>
   <div class="mt-3">
-    {% set values = {'invoice_number': b.invoice_number, 'invoice_date': b.invoice_date, 'amount': b.amount, 'description': b.description, 'engaged_by': b.engaged_by_text, 'po_number': b.po_number} %}
+    {% set values = {'engaged_by': b.engaged_by_text} %}
     {% set action = '/vendor/bills/' ~ b.id %}{% set button = 'Resubmit bill' %}{% set demo = '' %}{% set file_note = 'keeps: ' ~ b.filename %}
     {% include "_bill_form.html" %}
   </div>
@@ -35,6 +78,5 @@
     <dt class="text-slate-500">File</dt><dd class="break-all">{{ b.filename }}</dd>
     <dt class="text-slate-500">Submitted</dt><dd>{{ b.created_at | dt }}{% if b.submissions > 1 %} · {{ b.submissions }} submissions{% endif %}</dd>
   </dl>
-  <p class="mt-6 text-xs text-slate-400">Demo note: this is the vendor's view. The company sees every check on <a class="underline" href="/bills/{{ b.id }}">the bill page</a>.</p>
 </div>
 {% endblock %}

@@ -101,6 +101,10 @@ def flows(tmp_path_factory):
                 vals = dict(re.findall(r'name="(invoice_number|invoice_date|amount|description|engaged_by|po_number)"[^>]*value="([^"]*)"', page))
                 r = await v.post("/vendor/bills/new", data=vals | {"demo": key})
                 bid = int(r.headers["location"].rsplit("/", 1)[1])
+                review = (await v.get(f"/vendor/bills/{bid}")).text
+                out.setdefault("review_" + key, review)
+                po = re.search(r'<option value="(PO-[^"]+)" selected', review)
+                await v.post(f"/vendor/bills/{bid}/send", data={"po_number": po.group(1) if po else "", "engaged_by": vals.get("engaged_by", "")})
                 await drain()
                 return bid
 
@@ -124,6 +128,28 @@ def flows(tmp_path_factory):
             out["newbank_maker"] = (await staff.post(f"/bills/{bid2}/action", data={"action": "approve_payment"})).status_code
             staff.cookies.set("actor", "4")
             out["newbank_checker"] = (await staff.post(f"/bills/{bid2}/action", data={"action": "reject_bill", "comment": "Bank change not confirmed by phone."})).status_code
+
+            # three-way match journeys
+            bid3 = await bill("overbilled")                     # bills 3 shifts; delivery recorded for 2
+            staff.cookies.set("actor", "3")
+            out["over_page"] = (await staff.get(f"/bills/{bid3}")).text
+            out["over_vendor"] = (await v.get(f"/vendor/bills/{bid3}")).text
+            staff.cookies.set("actor", "4")                      # Finance approves over the discrepancy, with a reason ...
+            out["over_override_no_reason"] = (await staff.post(f"/bills/{bid3}/action", data={"action": "approve_payment"})).status_code
+            out["over_override"] = (await staff.post(f"/bills/{bid3}/action", data={"action": "approve_payment", "comment": "Third shift done on 3 Nov, confirmed by phone"})).status_code
+            out["over_release_self"] = (await staff.post(f"/bills/{bid3}/action", data={"action": "release_payment"})).status_code   # ... but can't release it
+            bid4 = await bill("clean")                          # the paid invoice, sent again
+            out["dup_page"] = (await staff.get(f"/bills/{bid4}")).text
+            out["dup_vendor"] = (await v.get(f"/vendor/bills/{bid4}")).text
+            out["review_clean"] = out.get("review_clean", "")
+            for path in ("/invoices", "/purchase-orders", "/audit", "/invoices?status=Paid"):
+                out[path] = await staff.get(path)
+            po3 = re.search(r'href="/purchase-orders/(\d+)"', out["over_page"]).group(1)
+            staff.cookies.set("actor", "1")                      # Priya, the requester on the order, records the third shift
+            out["receipt"] = (await staff.post(f"/purchase-orders/{po3}/receipts", data={"kind": "service", f"qty_x": ""} |
+                                               {k: "1" for k in re.findall(r'name="(qty_\d+)"', (await staff.get(f"/purchase-orders/{po3}")).text)})).status_code
+            staff.cookies.set("actor", "3")
+            out["po3_page"] = (await staff.get(f"/purchase-orders/{po3}")).text
 
             # who sees what: Priya (1) is named on the bills, Rahul (2) isn't, Arjun (3) reviews, Kavita (4) is Finance
             sha = re.search(r'href="/files/([0-9a-f]+)"', out["newbank_page"]).group(1)
@@ -214,7 +240,7 @@ def test_clean_bill_matches_its_po_and_payment_needs_finance(flows):
 def test_bank_change_bill_is_caught_and_kept_from_the_vendor(flows):
     page = flows["newbank_page"]
     assert "R-BILL-10" in page and "different bank account" in page and "fraud-class signal" in page
-    assert "being reviewed" in flows["newbank_vendor"] and "different bank account" not in flows["newbank_vendor"]
+    assert "Under review" in flows["newbank_vendor"] and "different bank account" not in flows["newbank_vendor"]
     assert flows["newbank_maker"] == 403 and flows["newbank_checker"] == 303
 
 
@@ -253,3 +279,36 @@ def test_reviewers_see_everything_and_only_finance_sees_the_full_account(flows):
         assert who["bill"].status_code == 200 and "R-BILL-10" in who["bill"].text and who["file"] == 200 and who["outbox"] == 200
         assert "Every rule that ran" in who["run"].text
     assert acct not in arjun["bill"].text and acct in kavita["bill"].text and "Finance only" in kavita["bill"].text
+
+
+def test_vendor_checks_what_was_read_before_sending(flows):
+    review = flows["review_clean"]
+    assert "Check what we read from your bill" in review and "KFS/2026-27/0207" in review and "PO-2026-0141" in review
+    assert 'name="invoice_number"' not in review
+
+
+def test_overbilled_invoice_goes_to_review_with_the_exact_discrepancy(flows):
+    page = flows["over_page"]
+    assert "Needs internal review" in page and "R-PO-04" in page and "billed 3" in page and "confirmed for 2" in page
+    assert "billed quantity exceeds confirmed receipt" in page.lower()
+    assert "Under review" in flows["over_vendor"] and "R-PO-04" not in flows["over_vendor"] and "confirmed for 2" not in flows["over_vendor"]
+
+
+def test_finance_override_needs_a_reason_and_approver_cannot_release(flows):
+    assert flows["over_override_no_reason"] == 400 and flows["over_override"] == 303
+    assert flows["over_release_self"] == 403
+
+
+def test_duplicate_of_a_paid_invoice_is_blocked(flows):
+    page = flows["dup_page"]
+    assert "Blocked for investigation" in page and "already paid" in page
+    assert "Under review" in flows["dup_vendor"] and "already paid" not in flows["dup_vendor"]
+
+
+def test_payables_pages_and_delivery_recording(flows):
+    for path in ("/invoices", "/purchase-orders", "/audit", "/invoices?status=Paid"):
+        assert flows[path].status_code == 200, path
+    assert "UTR HDFC261103000417" in flows["/audit"].text or "mark_paid" in flows["/audit"].text or "Record the payment" in flows["/audit"].text
+    assert "PO-2026-0141" in flows["/purchase-orders"].text and "Blocked for investigation" in flows["/invoices"].text
+    assert flows["receipt"] == 303 and "SC-" in flows["po3_page"]
+
