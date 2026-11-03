@@ -2,18 +2,18 @@
 {% from "_macros.html" import icon %}
 {% block title %}My account{% endblock %}
 {% block content %}
-{% set LABEL = {'IN_PROGRESS': ('Under review', 'Submitted. We are checking your details and documents; it is final only when our team confirms it.', 'bg-orange-50 border-orange-200'),
-                'APPROVED': ('Under review', 'Your checks are complete. Our team is confirming your registration; we will email you when it is done.', 'bg-orange-50 border-orange-200'),
+{% set LABEL = {'IN_PROGRESS': ('Under review', 'Submitted. We are checking your details and documents; it is final only when our team confirms it.', 'bg-amber-50 border-amber-200'),
+                'APPROVED': ('Under review', 'Your checks are complete. Our team is confirming your registration; we will email you when it is done.', 'bg-amber-50 border-amber-200'),
                 'ACTIVE': ('Confirmed: you are an active vendor', 'You can send us bills from this page.', 'bg-emerald-50 border-emerald-200'),
                 'PENDING_VENDOR': ('Action needed', 'See the message below, then update your registration.', 'bg-amber-50 border-amber-200'),
-                'PENDING_REVIEW': ('Under review', 'Our team is reviewing your registration. No action is needed from you; we will email you when it is decided.', 'bg-orange-50 border-orange-200'),
+                'PENDING_REVIEW': ('Under review', 'Our team is reviewing your registration. No action is needed from you; we will email you when it is decided.', 'bg-amber-50 border-amber-200'),
                 'REJECTED': ('Registration closed', 'See the message below.', 'bg-slate-50 border-slate-200')} %}
 <div class="reveal max-w-3xl mx-auto">
   <div class="kicker">{{ acct.company_name }}</div>
   <h1 class="text-[30px] sm:text-[38px] leading-tight mt-1">Hello, {{ acct.contact_name.split()[0] if acct.contact_name else 'there' }}</h1>
 
   {% if submitted %}
-  <div class="mt-4 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-900 flex flex-wrap items-center justify-between gap-2">
+  <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 flex flex-wrap items-center justify-between gap-2">
     <span><b>Submitted · under review.</b> We're checking your details and documents. It isn't final until our team confirms it; we'll email {{ acct.email }} when it's confirmed, or if we need anything.</span>
     {% if staff and DEMO_TOOLS %}<a class="text-xs underline underline-offset-4" href="/runs/{{ submitted }}">Demo: watch the company's live view {{ icon('arrow', 'h-3 w-3 inline') }}</a>{% endif %}
   </div>
@@ -99,7 +99,7 @@
         <span class="flex-1 min-w-[10rem]"><span class="mono text-[13px]">{{ b.invoice_number or 'being read…' }}</span><span class="block text-xs text-slate-500 truncate">{{ b.description }}</span></span>
         <span class="font-medium">{{ inr(money(b.amount)) if b.amount else '—' }}</span>
         {% set vs = B.vendor_invoice_status(b, vcases.get(b.id)) %}
-        <span class="tag dot {{ {'Paid': 'text-emerald-700', 'Approved for payment': 'text-emerald-700', 'Rejected': 'text-rose-700', 'More information required': 'text-orange-600', 'Draft': 'text-slate-600'}.get(vs, 'text-orange-600') }}">{{ vs }}</span>
+        <span class="tag dot {{ {'Paid': 'text-emerald-700', 'Approved for payment': 'text-emerald-700', 'Rejected': 'text-rose-700', 'More information required': 'text-amber-700', 'Draft': 'text-slate-600'}.get(vs, 'text-amber-700') }}">{{ vs }}</span>
       </a></li>
       {% endfor %}
     </ul>

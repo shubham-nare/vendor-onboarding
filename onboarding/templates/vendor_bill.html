@@ -4,7 +4,7 @@
 {% block content %}
 {% set vs = B.vendor_invoice_status(b, case) %}
 {% set tone = {'Paid': 'bg-emerald-50 border-emerald-200', 'Approved for payment': 'bg-emerald-50 border-emerald-200', 'Rejected': 'bg-rose-50 border-rose-200',
-               'More information required': 'bg-orange-50 border-orange-200', 'Draft': 'bg-white border-slate-200'}.get(vs, 'bg-orange-50 border-orange-200') %}
+               'More information required': 'bg-amber-50 border-amber-200', 'Draft': 'bg-white border-slate-200'}.get(vs, 'bg-amber-50 border-amber-200') %}
 {% set r = b.read or {} %}
 <div class="reveal max-w-3xl mx-auto">
   <div class="text-[13px] font-medium text-slate-500 flex items-center gap-1.5"><a href="/vendor" class="hover:text-slate-900">My account</a> {{ icon('chev', 'h-3.5 w-3.5 text-slate-400') }} <span class="mono">{{ b.ref }}</span></div>

@@ -95,10 +95,10 @@ def signal_text(s) -> dict:
 
 
 templates.env.globals.update(signal_text=signal_text)
-# One palette everywhere: orange = still in progress, red = invalid / blocked / rejected, green = verified / done.
+# One palette everywhere: amber = still in progress, red = invalid / blocked / rejected, green = verified / done.
 # The old tone names map onto it so every page reads the same way.
-COLOR = {"slate": "text-slate-600", "green": "text-emerald-700", "orange": "text-orange-600", "red": "text-rose-700",
-         "emerald": "text-emerald-700", "amber": "text-orange-600", "indigo": "text-orange-600", "violet": "text-orange-600", "rose": "text-rose-700"}
+COLOR = {"slate": "text-slate-600", "green": "text-emerald-700", "red": "text-rose-700",
+         "emerald": "text-emerald-700", "amber": "text-amber-700", "orange": "text-amber-700", "indigo": "text-amber-700", "violet": "text-amber-700", "rose": "text-rose-700"}
 templates.env.globals.update(COLOR=COLOR)
 from onboarding import pincode as _pincode  # noqa: E402
 templates.env.globals.update(PIN_SPECIFIC=_pincode.SPECIFIC, PIN_TWO=_pincode.TWO)

@@ -3,7 +3,7 @@
 {% block title %}{{ v.display_name }} · Vendor 360{% endblock %}
 {% block content %}
 {% set VTONE = {'active': 'text-emerald-700', 'onboarding': 'text-indigo-600', 'rejected': 'text-rose-600', 'on_record': 'text-slate-600', 'inactive': 'text-slate-500'} %}
-{% set ETONE = {'verified': 'text-emerald-700', 'declared': 'text-slate-500', 'inferred': 'text-orange-600', 'unresolved': 'text-rose-700'} %}
+{% set ETONE = {'verified': 'text-emerald-700', 'declared': 'text-slate-500', 'inferred': 'text-amber-700', 'unresolved': 'text-rose-700'} %}
 {% macro basis(b) -%}
   {%- if b == 'live' -%}<span class="tag dot text-emerald-700">Live source</span>
   {%- elif b == 'simulated' -%}<span class="tag dot text-amber-700" title="A stand-in for a paid government API. It can never confer A4.">SIMULATED SOURCE</span>

@@ -415,7 +415,7 @@ def test_weak_passwords_are_refused(flows):
 
 def test_after_submitting_the_vendor_sees_under_review_not_thank_you(flows):
     page = html.unescape(flows["home_submitted"])
-    assert "Submitted · under review" in page and "Thank you" not in page and "bg-orange-50" in page
+    assert "Submitted · under review" in page and "Thank you" not in page and "bg-amber-50" in page
     assert "isn't final until our team confirms it" in page
 
 

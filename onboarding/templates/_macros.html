@@ -1,7 +1,7 @@
 {% macro status_badge(status, size='sm') -%}
   {% set c = {'APPROVED': 'text-emerald-700 bg-emerald-50', 'ACTIVE': 'text-emerald-800 !bg-emerald-100',
-              'PENDING_VENDOR': 'text-orange-700 bg-orange-50', 'PENDING_REVIEW': 'text-orange-700 bg-orange-50', 'IN_PROGRESS': 'text-orange-700 bg-orange-50',
-              '': 'text-orange-700 bg-orange-50', 'REJECTED': 'text-rose-700 bg-rose-50'}.get(status, 'text-slate-500 bg-slate-50') %}
+              'PENDING_VENDOR': 'text-amber-700 bg-amber-50', 'PENDING_REVIEW': 'text-amber-700 bg-amber-50', 'IN_PROGRESS': 'text-amber-700 bg-amber-50',
+              '': 'text-amber-700 bg-amber-50', 'REJECTED': 'text-rose-700 bg-rose-50'}.get(status, 'text-slate-500 bg-slate-50') %}
   <span class="tag dot {{ c }} {{ '!text-[13px] !px-2.5 !py-0.5' if size == 'lg' }}">{{ STATUS_LABEL.get(status, status) }}</span>
 {%- endmacro %}
 
@@ -15,17 +15,17 @@
 {%- endmacro %}
 
 {% macro result_chip(result) -%}
-  {% set c = {'PASS': 'text-emerald-700', 'FAIL': 'text-rose-600', 'WARN': 'text-orange-600', 'SKIPPED': 'text-slate-400', 'ERROR': 'text-violet-600'}.get(result, '') %}
+  {% set c = {'PASS': 'text-emerald-700', 'FAIL': 'text-rose-600', 'WARN': 'text-amber-700', 'SKIPPED': 'text-slate-400', 'ERROR': 'text-violet-600'}.get(result, '') %}
   <span class="tag {{ c }} !text-[9.5px] w-[54px] justify-center">{{ result }}</span>
 {%- endmacro %}
 
 {% macro severity_chip(sev) -%}
-  {% set c = {'info': 'text-slate-500', 'warn': 'text-amber-700', 'vendor': 'text-orange-800', 'review': 'text-orange-600', 'fraud': 'text-white bg-rose-600 !border-rose-600'}.get(sev, 'text-slate-500') %}
+  {% set c = {'info': 'text-slate-500', 'warn': 'text-amber-700', 'vendor': 'text-amber-800', 'review': 'text-amber-700', 'fraud': 'text-white bg-rose-600 !border-rose-600'}.get(sev, 'text-slate-500') %}
   <span class="tag {{ c }} !text-[9.5px] shrink-0 self-start mt-px">{{ sev }}</span>
 {%- endmacro %}
 
 {% macro tier_chip(tier) -%}
-  {% set c = {'low': 'text-emerald-700', 'medium': 'text-orange-600', 'high': 'text-rose-700'}.get(tier, 'text-slate-500') %}
+  {% set c = {'low': 'text-emerald-700', 'medium': 'text-amber-700', 'high': 'text-rose-700'}.get(tier, 'text-slate-500') %}
   {% if tier %}<span class="inline-flex items-center gap-1.5 text-xs whitespace-nowrap {{ c }}"><span class="h-2 w-2 rounded-full bg-current"></span>{{ tier }} risk</span>{% endif %}
 {%- endmacro %}
 
