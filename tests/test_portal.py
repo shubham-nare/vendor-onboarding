@@ -154,6 +154,8 @@ def flows(tmp_path_factory):
             out["review_clean"] = out.get("review_clean", "")
             for path in ("/invoices", "/purchase-orders", "/audit", "/invoices?status=Paid"):
                 out[path] = await staff.get(path)
+            for path in ("/invoices?sort=amount_desc", "/invoices?sort=amount_asc", "/invoices?amin=41000", "/invoices?amax=30000", "/invoices?vendor=V-9999"):
+                out["filter " + path] = (await staff.get(path)).text
             po3 = re.search(r'href="/purchase-orders/(\d+)"', out["over_page"]).group(1)
             staff.cookies.set("actor", "1")                      # Priya, the requester on the order, records the third shift
             out["receipt"] = (await staff.post(f"/purchase-orders/{po3}/receipts", data={"kind": "service", f"qty_x": ""} |
@@ -422,4 +424,24 @@ def test_the_vendor_is_emailed_when_a_decision_is_released(flows):
     activated = [m for m in mails if "active" in m["subject"].lower()]
     assert activated, [m["subject"] for m in mails]
     assert "kesarifacility" in activated[0]["to"]
+
+
+def test_invoices_filter_by_amount_vendor_and_sort(flows):
+    def order(page):
+        import re as _re
+        return [m for m in _re.findall(r"KFS/2026-27/0\d{3}", page.split("<tbody", 1)[1])]
+    desc, asc = order(flows["filter /invoices?sort=amount_desc"]), order(flows["filter /invoices?sort=amount_asc"])
+    assert desc[0] == "KFS/2026-27/0219" and asc[0] == "KFS/2026-27/0211"          # 42,480 is the largest, 23,600 the smallest
+    assert set(order(flows["filter /invoices?amin=41000"])) == {"KFS/2026-27/0219"}
+    assert set(order(flows["filter /invoices?amax=30000"])) == {"KFS/2026-27/0211"}
+    assert "No invoices match" in flows["filter /invoices?vendor=V-9999"]
+    page = flows["filter /invoices?amin=41000"]
+    assert 'name="vendor"' in page and "Amount: high to low" in page and "Clear</a>" in page
+
+
+def test_navigation_uses_short_names_and_help_replaces_sources(flows):
+    page = flows["console_page"]
+    for label in (">Review<", ">Invoices<", ">Orders<", ">History<", ">Help<"):
+        assert label in page.replace("</svg>", ">"), label
+    assert "Verification sources" not in page and "Decisions and audit" not in page and "Invoice verification" not in page
 

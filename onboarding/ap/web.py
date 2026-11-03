@@ -30,7 +30,7 @@ def _po_total(lines) -> float:
 
 
 @router.get("/invoices", response_class=HTMLResponse)
-async def invoices(request: Request, status: str = "", q: str = ""):
+async def invoices(request: Request, status: str = "", q: str = "", vendor: str = "", amin: str = "", amax: str = "", sort: str = ""):
     """Every invoice from active vendors, newest first, with its status, the amount and the specific next step."""
     async with read_sessions()() as s:
         actor = await _actor(request, s)
@@ -50,16 +50,27 @@ async def invoices(request: Request, status: str = "", q: str = ""):
             if q and q.lower() not in f"{name} {b.invoice_number} {b.ref} {b.po_number} {b.vendor_id}".lower():
                 continue
             rows.append(dict(b=b, case=c, status=st, vendor=vend.get(b.vendor_id), name=name, amount=money(b.amount) or 0.0, next=B.next_action(b, c)))
-        counts = defaultdict(int)
-        sums = defaultdict(float)
+        vendors_seen = sorted({(x["b"].vendor_id, x["name"]) for x in rows}, key=lambda v: v[1].lower())
+        lo, hi = money(amin), money(amax)
+        if vendor:
+            rows = [x for x in rows if x["b"].vendor_id == vendor]
+        if lo is not None:
+            rows = [x for x in rows if x["amount"] >= lo]
+        if hi is not None:
+            rows = [x for x in rows if x["amount"] <= hi]
+        counts, sums = defaultdict(int), defaultdict(float)      # status chips count what the other filters leave
         for x in rows:
             counts[x["status"]] += 1
             sums[x["status"]] += x["amount"]
         if status:
             rows = [x for x in rows if x["status"] == status]
-        rows.sort(key=lambda x: (STATUS_ORDER.index(x["status"]) if x["status"] in STATUS_ORDER else 99, -x["b"].id))
+        orders = {"new": lambda x: -x["b"].id, "old": lambda x: x["b"].id, "amount_desc": lambda x: -x["amount"], "amount_asc": lambda x: x["amount"],
+                  "vendor": lambda x: (x["name"].lower(), -x["b"].id)}
+        rows.sort(key=orders.get(sort) or (lambda x: (STATUS_ORDER.index(x["status"]) if x["status"] in STATUS_ORDER else 99, -x["b"].id)))
+        params = {k: v for k, v in dict(q=q, vendor=vendor, amin=amin, amax=amax, sort=sort).items() if v}
         return await render(request, s, "ap_invoices.html", rows=rows, counts=counts, sums=sums, status=status, q=q, full=full,
-                            STATUS_ORDER=STATUS_ORDER, B=B)
+                            STATUS_ORDER=STATUS_ORDER, B=B, vendors_seen=vendors_seen, f=dict(vendor=vendor, amin=amin, amax=amax, sort=sort),
+                            params=params, total=sum(x["amount"] for x in rows))
 
 
 async def _po_bundle(s, po_ids=None):

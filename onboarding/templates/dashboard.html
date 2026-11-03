@@ -34,7 +34,7 @@
   {% if full or loop.index <= 2 %}
   <a href="{{ href }}" class="bg-white border rounded-xl px-4 py-3.5 hover:border-indigo-300 transition">
     <div class="text-[12.5px] font-medium text-slate-500">{{ label }}</div>
-    <div class="mt-1 text-[28px] font-semibold tracking-tight leading-none tabular-nums {{ {'indigo': 'text-indigo-700', 'rose': 'text-rose-700', 'amber': 'text-amber-700', 'slate': 'text-slate-800'}[tone] }}">{{ value }}</div>
+    <div class="mt-1 text-[28px] font-semibold tracking-tight leading-none tabular-nums {{ COLOR[tone] }}">{{ value }}</div>
     <div class="mt-1.5 text-[12px] text-slate-500 truncate">{{ note }}</div>
   </a>
   {% endif %}
@@ -112,7 +112,7 @@
 
 {% if full and work.recent %}
 <section class="bg-white border rounded-xl overflow-hidden">
-  <div class="px-4 sm:px-5 py-4 border-b border-slate-100 flex items-center justify-between"><h2 class="text-[16px]">Recent decisions</h2><a href="/audit" class="text-[12.5px] font-medium text-indigo-700 hover:underline">Decisions and audit</a></div>
+  <div class="px-4 sm:px-5 py-4 border-b border-slate-100 flex items-center justify-between"><h2 class="text-[16px]">Recent decisions</h2><a href="/audit" class="text-[12.5px] font-medium text-indigo-700 hover:underline">History</a></div>
   <ul class="divide-y divide-slate-100 text-[13px]">
     {% for d in work.recent %}<li class="px-4 sm:px-5 py-2.5 flex flex-wrap items-baseline gap-x-3 gap-y-0.5"><span class="text-[12px] text-slate-500 w-28 shrink-0">{{ d.at | dt }}</span><span class="font-medium text-slate-800">{{ d.what }}</span>{% if d.href %}<a class="text-indigo-700 hover:underline mono text-[12px]" href="{{ d.href }}">{{ d.label }}</a>{% else %}<span class="mono text-[12px]">{{ d.label }}</span>{% endif %}<span class="text-slate-500">· {{ d.who }}</span>{% if d.override %}<span class="tag text-amber-700">override</span>{% endif %}</li>{% endfor %}
   </ul>

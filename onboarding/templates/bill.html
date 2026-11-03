@@ -3,7 +3,7 @@
 {% block title %}{{ b.ref }} · {{ vm.legal_name }}{% endblock %}
 {% block content %}
 {% set st = B.invoice_status(b, case) %}
-{% set TONE = {'slate': 'text-slate-600', 'indigo': 'text-indigo-700', 'amber': 'text-amber-700', 'emerald': 'text-emerald-700', 'rose': 'text-rose-700'} %}
+{% set TONE = COLOR %}
 {% set failing = b.rules | selectattr('result', 'in', ['FAIL', 'ERROR']) | list %}
 {% set m = (case.match if case else {}) or {} %}
 {% set r = b.read or {} %}{% set au = b.authenticity or {} %}

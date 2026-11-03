@@ -2,34 +2,45 @@
 {% from "_macros.html" import icon %}
 {% block title %}{{ po.po_number }}{% endblock %}
 {% block content %}
-{% set TONE = {'slate': 'text-slate-600', 'indigo': 'text-indigo-700', 'amber': 'text-amber-700', 'emerald': 'text-emerald-700', 'rose': 'text-rose-700'} %}
+{% set TONE = COLOR %}
 <div class="reveal space-y-6">
   <div>
-    <div class="text-[13px] font-medium text-slate-500 flex items-center gap-1.5"><a href="/purchase-orders" class="hover:text-slate-900">Purchase orders</a> {{ icon('chev', 'h-3.5 w-3.5 text-slate-400') }} <span class="mono text-slate-800">{{ po.po_number }}</span></div>
+    <div class="text-[13px] font-medium text-slate-500 flex items-center gap-1.5"><a href="/purchase-orders" class="hover:text-slate-900">Orders</a> {{ icon('chev', 'h-3.5 w-3.5 text-slate-400') }} <span class="mono text-slate-800">{{ po.po_number }}</span></div>
     <div class="mt-1.5 flex flex-wrap items-start justify-between gap-4">
       <div>
-        <h1>{{ po.po_number }}</h1>
-        <p class="mt-1 text-[13.5px] text-slate-600">{% if vendor %}<a class="font-medium text-indigo-700 hover:underline" href="/vendors/{{ vendor.vendor_id }}">{{ po.vendor_name }}</a>{% else %}{{ po.vendor_name }}{% endif %} · <span class="mono">{{ po.vendor_gstin }}</span> · {{ po.cost_centre }} · {{ po.status }}</p>
+        <h1 class="flex flex-wrap items-center gap-3">{{ po.po_number }}
+          {% set pst = {'open': ('Open', 'text-orange-700 bg-orange-50'), 'closed': ('Closed', 'text-emerald-700 bg-emerald-50'), 'cancelled': ('Cancelled', 'text-rose-700 bg-rose-50')}.get(po.status, (po.status, 'text-slate-600 bg-slate-50')) %}
+          <span class="tag dot {{ pst[1] }} !text-[12px]">{{ pst[0] }}</span></h1>
+        <p class="mt-1 text-[13.5px] text-slate-600">{% if vendor %}<a class="font-medium text-indigo-700 hover:underline" href="/vendors/{{ vendor.vendor_id }}">{{ po.vendor_name }}</a>{% else %}{{ po.vendor_name }}{% endif %} · <span class="mono">{{ po.vendor_gstin }}</span></p>
       </div>
-      <div class="text-right"><div class="text-[12px] font-medium text-slate-500">Order value incl. GST</div><div class="text-[26px] font-semibold tabular-nums">{{ inr(d.total) }}</div></div>
+      {% set fully = d.delivered_value >= d.total - 0.5 %}
+      <dl class="grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-2 text-right">
+        <div><dt class="text-[12px] font-medium text-slate-500">Order value</dt><dd class="text-[22px] font-semibold tabular-nums">{{ inr(d.total) }}</dd></div>
+        <div><dt class="text-[12px] font-medium text-slate-500">Delivered</dt><dd class="text-[22px] font-semibold tabular-nums {{ 'text-emerald-700' if fully else 'text-orange-600' }}">{{ inr(d.delivered_value) }}</dd></div>
+        <div><dt class="text-[12px] font-medium text-slate-500">Invoiced</dt><dd class="text-[22px] font-semibold tabular-nums {{ 'text-rose-700' if d.invoiced > d.delivered_value + 0.5 else '' }}">{{ inr(d.invoiced) }}</dd></div>
+        <div><dt class="text-[12px] font-medium text-slate-500">Paid</dt><dd class="text-[22px] font-semibold tabular-nums {{ 'text-emerald-700' if d.paid }}">{{ inr(d.paid) }}</dd></div>
+      </dl>
     </div>
   </div>
-  <div class="grid sm:grid-cols-4 gap-3 text-[13px]">
-    {% for label, val in [('Requested by', emps[po.requester_id].name if po.requester_id in emps else '—'), ('Approved by', emps[po.approver_id].name if po.approver_id in emps else '—'),
-                          ('Service period', (po.service_from ~ ' to ' ~ po.service_to) if po.service_from else '—'), ('Pays into', po.payee_account_display ~ ' · ' ~ po.payee_ifsc)] %}
-    <div class="bg-white border rounded-xl px-4 py-3"><div class="text-slate-500 text-[12px]">{{ label }}</div><div class="mt-0.5 font-medium">{{ val }}</div></div>
+  <dl class="bg-white border rounded-xl px-4 sm:px-6 py-3 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-x-6 gap-y-3 text-[13px]">
+    {% for label, val in [('Cost centre', po.cost_centre or '—'), ('Requested by', emps[po.requester_id].name if po.requester_id in emps else '—'), ('Approved by', emps[po.approver_id].name if po.approver_id in emps else '—'),
+                          ('Service period', (po.service_from ~ ' to ' ~ po.service_to) if po.service_from else '—'), ('Pays into', po.payee_account_display ~ ' · ' ~ po.payee_ifsc), ('Deliveries', (d.receipts | length) ~ ' recorded')] %}
+    <div class="min-w-0"><dt class="text-slate-500 text-[12px]">{{ label }}</dt><dd class="mt-0.5 font-medium truncate">{{ val }}</dd></div>
     {% endfor %}
-  </div>
+  </dl>
 
   <section class="bg-white border rounded-xl overflow-hidden">
     <div class="px-4 sm:px-6 py-4 border-b border-slate-100"><h2 class="text-[16px]">Lines and delivery</h2></div>
     <div class="overflow-x-auto">
     <table class="w-full text-[13px]">
-      <thead class="text-left text-slate-500 bg-slate-50/70"><tr><th class="pl-4 sm:pl-6 pr-2 py-2">Line</th><th class="px-2 text-right">Ordered</th><th class="px-2 text-right">Delivered</th><th class="px-2 text-right">Unit price</th><th class="px-2 text-right">GST</th><th class="pr-4 sm:pr-6 pl-2 text-right">Value incl. GST</th></tr></thead>
+      <thead class="text-left text-slate-500 bg-slate-50/70"><tr><th class="pl-4 sm:pl-6 pr-2 py-2">Line</th><th class="px-2">Delivery</th><th class="px-2 text-right">Ordered</th><th class="px-2 text-right">Delivered</th><th class="px-2 text-right">Unit price</th><th class="px-2 text-right">GST</th><th class="pr-4 sm:pr-6 pl-2 text-right">Value incl. GST</th></tr></thead>
       <tbody class="divide-y divide-slate-100">
       {% for l in d.lines %}
-        <tr><td class="pl-4 sm:pl-6 pr-2 py-2">{{ l.description }}</td><td class="px-2 text-right tabular-nums">{{ l.quantity|round(2) }} {{ l.unit }}</td>
-          <td class="px-2 text-right tabular-nums {{ 'text-amber-700 font-semibold' if d.received[l.id] < l.quantity }}">{{ d.received[l.id]|round(2) }}</td>
+        {% set got = d.received[l.id] %}
+        <tr><td class="pl-4 sm:pl-6 pr-2 py-2.5">{{ l.description }}</td>
+          <td class="px-2 py-2.5 whitespace-nowrap">{% if got >= l.quantity %}<span class="tag dot text-emerald-700 bg-emerald-50">Delivered</span>{% elif got > 0 %}<span class="tag dot text-orange-700 bg-orange-50">Partly delivered</span>{% else %}<span class="tag dot text-rose-700 bg-rose-50">Not delivered</span>{% endif %}</td>
+          <td class="px-2 text-right tabular-nums">{{ l.quantity|round(2) }} {{ l.unit }}</td>
+          <td class="px-2 text-right tabular-nums font-semibold {{ 'text-emerald-700' if got >= l.quantity else ('text-orange-600' if got > 0 else 'text-rose-700') }}">{{ got|round(2) }}</td>
           <td class="px-2 text-right tabular-nums">{{ inr(l.unit_price) }}</td><td class="px-2 text-right">{{ l.tax_rate|round(1) }}%</td>
           <td class="pr-4 sm:pr-6 pl-2 text-right tabular-nums">{{ inr(l.quantity * l.unit_price * (1 + l.tax_rate / 100)) }}</td></tr>
       {% endfor %}
@@ -38,15 +49,18 @@
     </div>
   </section>
 
-  <div class="grid lg:grid-cols-2 gap-6">
+  <div class="grid lg:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
     <section class="bg-white border rounded-xl overflow-hidden">
-      <div class="px-4 sm:px-6 py-4 border-b border-slate-100"><h2 class="text-[16px]">Deliveries recorded</h2><p class="text-[12.5px] text-slate-500 mt-0.5">Goods receipts and service confirmations. An invoice can't bill more than what's recorded here.</p></div>
+      <div class="px-4 sm:px-6 py-4 border-b border-slate-100"><h2 class="text-[16px]">Deliveries</h2><p class="text-[12.5px] text-slate-500 mt-0.5">Goods receipts and service confirmations. An invoice can't bill more than what's recorded here.</p></div>
       <ul class="divide-y divide-slate-100">
         {% for g in d.receipts %}<li class="px-4 sm:px-6 py-2.5 text-[13px]"><span class="mono font-medium">{{ g.number }}</span> · {{ 'goods received' if g.kind == 'goods' else 'service confirmed' }} on {{ g.received_on }} by {{ emps[g.confirmed_by].name if g.confirmed_by in emps else '—' }}{% if g.note %}<div class="text-slate-500">{{ g.note }}</div>{% endif %}</li>
-        {% else %}<li class="px-6 py-4 text-[13px] text-amber-700">Nothing recorded yet: invoices against this order will wait for review.</li>{% endfor %}
+        {% else %}<li class="px-6 py-4 text-[13px] text-orange-600">Nothing recorded yet: invoices against this order will wait for review.</li>{% endfor %}
       </ul>
-      <form method="post" action="/purchase-orders/{{ po.id }}/receipts" class="border-t border-slate-100 p-4 sm:p-6 space-y-3 text-[13px]">
-        <div class="font-semibold">Record a delivery</div>
+    </section>
+
+    <section class="bg-white border rounded-xl overflow-hidden">
+      <div class="px-4 sm:px-6 py-4 border-b border-slate-100"><h2 class="text-[16px]">Record a delivery</h2><p class="text-[12.5px] text-slate-500 mt-0.5">By the person who requested the order, or a reviewer.</p></div>
+      <form method="post" action="/purchase-orders/{{ po.id }}/receipts" class="p-4 sm:p-6 space-y-3 text-[13px]">
         <div class="grid sm:grid-cols-2 gap-3">
           <label class="block">Type<select name="kind" class="mt-1 w-full rounded-md border px-2 py-1.5"><option value="service">Service confirmation</option><option value="goods">Goods receipt</option></select></label>
           <label class="block">Date<input type="date" name="received_on" class="mt-1 w-full rounded-md border px-2 py-1.5"></label>
@@ -58,10 +72,10 @@
     </section>
 
     <section class="bg-white border rounded-xl overflow-hidden">
-      <div class="px-4 sm:px-6 py-4 border-b border-slate-100"><h2 class="text-[16px]">Invoices against this order</h2></div>
+      <div class="px-4 sm:px-6 py-4 border-b border-slate-100"><h2 class="text-[16px]">Invoices</h2></div>
       <ul class="divide-y divide-slate-100">
         {% for b, c in d.invoices %}{% set st = B.invoice_status(b, c) %}
-        <li><a href="/bills/{{ b.id }}" class="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-2.5 text-[13px] hover:bg-slate-50"><span><span class="mono font-medium">{{ b.invoice_number or b.ref }}</span> · {{ inr(money(b.amount)) if b.amount else '—' }}</span><span class="tag dot {{ TONE[B.INVOICE_TONE.get(st, 'slate')] }}">{{ st }}</span></a></li>
+        <li><a href="/bills/{{ b.id }}" class="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-2.5 text-[13px] hover:bg-slate-50"><span class="mono font-medium">{{ b.invoice_number or b.ref }}</span><span class="ml-auto tabular-nums">{{ inr(money(b.amount)) if b.amount else '—' }}</span><span class="tag dot {{ TONE[B.INVOICE_TONE.get(st, 'slate')] }}">{{ st }}</span></a></li>
         {% else %}<li class="px-6 py-4 text-[13px] text-slate-500">No invoices yet.</li>{% endfor %}
       </ul>
       {% if audit %}

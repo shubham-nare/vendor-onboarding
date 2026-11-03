@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 {% from "_macros.html" import status_badge, tier_chip, empty, icon, monogram %}
-{% block title %}Review queue{% endblock %}
+{% block title %}Review{% endblock %}
 {% block content %}
-{% set TONE = {'slate': 'text-slate-600', 'indigo': 'text-indigo-700', 'amber': 'text-amber-700', 'emerald': 'text-emerald-700', 'rose': 'text-rose-700'} %}
+{% set TONE = COLOR %}
 <div class="reveal space-y-6">
   <div>
-    <h1>Review queue</h1>
+    <h1>Review</h1>
     <p class="text-slate-500 text-[14px] mt-1.5 max-w-3xl">What you can act on now, as {{ ROLE_LABEL[actor.role] if actor else 'a guest' }}. Items you're not allowed to decide (segregation of duties) aren't listed.</p>
   </div>
 

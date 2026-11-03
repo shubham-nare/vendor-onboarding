@@ -51,9 +51,9 @@ VENDOR_TEXT = {  # what the vendor sees: never the internal reasoning
 }
 
 # The invoice statuses people see. Internal: the full lifecycle. Vendor: only what's safe to say.
-INVOICE_TONE = {"Draft": "slate", "Being checked": "indigo", "Needs vendor information": "amber", "Needs internal review": "amber",
-                "Matched and ready for approval": "indigo", "Approved for payment": "emerald", "Payment on hold": "amber",
-                "Payment in progress": "indigo", "Paid": "emerald", "Rejected": "rose", "Blocked for investigation": "rose"}
+INVOICE_TONE = {"Draft": "slate", "Being checked": "orange", "Needs vendor information": "orange", "Needs internal review": "orange",
+                "Matched and ready for approval": "green", "Approved for payment": "green", "Payment on hold": "orange",
+                "Payment in progress": "orange", "Paid": "green", "Rejected": "red", "Blocked for investigation": "red"}
 
 
 def invoice_status(b, case=None) -> str:

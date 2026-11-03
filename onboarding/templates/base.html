@@ -157,6 +157,7 @@
     '/invoices': '<path d="M5 3h14v18l-2.3-1.5L14.3 21 12 19.5 9.7 21l-2.4-1.5L5 21z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
     '/purchase-orders': '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/>',
     '/audit': '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    '/help': '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6"/><path d="M12 17h.01"/>',
     '/console': '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
     '/bills': '<path d="M5 3h14v18l-2.3-1.5L14.3 21 12 19.5 9.7 21l-2.4-1.5L5 21z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
     '/vendors': '<path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16"/><path d="M16 9h2a2 2 0 0 1 2 2v10"/><path d="M3 21h18M8 7h4M8 11h4M8 15h4"/>',
@@ -234,10 +235,10 @@
 
 
   {% else %}
-  {% set NAV = [('Workspace', [('/console', 'Dashboard'), ('/review', 'Review queue'), ('/vendors', 'Vendors'), ('/applications', 'Applications'), ('/relationships', 'Relationships'), ('/invites', 'Invites')]),
-                ('Payables', [('/invoices', 'Invoice verification'), ('/purchase-orders', 'Purchase orders')]),
-                ('Records', [('/audit', 'Decisions and audit')]),
-                ('Settings and tools', [('/assumptions', 'Verification sources'), ('/supplier-accounts', 'Supplier accounts'), ('/outbox', 'Outbox'), ('/check', 'Document check'), ('/system', 'System')])] %}
+  {% set NAV = [('Workspace', [('/console', 'Dashboard'), ('/review', 'Review'), ('/vendors', 'Vendors'), ('/applications', 'Applications'), ('/relationships', 'Relationships'), ('/invites', 'Invites')]),
+                ('Payables', [('/invoices', 'Invoices'), ('/purchase-orders', 'Orders')]),
+                ('Records', [('/audit', 'History')]),
+                ('Settings', [('/supplier-accounts', 'Accounts'), ('/outbox', 'Outbox'), ('/check', 'Checker'), ('/system', 'System')])] %}
   {% set REVIEWER_ONLY = ['/relationships', '/purchase-orders', '/audit', '/supplier-accounts', '/outbox', '/check', '/system'] %}
   {% set reviewer = actor and actor.role in ('maker', 'checker') %}
   {# desktop sidebar #}
@@ -259,6 +260,7 @@
     </nav>
     {% if actor %}
     <div class="p-3 border-t border-white/10 space-y-2">
+      <a href="/assumptions" class="side-link !py-1.5 text-[12.5px]" title="How the checks work and which sources are live">{{ nav_icon('/help') }}Help</a>
       {% if DEMO_TOOLS %}
       <div class="px-1 text-[10.5px] font-semibold uppercase tracking-[.08em] text-slate-500">Switch person (development)</div>
       {{ persona('left-0 bottom-full mb-2') }}
@@ -289,7 +291,7 @@
   </header>
   <script>{ const n = document.getElementById('mainnav'), a = n && n.querySelector('[aria-current]'); if (a && a.offsetLeft + a.offsetWidth > n.clientWidth) n.scrollLeft = a.offsetLeft - 16; }</script>
   <div class="lg:pl-64">
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 py-6 sm:py-8">
+    <main class="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-10 2xl:px-12 py-6 sm:py-8">
       {% block content %}{% endblock %}
     </main>
 

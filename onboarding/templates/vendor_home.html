@@ -99,7 +99,7 @@
         <span class="flex-1 min-w-[10rem]"><span class="mono text-[13px]">{{ b.invoice_number or 'being read…' }}</span><span class="block text-xs text-slate-500 truncate">{{ b.description }}</span></span>
         <span class="font-medium">{{ inr(money(b.amount)) if b.amount else '—' }}</span>
         {% set vs = B.vendor_invoice_status(b, vcases.get(b.id)) %}
-        <span class="tag dot {{ {'Paid': 'text-emerald-700', 'Approved for payment': 'text-emerald-700', 'Rejected': 'text-rose-700', 'More information required': 'text-amber-700', 'Draft': 'text-slate-600'}.get(vs, 'text-indigo-700') }}">{{ vs }}</span>
+        <span class="tag dot {{ {'Paid': 'text-emerald-700', 'Approved for payment': 'text-emerald-700', 'Rejected': 'text-rose-700', 'More information required': 'text-orange-600', 'Draft': 'text-slate-600'}.get(vs, 'text-orange-600') }}">{{ vs }}</span>
       </a></li>
       {% endfor %}
     </ul>
