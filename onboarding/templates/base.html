@@ -58,7 +58,7 @@
 
     /* cards: white tiles on the grey page, large radius, no outline */
     .rounded-xl, .rounded-2xl, main section.bg-white, main .bg-white.border, main article.bg-white, main details.bg-white { border-radius: 18px !important; }
-    main section.bg-white, main .bg-white.border, main article.bg-white, main details.bg-white { border-color: transparent !important; box-shadow: none; }
+    main section.bg-white, main .bg-white.border, main article.bg-white, main details.bg-white { border: 1px solid #D2D2D7 !important; box-shadow: none; }
     main a.bg-white.border:hover, main a.bg-white:hover { box-shadow: 0 4px 24px rgba(0,0,0,.08); transform: scale(1.005); }
     main .border-slate-100, main .divide-slate-100 > * + * { border-color: #E8E8ED !important; }
     .rounded-lg { border-radius: 12px; } .rounded-md { border-radius: 10px; }
@@ -104,8 +104,7 @@
 
     /* live run timeline */
     #stages li { position: relative; }
-    #stages li::before { content: ""; position: absolute; left: 26.5px; top: 0; bottom: 0; width: 1.5px; background: #E3E3E8; }
-    #stages li:first-child::before { top: 18px; } #stages li:last-child::before { bottom: calc(100% - 18px); }
+    #stages li.step { border-color: #D2D2D7; }
     #stages .icon { position: relative; z-index: 1; background: var(--card); }
     .ink-dot { width: 12px; height: 12px; border-radius: 9999px; background: var(--accent); animation: ink 1.4s ease-out infinite; }
     @keyframes ink { 0% { box-shadow: 0 0 0 0 rgba(0,113,227,.45); } 100% { box-shadow: 0 0 0 9px rgba(0,113,227,0); } }

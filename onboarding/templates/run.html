@@ -30,39 +30,39 @@
   {% endif %}
 </div>
 
-<div class="grid grid-cols-1 lg:grid-cols-[340px_1fr] xl:grid-cols-[360px_1fr] 2xl:grid-cols-[400px_1fr] gap-5 sm:gap-6 mt-6 sm:mt-7">
-  <!-- live ledger -->
-  <section class="bg-white rounded-xl border self-start lg:sticky lg:top-5 lg:max-h-[calc(100vh-2.5rem)] lg:overflow-y-auto min-w-0 {{ 'order-last lg:order-none' if done }}" aria-live="polite">
-    <div class="px-4 sm:px-5 py-3.5 border-b border-slate-200">
-      <div class="flex items-center justify-between">
-        <h2 class="text-lg">Live run</h2>
-        <span id="runstate" class="tag dot {{ 'text-emerald-700' if done else 'text-indigo-600' }}">{{ 'finished' if done else run.state }}</span>
-      </div>
+<div class="mt-6 sm:mt-7 space-y-6">
+  <!-- live run: a horizontal strip -->
+  <section class="bg-white rounded-xl border min-w-0 overflow-hidden" aria-live="polite">
+    <div class="px-4 sm:px-6 py-3 border-b border-slate-200 flex flex-wrap items-center gap-x-4 gap-y-1">
+      <h2 class="text-lg">Live run</h2>
+      <span id="runstate" class="tag dot {{ 'text-emerald-700' if done else 'text-indigo-600' }}">{{ 'finished' if done else run.state }}</span>
       {% if done and run.finished_at and run.started_at %}
-      {% set live_reads = docs | selectattr('read') | map(attribute='read') | selectattr('origin', 'equalto', 'live') | list %}
-      <p class="mt-1 text-[12px] text-slate-500"><b class="tabular-nums">{{ '%.1f' % (run.finished_at - run.started_at).total_seconds() }} s</b> · <b class="tabular-nums">{{ docs | length }}</b> document{{ 's' if docs | length != 1 }} · <b class="tabular-nums">{{ rules | length }}</b> checks</p>
+      <span class="text-[13px] text-slate-500"><b class="tabular-nums text-slate-900">{{ '%.1f' % (run.finished_at - run.started_at).total_seconds() }} s</b> · <b class="tabular-nums text-slate-900">{{ docs | length }}</b> document{{ 's' if docs | length != 1 }} · <b class="tabular-nums text-slate-900">{{ rules | length }}</b> checks</span>
       {% endif %}
     </div>
-    <ol id="stages">
+    <ol id="stages" class="flex overflow-x-auto no-scrollbar">
       {% for key, label in stages %}
-      <li data-stage="{{ key }}" class="px-4 py-3 sm:py-2.5 border-b border-slate-100 last:border-b-0">
-        <details>
-          <summary class="flex items-start gap-3">
-            <span class="icon mt-0.5 inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border border-slate-300 mono text-[10px] text-slate-400">{{ loop.index }}</span>
-            <span class="flex-1 min-w-0">
-              <span class="block text-[14px] font-medium">{{ label }}</span>
-              <span class="summary block text-xs text-slate-500"></span>
-              <span class="log block"></span>
-            </span>
-          </summary>
-          <div class="rules mt-2 ml-9 space-y-1"></div>
-        </details>
+      <li data-stage="{{ key }}" class="step flex-1 min-w-[9.5rem] border-r border-slate-200 last:border-r-0">
+        <button type="button" class="w-full h-full text-left px-3.5 py-3 flex items-start gap-2.5 hover:bg-slate-50" aria-expanded="false">
+          <span class="icon mt-0.5 inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border border-slate-300 mono text-[10px] text-slate-400">{{ loop.index }}</span>
+          <span class="flex-1 min-w-0">
+            <span class="block text-[13.5px] font-semibold leading-snug">{{ label }}</span>
+            <span class="summary block text-[12px] text-slate-500 leading-snug"></span>
+            <span class="log hidden"></span>
+          </span>
+        </button>
+        <div class="rules hidden"></div>
       </li>
       {% endfor %}
     </ol>
+    <div id="stage-detail" class="hidden border-t border-slate-200 bg-slate-50 px-4 sm:px-6 py-3">
+      <div class="flex items-center justify-between gap-3"><div id="stage-detail-title" class="text-[13.5px] font-semibold"></div>
+        <button type="button" id="stage-detail-x" class="text-slate-500 hover:text-slate-900 text-[13px]" aria-label="Close">✕</button></div>
+      <div id="stage-detail-body" class="mt-2 space-y-1"></div>
+    </div>
   </section>
 
-  <div class="space-y-6 min-w-0">
+  <div class="min-w-0">
   {% if not done %}
     <section id="waiting" class="bg-white rounded-xl border px-5 sm:px-8 py-10 sm:py-14 text-center">
       {% if run.state in ('failed', 'interrupted') %}
@@ -75,6 +75,8 @@
       {% endif %}
     </section>
   {% else %}
+  <div class="grid grid-cols-1 lg:grid-cols-[minmax(320px,400px)_1fr] xl:grid-cols-[minmax(360px,440px)_1fr] gap-6 items-start">
+    <div class="lg:sticky lg:top-5 lg:max-h-[calc(100vh-2.5rem)] lg:overflow-y-auto min-w-0 rounded-[18px]">
     <!-- decision -->
     {% set tone = {'APPROVED': 'text-emerald-600', 'PENDING_VENDOR': 'text-amber-600', 'PENDING_REVIEW': 'text-violet-600', 'REJECTED': 'text-rose-600'}.get(run.status, 'text-slate-600') %}
     {% set word = {'APPROVED': 'Approved', 'PENDING_VENDOR': 'Vendor to fix', 'PENDING_REVIEW': 'For review', 'REJECTED': 'Rejected'}.get(run.status, run.status) %}
@@ -127,6 +129,8 @@
         {% endif %}
       </div>
     </section>
+    </div>
+    <div class="space-y-6 min-w-0">
 
     {% if bill %}
     {% set f = run.form %}
@@ -431,6 +435,8 @@
       </details>
     </section>
     {% endif %}
+    </div>
+  </div>
   {% endif %}
   </div>
 </div>
@@ -484,6 +490,21 @@ function finish() {
   setTimeout(() => location.reload(), 900);
 }
 
+document.querySelectorAll('#stages li.step > button').forEach(btn => btn.addEventListener('click', () => {
+  const li = btn.parentElement, panel = document.getElementById('stage-detail');
+  const open = btn.getAttribute('aria-expanded') === 'true';
+  document.querySelectorAll('#stages li.step > button').forEach(b => { b.setAttribute('aria-expanded', 'false'); b.classList.remove('bg-indigo-50'); });
+  if (open) { panel.classList.add('hidden'); return; }
+  btn.setAttribute('aria-expanded', 'true'); btn.classList.add('bg-indigo-50');
+  document.getElementById('stage-detail-title').textContent = li.querySelector('.font-semibold').textContent;
+  const rules = li.querySelector('.rules').innerHTML, log = li.querySelector('.log').innerHTML;
+  document.getElementById('stage-detail-body').innerHTML = (log || '') + (rules || '<p class="text-[12.5px] text-slate-500">No individual checks in this step.</p>');
+  panel.classList.remove('hidden');
+}));
+document.getElementById('stage-detail-x').addEventListener('click', () => {
+  document.getElementById('stage-detail').classList.add('hidden');
+  document.querySelectorAll('#stages li.step > button').forEach(b => { b.setAttribute('aria-expanded', 'false'); b.classList.remove('bg-indigo-50'); });
+});
 INITIAL.forEach(apply);
 if (!FINISHED) {
   let es;
