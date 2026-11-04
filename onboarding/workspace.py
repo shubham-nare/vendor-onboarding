@@ -8,12 +8,11 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import aliased
 
 from onboarding import access
-from onboarding import bills as B
-from onboarding.ap.models import ChangeRequest, InvoiceCase
+from onboarding.ap.models import ChangeRequest
 from onboarding.intel.models import GraphEdge, GraphNode, RiskEvent, Vendor, VendorApplication
-from onboarding.models import Application, Bill, Document, HumanAction, Invite, Run, VendorBill, VendorMaster
+from onboarding.models import Application, Bill, Document, Invite, Run, VendorMaster
 from onboarding.pipeline import read_sessions
-from onboarding.web import _actor, _all, _employees, _reads, _rows, _todo, render
+from onboarding.web import _actor, _all, _employees, _reads, _rows, render
 
 router = APIRouter()
 
@@ -50,39 +49,24 @@ async def applications(request: Request, status: str = "", q: str = ""):
 
 @router.get("/review", response_class=HTMLResponse)
 async def review_queue(request: Request):
-    """Everything waiting on a person, most urgent first: vendor decisions, invoices and change requests."""
+    """Everything waiting on this person, most urgent first: the same list as Home, the badge and the reminder,
+    grouped into change requests, invoices and vendor decisions."""
+    from onboarding.web import _dashboard_ctx
     async with read_sessions()() as s:
-        actor = await _actor(request, s)
-        full = access.full_view(actor)
-        emps = {e.id: e for e in await _employees(s)}
-        r = await _reads(rows=_rows(select(Run, Application).join(Application, Application.id == Run.application_id).order_by(Run.id.desc())),
-                         invites=_all(select(Invite)), bills=_all(select(Bill)), acted=_rows(select(HumanAction.run_id, HumanAction.action)),
-                         vbills=_all(select(VendorBill).order_by(VendorBill.id.desc())), cases=_all(select(InvoiceCase)),
-                         changes=_all(select(ChangeRequest).where(ChangeRequest.status == "submitted").order_by(ChangeRequest.id)),
-                         masters=_all(select(VendorMaster)), vendors=_all(select(Vendor)))
-        invites, bills = {i.id: i for i in r["invites"]}, {b.application_id: b for b in r["bills"]}
-        runs = [dict(run=run, app=app, bill=bills.get(app.id), fraud=(run.summary or {}).get("fraud"))
-                for run, app in r["rows"] if full or access.owns_application(actor, invites.get(app.invite_id), bills.get(app.id))]
-        apps_todo = _todo(actor, runs, invites, emps, r["acted"], [])
-        cases = {c.bill_id: c for c in r["cases"]}
-        names = {m.vendor_id: m.legal_name for m in r["masters"]}
-        vend = {v.erp_vendor_id: v for v in r["vendors"] if v.erp_vendor_id}
-        invoices = []
-        for b in r["vbills"]:
-            if not (full or access.can_open_bill(actor, b)):
-                continue
-            c = cases.get(b.id)
-            st = B.invoice_status(b, c)
-            engaged = emps.get(b.engaged_employee_id)
-            allowed = {k: v for k, v in B.allowed_bill_actions(b, actor, engaged, c).items() if not v["blocked"]}
-            if st in ("Paid", "Rejected", "Draft", "Being checked", "Needs vendor information") or not allowed:
-                continue
-            na = B.next_action(b, c)
-            invoices.append(dict(b=b, status=st, next=na, vendor=vend.get(b.vendor_id), name=names.get(b.vendor_id, b.vendor_id), urgent=st == "Blocked for investigation"))
-        changes = [dict(cr=c, name=names.get(c.erp_vendor_id, c.erp_vendor_id), vendor=vend.get(c.erp_vendor_id),
-                        mine=(actor and ((c.kind == "bank_account" and actor.role == "checker") or (c.kind != "bank_account" and full))))
-                   for c in r["changes"] if full]
-        return await render(request, s, "ws_review.html", apps_todo=apps_todo, invoices=invoices, changes=changes, full=full, B=B)
+        ctx = await _dashboard_ctx(request, s)
+        actor, full, todo = await _actor(request, s), ctx["full"], ctx["todo"]
+        changes = []
+        if full:   # every open change request; the ones this person can't decide say who does
+            r = await _reads(changes=_all(select(ChangeRequest).where(ChangeRequest.status == "submitted").order_by(ChangeRequest.id)),
+                             masters=_all(select(VendorMaster)), vendors=_all(select(Vendor)))
+            names = {m.vendor_id: m.legal_name for m in r["masters"]}
+            vend = {v.erp_vendor_id: v for v in r["vendors"] if v.erp_vendor_id}
+            changes = [dict(cr=c, name=names.get(c.erp_vendor_id, c.erp_vendor_id), vendor=vend.get(c.erp_vendor_id),
+                            mine=bool(actor and ((c.kind == "bank_account" and actor.role == "checker") or c.kind != "bank_account")))
+                       for c in r["changes"]]
+        return await render(request, s, "ws_review.html", todo=todo, changes=changes, full=full,
+                            invoices=[x for x in todo if x["status"] == "BILL"],
+                            apps_todo=[x for x in todo if x["status"] not in ("BILL", "CHANGE")])
 
 
 @router.get("/relationships", response_class=HTMLResponse)

@@ -179,8 +179,11 @@ def flows(tmp_path_factory):
             out["profile_after"] = (await v.get("/vendor/profile")).text
             staff.cookies.set("actor", "3")
             out["review_maker"] = (await staff.get("/review")).text
+            out["pending_maker_cr"] = (await staff.get("/console/pending")).json()
             staff.cookies.set("actor", "4")
-            cr_id = re.search(r'/change-requests/(\d+)/decide', (await staff.get("/review")).text).group(1)
+            out["review_finance"] = (await staff.get("/review")).text
+            out["pending_finance_cr"] = (await staff.get("/console/pending")).json()
+            cr_id = re.search(r'/change-requests/(\d+)/decide', out["review_finance"]).group(1)
             staff.cookies.set("actor", "3")
             out["cr_maker"] = (await staff.post(f"/change-requests/{cr_id}/decide", data={"decision": "approve", "note": "looks fine"})).status_code
             staff.cookies.set("actor", "4")
@@ -534,3 +537,14 @@ def test_tag_a_teammate_on_an_invoice(flows):
     assert "tagged you" not in flows["rahul_console_after"]
     page = flows["bill_after_tag"]
     assert "@Rahul Desai" in page and "Yes, I asked them on 2 Nov." in page and "Tag a teammate" in page
+
+
+def test_review_badge_home_and_review_count_the_same_things(flows):
+    import html
+    fin, mk = flows["pending_finance_cr"], flows["pending_maker_cr"]
+    assert any(i["href"] == "/review#changes" for i in fin["items"])           # a bank change waits for Finance ...
+    assert not any(i["href"] == "/review#changes" for i in mk["items"])        # ... not for the reviewer
+    assert f"{fin['count']} waiting for you" in html.unescape(flows["review_finance"])
+    page = flows["console_page"]
+    assert 'id="invite-box"' in page and 'class="review-count" hidden' in page
+    assert 'href="/invites" class="side-link' not in page                     # Invites lives on Home now

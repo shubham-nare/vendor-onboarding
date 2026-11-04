@@ -159,6 +159,11 @@
     main [class*="bg-amber-50/"] { background-color: transparent !important; }
     main [class*="bg-rose-50/"] { background-color: #FFF1F0 !important; }
     main [class*="bg-emerald-50/"] { background-color: #EFFAF2 !important; }
+    /* Review's count: a red circle, gone when nothing is waiting */
+    .review-count { margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: #FF3B30; color: #fff;
+                    font-size: 11.5px; font-weight: 600; line-height: 20px; text-align: center; font-variant-numeric: tabular-nums; }
+    #mainnav .review-count { margin-left: 2px; }
+    .review-count[hidden] { display: none; }
     /* the reminder in the bottom-right corner */
     #pending-note { position: fixed; right: 1rem; bottom: 1rem; z-index: 60; width: 22rem; max-width: calc(100vw - 2rem); border-radius: 18px; box-shadow: 0 12px 40px rgba(0,0,0,.14); overflow: hidden; }
   </style>
@@ -268,7 +273,7 @@
 
 
   {% else %}
-  {% set NAV = [('Approvals', [('/console', 'Home'), ('/review', 'Review'), ('/invoices', 'Invoices'), ('/invites', 'Invites')]),
+  {% set NAV = [('Approvals', [('/console', 'Home'), ('/review', 'Review'), ('/invoices', 'Invoices')]),
                 ('In depth', [('/vendors', 'Vendors'), ('/applications', 'Applications'), ('/purchase-orders', 'Orders'), ('/audit', 'History'), ('/documents', 'Documents')]),
                 ('Settings', [('/supplier-accounts', 'Accounts'), ('/outbox', 'Outbox'), ('/check', 'Checker'), ('/system', 'System')])] %}
   {% set REVIEWER_ONLY = ['/relationships', '/purchase-orders', '/audit', '/documents', '/supplier-accounts', '/outbox', '/check', '/system'] %}
@@ -289,8 +294,8 @@
         <div class="px-3 mb-1.5 text-[10.5px] font-semibold uppercase tracking-[.08em] text-slate-500">{{ group }}</div>
       {% endif %}
         {% for href, label in shown %}
-        {% set on = path == href or (href != '/console' and path.startswith(href ~ '/')) or (href == '/console' and path.startswith('/runs/')) %}
-        <a href="{{ href }}" class="side-link {{ '!font-semibold' if group == 'Approvals' else '' }}" {{ 'aria-current=page' if on }}>{{ nav_icon(href) }}{{ label }}</a>
+        {% set on = path == href or (href != '/console' and path.startswith(href ~ '/')) or (href == '/console' and (path.startswith('/runs/') or path.startswith('/invites'))) %}
+        <a href="{{ href }}" class="side-link {{ '!font-semibold' if group == 'Approvals' else '' }}" {{ 'aria-current=page' if on }}>{{ nav_icon(href) }}{{ label }}{% if href == '/review' %}<span class="review-count" hidden></span>{% endif %}</a>
         {% endfor %}
       {% if group == 'Settings' %}</details>{% else %}</div>{% endif %}
       {% endif %}
@@ -322,8 +327,8 @@
     </div>
     <nav id="mainnav" class="px-2 sm:px-4 flex flex-nowrap overflow-x-auto no-scrollbar fade-r text-[13.5px]" aria-label="Main">
       {% for group, items in NAV %}{% for href, label in items if actor and (reviewer or href not in REVIEWER_ONLY) %}
-        {% set on = path == href or (href != '/console' and path.startswith(href ~ '/')) or (href == '/console' and path.startswith('/runs/')) %}
-        <a href="{{ href }}" class="shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-2.5 border-b-2 font-medium {{ 'border-indigo-600 text-indigo-700' if on else 'border-transparent text-slate-500 hover:text-slate-900' }}" {{ 'aria-current=page' if on }}>{{ label }}</a>
+        {% set on = path == href or (href != '/console' and path.startswith(href ~ '/')) or (href == '/console' and (path.startswith('/runs/') or path.startswith('/invites'))) %}
+        <a href="{{ href }}" class="shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-2.5 border-b-2 font-medium {{ 'border-indigo-600 text-indigo-700' if on else 'border-transparent text-slate-500 hover:text-slate-900' }}" {{ 'aria-current=page' if on }}>{{ label }}{% if href == '/review' %}<span class="review-count" hidden></span>{% endif %}</a>
       {% endfor %}{% endfor %}
     </nav>
   </header>
@@ -342,18 +347,20 @@
       <div class="flex-1 min-w-0">
         <div class="font-bold text-amber-800"><span id="pending-n" class="tabular-nums"></span> still waiting for you</div>
         <ul id="pending-list" class="mt-1.5 space-y-1 text-[12.5px] text-slate-700"></ul>
-        <a href="/console" class="mt-2 inline-block text-[12.5px] font-semibold text-indigo-700 hover:underline">Open Home</a>
+        <a href="/review" class="mt-2 inline-block text-[12.5px] font-semibold text-indigo-700 hover:underline">Open Review</a>
       </div>
       <button type="button" id="pending-x" class="text-slate-400 hover:text-slate-700 px-1" aria-label="Hide for this session">✕</button>
     </div>
   </aside>
   <script>
     (async () => {
-      try { if (sessionStorage.getItem('pending-hidden')) return; } catch (e) {}
       try {
         const r = await fetch('/console/pending', { credentials: 'same-origin' });
         const d = await r.json();
+        document.querySelectorAll('.review-count').forEach(b => { b.textContent = d.count > 99 ? '99+' : d.count; b.hidden = !d.count;
+          b.setAttribute('aria-label', `${d.count} waiting`); });
         if (!d.count) return;
+        try { if (sessionStorage.getItem('pending-hidden')) return; } catch (e) {}
         const box = document.getElementById('pending-note');
         document.getElementById('pending-n').textContent = d.count;
         const ul = document.getElementById('pending-list');

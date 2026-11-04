@@ -339,13 +339,25 @@ async def _dashboard_ctx(request: Request, s) -> dict:
                        status="BILL", risk=vb.risk_tier, fraud=False, since=tg.created_at, amount=vb.amount, waiting=_waiting(tg.created_at))
                   for tg, vb in mine]
         todo = tagged + [t for t in todo if t["href"] not in {x["href"].split("#")[0] for x in tagged}]
-    work = await _work_summary(s, actor, full, counts, todo)
+    if full:    # a vendor asked to change its bank account or contact: Finance decides bank accounts, reviewers the rest
+        from onboarding.ap.models import ChangeRequest
+        from onboarding.models import VendorMaster
+        cr = await _reads(c=_all(select(ChangeRequest).where(ChangeRequest.status == "submitted").order_by(ChangeRequest.id)),
+                          m=_rows(select(VendorMaster.vendor_id, VendorMaster.legal_name)))
+        vm_names = dict(cr["m"])
+        todo = [dict(href="/review#changes", ref=c.erp_vendor_id, name=vm_names.get(c.erp_vendor_id, c.erp_vendor_id), verb="Decide",
+                     detail="Bank account change" if c.kind == "bank_account" else "Contact change", status="CHANGE",
+                     risk="high" if c.kind == "bank_account" else "low", fraud=False, since=c.created_at, waiting=_waiting(c.created_at))
+                for c in cr["c"] if c.kind != "bank_account" or actor.role == "checker"] + todo
+    work =await _work_summary(s, actor, full, counts, todo)
     vnames = {pk: (vid, name) for pk, vid, name in r.get("vnames", [])}
     alerts = [dict(ev=ev, vendor=vend, related=vnames.get(ev.related_vendor_pk)) for ev, vend in r.get("alerts", [])]
     alerts.sort(key=lambda a: a["ev"].severity != "fraud")
     from onboarding import followups
     chasing = [w for w in await followups.waiting(s) if full or (actor and w.requester and w.requester.id == actor.id)]
-    return dict(runs=runs, counts=counts, stats=stats, catalog=demo_catalog(), full=full,
+    open_invites = sum(1 for i in r["invites"] if i.status == "open" and (full or (actor and i.sponsor_id == actor.id))
+                       and (not i.expires_at or _utc(i.expires_at) > now()))
+    return dict(runs=runs, counts=counts, stats=stats, catalog=demo_catalog(), full=full, open_invites=open_invites,
                 to_confirm=to_confirm, todo=todo, alerts=alerts, work=work, chasing=chasing, FU=followups)
 
 

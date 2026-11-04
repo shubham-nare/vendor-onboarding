@@ -7,7 +7,7 @@
   {%- set w = (name or '?').split() -%}
   <span class="{{ size }} {{ TONES[tone(name)] }} shrink-0 inline-flex items-center justify-center rounded-lg font-semibold" aria-hidden="true">{{ w[0][0] }}{{ w[1][0] if w | length > 1 else '' }}</span>
 {%- endmacro %}
-{% set vendor_items = todo | rejectattr('status', 'equalto', 'BILL') | list %}
+{% set vendor_items = todo | rejectattr('status', 'in', ['BILL', 'CHANGE']) | list %}
 {% set invoice_items = todo | selectattr('status', 'equalto', 'BILL') | list %}
 {% set checker = actor and actor.role == 'checker' %}
 <div class="reveal space-y-6">
@@ -17,8 +17,21 @@
     <h1>{% if actor %}Welcome back, {{ actor.name.split()[0] }}{% else %}Home{% endif %}</h1>
     <p class="text-slate-500 text-[14.5px] mt-1.5">{% if todo %}{{ todo | length }} thing{{ 's' if todo | length != 1 }} waiting for your decision.{% else %}Nothing is waiting for your decision.{% endif %}</p>
   </div>
-  <a href="/invites" class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold px-4 py-2.5 hover:bg-indigo-700 shadow-sm">{{ icon('plus') }} Invite a vendor</a>
 </div>
+
+{# inviting a vendor starts everything: one large box. A requester sends invites; reviewers follow them up #}
+{% set requester = actor and actor.role == 'sponsor' %}
+<a href="/invites" id="invite-box" class="group block rounded-[18px] bg-[#0071E3] text-white px-6 sm:px-8 py-7 sm:py-8 hover:bg-[#0077ED] transition">
+  <div class="flex flex-wrap items-center gap-5">
+    <span class="h-14 w-14 shrink-0 rounded-full bg-white/15 grid place-items-center"><svg class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.5 2.5 11 13"/><path d="M21.5 2.5 15 21l-4-8-8-4z"/></svg></span>
+    <span class="flex-1 min-w-[14rem]">
+      <span class="block text-[26px] sm:text-[30px] font-semibold tracking-tight leading-tight">{{ 'Invite a vendor' if requester else 'Invites' }}</span>
+      <span class="block mt-1 text-[15px] text-white/85">{% if requester %}Send a registration link. We check everything they submit.{% else %}Every registration link sent, and who has yet to register.{% endif %}
+        {% if open_invites %}<b class="text-white">{{ open_invites }} open.</b>{% endif %}</span>
+    </span>
+    <span class="inline-flex items-center gap-1.5 rounded-full bg-white text-[#0071E3] px-5 py-2.5 text-[14px] font-semibold group-hover:bg-white/90">{{ 'Invite' if requester else 'Open' }} {{ icon('chev', 'h-4 w-4') }}</span>
+  </div>
+</a>
 
 {# what needs approving: two or three numbers, nothing else #}
 <div class="grid sm:grid-cols-2 {{ 'lg:grid-cols-3' if checker }} gap-3">
@@ -41,14 +54,14 @@
   </div>
   {% if todo %}
   <ul class="divide-y divide-slate-100">
-    {% for t in todo %}
+    {% for t in todo[:5] %}
     <li><a href="{{ t.href }}" class="group flex items-center gap-3 px-4 sm:px-5 py-3 hover:bg-slate-50">
       {{ mono(t.name) }}
       <span class="flex-1 min-w-0">
         <span class="block text-[14px] font-medium truncate">{{ t.name }}</span>
         <span class="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[12px] text-slate-500">
           <span class="mono">{{ t.ref }}</span>
-          {% if t.status == 'BILL' %}<span class="tag text-amber-700">{{ t.detail }}{{ ' · ' ~ inr(money(t.amount)) if t.amount }}</span>{% else %}{{ status_badge(t.status) }}{% endif %}
+          {% if t.status in ('BILL', 'CHANGE') %}<span class="tag {{ 'text-rose-700' if t.status == 'CHANGE' else 'text-amber-700' }}">{{ t.detail }}{{ ' · ' ~ inr(money(t.amount)) if t.amount }}</span>{% else %}{{ status_badge(t.status) }}{% endif %}
           {% if t.fraud and full %}<span class="tag text-rose-700">fraud class</span>{% endif %}
           {{ tier_chip(t.risk) }}
           {% if t.waiting %}<span class="text-slate-400">{{ t.waiting }}</span>{% endif %}
@@ -59,11 +72,12 @@
     </a></li>
     {% endfor %}
   </ul>
+  {% if todo | length > 5 %}<a href="/review" class="block border-t border-slate-100 px-4 sm:px-5 py-3 text-[13.5px] font-medium text-indigo-700 hover:bg-slate-50">See all {{ todo | length }} in Review ›</a>{% endif %}
   {% else %}
   <div class="px-5 py-12 text-center">
     <span class="mx-auto h-11 w-11 rounded-full bg-emerald-50 text-emerald-600 grid place-items-center">{{ icon('check', 'h-5 w-5') }}</span>
     <p class="mt-3 text-[14px] font-medium">You're all caught up</p>
-    <p class="mt-1 text-[12.5px] text-slate-500">{% if actor and actor.role == 'sponsor' %}Invite a vendor when your team needs one.{% else %}New registrations and invoices appear here when they need you.{% endif %}</p>
+    <p class="mt-1 text-[12.5px] text-slate-500">New registrations and invoices appear here when they need you.</p>
   </div>
   {% endif %}
 </section>
