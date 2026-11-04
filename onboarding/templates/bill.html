@@ -8,7 +8,6 @@
 {% set m = (case.match if case else {}) or {} %}
 {% set r = b.read or {} %}{% set au = b.authenticity or {} %}
 <div class="reveal space-y-6">
-  {% if not full %}<div class="rounded-lg border border-amber-200 bg-amber-50/70 px-4 py-2.5 text-[13px] text-amber-900 flex items-start gap-2">{{ icon('lock', 'h-4 w-4 shrink-0 mt-0.5') }}<span><b>Requester view.</b> You see the bill, its status and whether you need to confirm the work. The checks, file details and payment controls are for Procurement and Finance.</span></div>{% endif %}
 
   {# ---- header ---- #}
   <div>

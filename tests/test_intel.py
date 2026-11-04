@@ -243,7 +243,7 @@ def test_requesters_see_only_their_vendors_and_less(intel):
     assert intel["priya_rangoli"] == 403
     assert "Rangoli" not in intel["priya_dir"]
     rahul = intel["rahul_rangoli"]
-    assert "Requester view" in rahul and "Relationships" not in rahul and "Evidence register" not in rahul
+    assert "Relationships" not in rahul and "Evidence register" not in rahul
 
 
 def test_human_decisions_close_flags_and_activate(intel):

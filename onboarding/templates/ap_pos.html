@@ -6,26 +6,24 @@
   <div class="flex flex-wrap items-end justify-between gap-4">
     <div>
       <h1>Orders</h1>
-      <p class="text-slate-500 text-[14px] mt-1.5 max-w-3xl">The company's orders and what was delivered against them. Invoices are matched to these records before anyone can approve them.</p>
-      <p class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-slate-600"><span><span class="inline-block h-2.5 w-2.5 bg-rose-600 align-middle mr-1"></span>Mismatch: an invoice doesn't match the order</span><span><span class="inline-block h-2.5 w-2.5 bg-amber-500 align-middle mr-1"></span>In progress</span><span><span class="inline-block h-2.5 w-2.5 bg-emerald-600 align-middle mr-1"></span>Matched and settled</span></p>
+      <p class="text-slate-500 text-[17px] mt-2 max-w-3xl">What was ordered, delivered, invoiced and paid.</p>
+      <p class="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[13px] text-slate-600"><span><span class="inline-block h-3 w-3 rounded-full bg-rose-500 align-middle mr-1.5"></span>Mismatch</span><span><span class="inline-block h-3 w-3 rounded-full bg-amber-400 align-middle mr-1.5"></span>In progress</span><span><span class="inline-block h-3 w-3 rounded-full bg-emerald-400 align-middle mr-1.5"></span>Settled</span></p>
     </div>
     <div class="flex gap-2 w-full sm:w-auto">
       <form method="get" class="flex-1"><input name="q" value="{{ q }}" type="search" placeholder="PO number, vendor or cost centre" aria-label="Search purchase orders" class="w-full sm:w-64 rounded-lg border px-3 py-2 text-[13px]"></form>
       <a href="/purchase-orders/new" class="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 text-white text-sm font-semibold px-4 py-2 hover:bg-indigo-700">{{ icon('plus') }} New PO</a>
     </div>
   </div>
-  <section class="bg-white border rounded-xl overflow-hidden">
+  <section>
     {% if rows %}
     <div class="overflow-x-auto">
-    <table class="rtable w-full text-sm">
-      <thead class="text-left text-slate-500 bg-slate-50/70 border-b border-slate-100">
+    <table class="rtable tiles w-full text-sm">
+      <thead class="text-left text-slate-500">
         <tr><th class="pl-5 pr-2 py-2.5">PO</th><th class="px-2">Vendor</th><th class="px-2">Requested by</th><th class="px-2 text-center">Order value</th><th class="px-2 text-center">Delivered</th><th class="px-2 text-center">Invoiced</th><th class="pr-5 pl-2 text-center">Paid</th></tr>
       </thead>
-      <tbody class="divide-y divide-slate-100">
-      {% set ROW = {'red': 'bg-rose-50 hover:bg-rose-100 border-l-4 border-l-rose-600', 'amber': 'bg-amber-50/60 hover:bg-amber-50 border-l-4 border-l-amber-500',
-                    'green': 'bg-emerald-50/50 hover:bg-emerald-50 border-l-4 border-l-emerald-600', 'slate': 'hover:bg-slate-50 border-l-4 border-l-transparent'} %}
+      <tbody>
       {% for d in rows %}{% set po = d.po %}{% set red = d.tone == 'red' %}
-        <tr class="group cursor-pointer {{ ROW[d.tone] }}" onclick="location.href='/purchase-orders/{{ po.id }}'">
+        <tr class="group cursor-pointer row-{{ d.tone }}" onclick="location.href='/purchase-orders/{{ po.id }}'">
           <td class="pl-5 pr-2 py-3 whitespace-nowrap"><a href="/purchase-orders/{{ po.id }}" class="mono text-[12.5px] font-medium {{ 'text-rose-800' if d.tone == 'red' }}">{{ po.po_number }}</a><div class="text-[11.5px] text-slate-500">{{ po.cost_centre }} · {{ po.status }}</div>
             {% if d.issues %}<div class="mt-1 text-[11.5px] font-semibold text-rose-700">{{ d.issues | join(' · ') }}</div>{% endif %}</td>
           <td class="px-2 py-3" data-label="Vendor">{{ po.vendor_name }}<div class="text-[11.5px] text-slate-500 mono">{{ po.vendor_gstin }}</div></td>

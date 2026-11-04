@@ -7,7 +7,7 @@
   <div class="flex flex-wrap items-end justify-between gap-4">
     <div>
       <h1>Invoices</h1>
-      <p class="text-slate-500 text-[14px] mt-1.5 max-w-3xl">Every invoice from an active vendor, matched against its purchase order and the delivery we confirmed. Payment is released separately, by Finance, after approval.</p>
+      <p class="text-slate-500 text-[17px] mt-2 max-w-3xl">Matched to the order and the delivery.</p>
     </div>
   </div>
 
@@ -39,17 +39,17 @@
     {% endfor %}
   </div>
 
-  <section class="bg-white border rounded-xl overflow-hidden">
+  <section>
     {% if rows %}
-    <div class="px-5 py-2.5 border-b border-slate-100 flex flex-wrap justify-between gap-2 text-[12.5px] text-slate-500"><span>{{ rows | length }} invoice{{ 's' if rows | length != 1 }}</span>{% if full %}<span>Total <b class="text-slate-800 tabular-nums">{{ inr(total) }}</b></span>{% endif %}</div>
+    <div class="px-1 py-1 flex flex-wrap justify-between gap-2 text-[13px] text-slate-500"><span>{{ rows | length }} invoice{{ 's' if rows | length != 1 }}</span>{% if full %}<span>Total <b class="text-slate-800 tabular-nums">{{ inr(total) }}</b></span>{% endif %}</div>
     <div class="overflow-x-auto">
-    <table class="rtable w-full text-sm">
-      <thead class="text-left text-slate-500 bg-slate-50/70 border-b border-slate-100">
+    <table class="rtable tiles w-full text-sm">
+      <thead class="text-left text-slate-500">
         <tr><th class="pl-5 pr-2 py-2.5">Invoice</th><th class="px-2">Vendor</th><th class="px-2">PO</th><th class="px-2 text-right">Amount</th><th class="px-2">Status</th><th class="pr-5 pl-2">Next action</th></tr>
       </thead>
-      <tbody class="divide-y divide-slate-100">
+      <tbody>
       {% for x in rows %}{% set b = x.b %}
-        <tr class="group hover:bg-slate-50/80 cursor-pointer" onclick="location.href='/bills/{{ b.id }}'">
+        <tr class="group cursor-pointer row-{{ B.INVOICE_TONE.get(x.status, 'slate') }}" onclick="location.href='/bills/{{ b.id }}'">
           <td class="pl-5 pr-2 py-3 whitespace-nowrap"><a href="/bills/{{ b.id }}" class="font-medium text-slate-900 group-hover:text-indigo-700 mono text-[12.5px]">{{ b.invoice_number or 'being read…' }}</a><div class="text-[11.5px] text-slate-500"><span class="mono">{{ b.ref }}</span> · {{ b.created_at | dt }}</div></td>
           <td class="px-2 py-3" data-label="Vendor">{% if x.vendor and full %}<a href="/vendors/{{ x.vendor.vendor_id }}" onclick="event.stopPropagation()" class="hover:text-indigo-700">{{ x.name }}</a>{% else %}{{ x.name }}{% endif %}<div class="text-[11.5px] text-slate-500 mono">{{ b.vendor_id }}</div></td>
           <td class="px-2 py-3 mono text-[12px]" data-label="PO">{{ b.po_number or '—' }}</td>

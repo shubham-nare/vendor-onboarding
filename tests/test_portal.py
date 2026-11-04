@@ -305,7 +305,7 @@ def test_requester_sees_only_their_own_and_no_evidence(flows):
     # Priya is named on the bills: she sees them, without the checks, documents, ID numbers or fraud flag
     assert "BILL-0002" in priya["bills"] and priya["bill"].status_code == 200 and priya["run"].status_code == 200
     page = priya["bill"].text
-    assert "Requester view" in page and "R-BILL-10" not in page and "fraud-class" not in page and "/files/" not in page
+    assert "R-BILL-10" not in page and "fraud-class" not in page and "/files/" not in page
     assert KESARI["pan"] not in page and "Pays into" not in page
     run = priya["run"].text
     assert "Every rule that ran" not in run and "Internal note" not in run and "How well each fact is proven" not in run
@@ -472,8 +472,8 @@ def test_pending_reminder_feed_and_house_style(flows):
     page = flows["applications_page"]
     assert 'id="pending-note"' in page and "/console/pending" in page            # reminder on other pages
     assert 'id="pending-note"' not in flows["console_page"]                       # Home already lists them
-    assert "Verdana" in page and "Geist" not in page and "fonts.googleapis" not in page
-    assert "animation: none" in page
+    assert "-apple-system" in page and "Verdana" not in page and "#F5F5F7" in page          # Apple type and greys
+    assert "html.js .sr" in page and "IntersectionObserver" in page                # blocks rise in as they scroll into view
 
 
 def test_order_rows_turn_red_on_a_mismatch():

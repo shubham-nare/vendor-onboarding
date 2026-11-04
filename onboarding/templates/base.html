@@ -5,142 +5,163 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Vendor onboarding{% endblock %} · Vendor Assurance</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script>
-    // A clean product UI: cool greys, one cobalt accent, status colours that carry meaning.
-    // Templates use `indigo` for the brand accent, so it is mapped to the cobalt scale here.
+    // Apple's palette. Templates use slate (greys), indigo (the accent), emerald / amber / rose / violet (status),
+    // so each scale is mapped to Apple's own colours here and every page follows.
     tailwind.config = { theme: { extend: {
       colors: {
-        indigo: { 50: '#EEF4FF', 100: '#DCE7FE', 200: '#BCD0FC', 300: '#8FB0F8', 400: '#5E87F1', 500: '#3B66E6', 600: '#2950D3', 700: '#2240AB', 800: '#213887', 900: '#1F326B' },
+        slate:   { 50: '#F5F5F7', 100: '#EDEDF0', 200: '#E3E3E8', 300: '#D2D2D7', 400: '#A1A1A6', 500: '#86868B', 600: '#6E6E73', 700: '#424245', 800: '#333336', 900: '#1D1D1F' },
+        indigo:  { 50: '#F0F6FF', 100: '#E0EDFF', 200: '#C2DBFF', 300: '#8EBEFF', 400: '#4C9BFF', 500: '#147CE5', 600: '#0071E3', 700: '#0066CC', 800: '#0053A6', 900: '#003F80' },
+        emerald: { 50: '#EAF8EE', 100: '#D2F2DB', 200: '#A6E5B6', 300: '#6FD48B', 400: '#34C759', 500: '#2AB04C', 600: '#248A3D', 700: '#1D7A35', 800: '#17612A', 900: '#0F451D' },
+        amber:   { 50: '#FFF5E8', 100: '#FFE9CC', 200: '#FFD399', 300: '#FFB85C', 400: '#FF9F0A', 500: '#FF9500', 600: '#E07800', 700: '#C24E00', 800: '#9E3D00', 900: '#702B00' },
+        rose:    { 50: '#FFEFEE', 100: '#FFDDDA', 200: '#FFBAB4', 300: '#FF8A80', 400: '#FF5A4F', 500: '#FF3B30', 600: '#E3241A', 700: '#D70015', 800: '#A80011', 900: '#7A000C' },
+        violet:  { 50: '#F8F0FC', 100: '#F0DEF9', 200: '#E0BEF2', 300: '#CB93E8', 400: '#BF5AF2', 500: '#AF52DE', 600: '#8944AB', 700: '#7A3A99', 800: '#5E2D77', 900: '#432055' },
       },
       fontFamily: {
-        sans: ['Verdana', 'Geneva', 'Tahoma', 'sans-serif'],
-        display: ['Verdana', 'Geneva', 'Tahoma', 'sans-serif'],
-        mono: ['Verdana', 'Geneva', 'Tahoma', 'sans-serif'],
+        sans: ['-apple-system', 'BlinkMacSystemFont', '"SF Pro Text"', 'Inter', '"Helvetica Neue"', 'Helvetica', 'Arial', 'sans-serif'],
+        display: ['-apple-system', 'BlinkMacSystemFont', '"SF Pro Display"', 'Inter', '"Helvetica Neue"', 'Helvetica', 'Arial', 'sans-serif'],
+        mono: ['"SF Mono"', 'ui-monospace', 'Menlo', 'Consolas', 'monospace'],
       },
-      boxShadow: {
-        card: '0 1px 2px rgba(15,23,42,.04), 0 1px 3px rgba(15,23,42,.05)',
-        pop: '0 12px 32px -8px rgba(15,23,42,.18), 0 4px 8px -4px rgba(15,23,42,.08)',
-      },
+      boxShadow: { card: 'none', pop: '0 12px 40px rgba(0,0,0,.12)' },
     } } };
+    document.documentElement.classList.add('js');
   </script>
   <style>
     :root {
-      --page: #F6F5F2; --card: #FFFFFF; --ink: #0F172A; --ink-soft: #64748B; --rule: #E5E7EB;
-      --accent: #2950D3; --ok: #059669; --warn: #D97706; --review: #7C3AED; --bad: #E11D48;
-      --ease-out: cubic-bezier(.2, .8, .2, 1);
+      --page: #F5F5F7; --card: #FFFFFF; --ink: #1D1D1F; --ink-soft: #6E6E73; --rule: #D2D2D7;
+      --accent: #0071E3; --ok: #248A3D; --warn: #C24E00; --review: #8944AB; --bad: #D70015;
+      --ease: cubic-bezier(.28, .11, .32, 1);
+      --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, "Helvetica Neue", Helvetica, Arial, sans-serif;
+      --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, "Helvetica Neue", Helvetica, Arial, sans-serif;
     }
     html { background: var(--page); }
-    main > * , .reveal > * { min-width: 0; }
-    body { font-family: Verdana, Geneva, Tahoma, sans-serif; color: var(--ink); background: transparent; -webkit-font-smoothing: antialiased;  }
-    h1, h2, .font-display { font-family: Verdana, Geneva, Tahoma, sans-serif; letter-spacing: -0.022em; }
-    body h1 { font-weight: 650; }
-    body h2, body h3 { font-weight: 600; }
-    main h1:not(.hero) { font-size: 26px !important; line-height: 1.2 !important; }
-    @media (min-width: 640px) { main h1:not(.hero) { font-size: 28px !important; } }
-    h1 em, h1 i { font-style: normal; }
-    main h2.text-xl { font-size: 16px; line-height: 1.4; }
-    .font-display.leading-none { font-weight: 650; letter-spacing: -0.03em; }
-    .mono { font-family: Verdana, Geneva, Tahoma, sans-serif; }
-    .kicker { font-family: Verdana, sans-serif; font-weight: 600; font-size: 11.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-soft); }
+    body { font-family: var(--font); color: var(--ink); background: transparent; -webkit-font-smoothing: antialiased; font-size: 15px; letter-spacing: -0.01em; }
+    main > *, .reveal > * { min-width: 0; }
 
-    /* cards */
-    main .bg-white.border, main section.bg-white { box-shadow: none; border-color: var(--rule); border-radius: 10px; }
-    main .rounded-xl { border-radius: 12px; }
-    main table thead { font-family: Verdana, sans-serif; letter-spacing: .04em; text-transform: uppercase; font-size: 11px !important; font-weight: 600; }
+    /* type: big, tight headlines; sentence case everywhere */
+    h1, h2, h3, .font-display { font-family: var(--font-display); color: var(--ink); }
+    main h1:not(.hero) { font-size: 34px !important; line-height: 1.1 !important; font-weight: 600; letter-spacing: -0.022em; }
+    @media (min-width: 640px) { main h1:not(.hero) { font-size: 44px !important; } }
+    main h2 { font-weight: 600; letter-spacing: -0.016em; }
+    main h2.text-xl, main h2.text-lg, main h2.text-\[16px\] { font-size: 21px !important; line-height: 1.2; }
+    .font-display.leading-none { font-weight: 600; letter-spacing: -0.03em; }
+    .mono { font-family: var(--font); font-variant-numeric: tabular-nums; letter-spacing: 0; }
+    /* the small label above a headline ("Apple Upgrade"): sentence case, not shouty capitals */
+    .kicker { font-weight: 600; font-size: 13px; letter-spacing: -0.005em; text-transform: none !important; color: var(--ink-soft); }
+    [class*="uppercase"] { text-transform: none !important; letter-spacing: -0.005em !important; }
+    main table thead { text-transform: none; letter-spacing: 0; font-size: 12px !important; font-weight: 600; color: var(--ink-soft); }
     main table thead th { font-weight: 600 !important; }
+    a.text-indigo-700, a.text-indigo-600 { color: #0066CC; }
 
-    /* status: a solid badge (was a rubber stamp) */
-    .stamp { display: inline-flex; align-items: center; gap: .7rem; padding: .5rem 1rem; border: 1.5px solid color-mix(in srgb, currentColor 30%, transparent);
-      background: color-mix(in srgb, currentColor 8%, white); border-radius: 12px; font-weight: 650; letter-spacing: .02em; line-height: 1.15; transform: none !important; }
-    .stamp > span { font-family: Verdana, sans-serif; font-weight: 500; letter-spacing: .04em !important; opacity: .85; border-left-width: 1.5px !important; }
-    .stamp-land { animation: pop .45s var(--ease-out) .15s both; }
-    @keyframes pop { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: none; } }
-    .tag { display: inline-flex; align-items: center; gap: .35rem; border: 1px solid color-mix(in srgb, currentColor 22%, transparent); background-color: color-mix(in srgb, currentColor 7%, white);
-      border-radius: 5px; padding: .1rem .55rem; font-family: Verdana, sans-serif; font-weight: 550; font-size: 11.5px; letter-spacing: 0; white-space: nowrap; line-height: 1.5; }
+    /* cards: white tiles on the grey page, large radius, no outline */
+    .rounded-xl, .rounded-2xl, main section.bg-white, main .bg-white.border, main article.bg-white, main details.bg-white { border-radius: 18px !important; }
+    main section.bg-white, main .bg-white.border, main article.bg-white, main details.bg-white { border-color: transparent !important; box-shadow: none; }
+    main a.bg-white.border:hover, main a.bg-white:hover { box-shadow: 0 4px 24px rgba(0,0,0,.08); transform: scale(1.005); }
+    main .border-slate-100, main .divide-slate-100 > * + * { border-color: #E8E8ED !important; }
+    .rounded-lg { border-radius: 12px; } .rounded-md { border-radius: 10px; }
+
+    /* buttons: pills */
+    main button:not(.use-reply):not([id^="pending"]), main a.bg-indigo-600, main a.rounded-lg.bg-indigo-600, header a.bg-indigo-600 { border-radius: 980px !important; }
+    main button.bg-indigo-600, main a.bg-indigo-600, main button.bg-emerald-600 { font-weight: 500; }
+    main a.rounded-lg.border, main .rounded-lg.border.px-3 { border-radius: 980px; }
+
+    /* status chips */
+    .tag { display: inline-flex; align-items: center; gap: .35rem; border: 0; background-color: color-mix(in srgb, currentColor 11%, white);
+      border-radius: 980px; padding: .15rem .65rem; font-weight: 600; font-size: 12px; letter-spacing: -0.005em; white-space: nowrap; line-height: 1.5; }
     .tag.dot::before { content: ""; width: 6px; height: 6px; border-radius: 9999px; background: currentColor; }
+    .stamp { display: inline-flex; align-items: center; gap: .7rem; padding: .5rem 1rem; border: 0; background: color-mix(in srgb, currentColor 11%, white);
+      border-radius: 980px; font-weight: 600; line-height: 1.15; transform: none !important; }
 
-    /* proof ladder (assurance A0-A4) */
+    /* the colour language, as whole tiles: green done, amber in progress, red needs attention */
+    .tile-green, .tile-amber, .tile-red, .tile-slate { border-radius: 18px; }
+    .tile-green { background: #EAF8EE !important; border: 2px solid #34C759 !important; }
+    .tile-amber { background: #FFF5E8 !important; border: 2px solid #FF9F0A !important; }
+    .tile-red   { background: #FFE3E0 !important; border: 4px solid #FF3B30 !important; }
+    .tile-slate { background: #FFFFFF !important; border: 2px solid transparent !important; }
+    table.tiles { border-collapse: separate; border-spacing: 0 10px; }
+    table.tiles > tbody > tr > td { background: #fff; border-top: 2px solid transparent; border-bottom: 2px solid transparent; }
+    table.tiles > tbody > tr > td:first-child { border-left: 2px solid transparent; border-radius: 18px 0 0 18px; }
+    table.tiles > tbody > tr > td:last-child { border-right: 2px solid transparent; border-radius: 0 18px 18px 0; }
+    table.tiles > tbody > tr.row-green > td { background: #EAF8EE; border-color: #34C759; }
+    table.tiles > tbody > tr.row-amber > td { background: #FFF5E8; border-color: #FF9F0A; }
+    table.tiles > tbody > tr.row-red > td   { background: #FFE3E0; border-color: #FF3B30; border-top-width: 4px; border-bottom-width: 4px; }
+    table.tiles > tbody > tr.row-red > td:first-child { border-left-width: 4px; } table.tiles > tbody > tr.row-red > td:last-child { border-right-width: 4px; }
+    table.tiles > tbody > tr:hover > td { filter: brightness(.985); }
+    table.tiles > tbody { border: 0 !important; } table.tiles > tbody > tr { border: 0 !important; }
+
+    /* proof ladder (A0-A4) */
     .ladder { display: inline-flex; align-items: center; gap: .5rem; white-space: nowrap; }
     .ladder .bars { display: inline-flex; gap: 2px; align-items: flex-end; }
-    .ladder .bars i { width: 5px; border-radius: 1.5px; background: #E2E8F0; }
+    .ladder .bars i { width: 5px; border-radius: 1.5px; background: #E3E3E8; }
     .ladder .bars i:nth-child(1) { height: 6px; } .ladder .bars i:nth-child(2) { height: 8px; } .ladder .bars i:nth-child(3) { height: 10px; }
     .ladder .bars i:nth-child(4) { height: 12px; } .ladder .bars i:nth-child(5) { height: 14px; }
     .ladder .bars i.on { background: currentColor; }
-    .ladder b { font-family: Verdana, sans-serif; font-weight: 500; font-size: 11px; }
+    .ladder b { font-weight: 600; font-size: 11px; }
     .ladder span { font-size: 12px; color: var(--ink-soft); }
 
     /* live run timeline */
     #stages li { position: relative; }
-    #stages li::before { content: ""; position: absolute; left: 26.5px; top: 0; bottom: 0; width: 1.5px; background: #E2E8F0; }
+    #stages li::before { content: ""; position: absolute; left: 26.5px; top: 0; bottom: 0; width: 1.5px; background: #E3E3E8; }
     #stages li:first-child::before { top: 18px; } #stages li:last-child::before { bottom: calc(100% - 18px); }
     #stages .icon { position: relative; z-index: 1; background: var(--card); }
-    .ink-dot { width: 12px; height: 12px; border-radius: 9999px; background: var(--accent); box-shadow: 0 0 0 0 rgba(41,80,211,.45); animation: ink 1.4s ease-out infinite; }
-    @keyframes ink { to { box-shadow: 0 0 0 9px rgba(41,80,211,0); } }
-
-    /* load choreography */
-    .reveal > * { animation: rise .5s var(--ease-out) both; }
-    .reveal > *:nth-child(2) { animation-delay: .05s; } .reveal > *:nth-child(3) { animation-delay: .1s; } .reveal > *:nth-child(4) { animation-delay: .15s; }
-    .reveal > *:nth-child(5) { animation-delay: .2s; } .reveal > *:nth-child(6) { animation-delay: .25s; } .reveal > *:nth-child(n+7) { animation-delay: .3s; }
-    @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-    .fade-in { animation: rise .3s var(--ease-out) both; }
+    .ink-dot { width: 12px; height: 12px; border-radius: 9999px; background: var(--accent); animation: ink 1.4s ease-out infinite; }
+    @keyframes ink { 0% { box-shadow: 0 0 0 0 rgba(0,113,227,.45); } 100% { box-shadow: 0 0 0 9px rgba(0,113,227,0); } }
+    .fade-in { animation: rise .35s var(--ease) both; }
+    @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
     .spin { animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
-    .hover-lift { transition: transform .18s var(--ease-out), box-shadow .18s var(--ease-out), border-color .18s; }
-    .hover-lift:hover { transform: translateY(-2px); box-shadow: 0 8px 24px -10px rgba(15,23,42,.18); }
+
+    /* scrolling: each block rises into place as it comes into view, the way apple.com does */
+    html.js .sr { opacity: 0; transform: translateY(28px); transition: opacity .9s var(--ease), transform .9s var(--ease); }
+    html.js .sr.in { opacity: 1; transform: none; }
 
     /* controls */
-    input:not([type=checkbox]):not([type=file]):not([type=radio]), select, textarea { background: #fff; border-color: #D9DEE5 !important; border-radius: 8px !important; transition: border-color .15s, box-shadow .15s; }
-    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent) !important; box-shadow: 0 0 0 3px rgba(41,80,211,.15); }
+    input:not([type=checkbox]):not([type=file]):not([type=radio]), select, textarea { background: #fff; border: 1px solid #D2D2D7 !important; border-radius: 12px !important; transition: border-color .2s, box-shadow .2s; }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent) !important; box-shadow: 0 0 0 4px rgba(0,113,227,.18); }
     input[type=checkbox] { accent-color: var(--accent); width: 1rem; height: 1rem; }
-    input[type=file]::file-selector-button { font: inherit; font-size: 12px; font-weight: 500; border: 1px solid #D9DEE5; background: #F8FAFC; border-radius: 6px; padding: .35rem .75rem; margin-right: .6rem; cursor: pointer; }
-    main a.rounded-md, main button.rounded-md { border-radius: 8px; }
+    input[type=file]::file-selector-button { font: inherit; font-size: 13px; font-weight: 500; border: 0; background: #E8E8ED; color: var(--ink); border-radius: 980px; padding: .4rem .9rem; margin-right: .6rem; cursor: pointer; }
     a, button, summary, [onclick], label:has(input[type=checkbox]) { cursor: pointer; }
-    button, a { transition: background-color .15s, color .15s, border-color .15s, transform .15s, box-shadow .15s; }
-    button:not(:disabled):active { transform: translateY(1px); }
+    button, a { transition: background-color .2s, color .2s, border-color .2s, box-shadow .3s var(--ease), transform .3s var(--ease); }
     :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     details > summary { list-style: none; } details > summary::-webkit-details-marker { display: none; }
-    ::selection { background: #DCE7FE; }
+    ::selection { background: #C2DBFF; }
 
-    /* sidebar */
-    .side-link { display: flex; align-items: center; gap: .7rem; padding: .45rem .7rem; border-radius: 6px; font-size: 13.5px; font-weight: 500; color: #CBD5E1; }
-    .side-link:hover { background: rgba(255,255,255,.06); color: #fff; }
-    .side-link[aria-current] { background: rgba(255,255,255,.11); color: #fff; }
-    .side-link[aria-current] svg { color: #93B4FF; }
-    .side-link svg { color: #7F8EA8; }
+    /* sidebar: light, translucent, like Apple's navigation */
+    aside.apple-side { background: rgba(251,251,253,.86); backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px); border-right: 1px solid #E3E3E8; color: var(--ink); }
+    .side-link { display: flex; align-items: center; gap: .7rem; padding: .5rem .75rem; border-radius: 10px; font-size: 14px; font-weight: 500; color: #1D1D1F; }
+    .side-link:hover { background: rgba(0,0,0,.04); }
+    .side-link[aria-current] { background: rgba(0,113,227,.1); color: #0066CC; }
+    .side-link[aria-current] svg { color: #0071E3; }
+    .side-link svg { color: #86868B; }
 
     /* ---- responsive ---- */
     .no-scrollbar { scrollbar-width: none; } .no-scrollbar::-webkit-scrollbar { display: none; }
     .fade-r { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); }
     @media (max-width: 639px) {
-      /* iOS zooms into inputs under 16px */
       input:not([type=checkbox]):not([type=file]):not([type=radio]), select, textarea { font-size: 16px !important; }
-      /* tables become stacked cards */
       .rtable thead { display: none; }
       .rtable, .rtable tbody, .rtable tr, .rtable td { display: block; width: 100%; }
       .rtable tr { padding: .8rem 1rem; }
       .rtable td { padding: .12rem 0 !important; text-align: left !important; white-space: normal !important; }
       .rtable td.inline-sm { display: inline-block; width: auto; margin-right: .5rem; vertical-align: middle; }
-      .rtable td[data-label]::before { content: attr(data-label); display: block; font-size: 10.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-soft); margin: .35rem 0 .05rem; }
+      .rtable td[data-label]::before { content: attr(data-label); display: block; font-size: 11px; font-weight: 600; color: var(--ink-soft); margin: .35rem 0 .05rem; }
+      table.tiles > tbody > tr > td { border: 0 !important; border-radius: 0 !important; }
     }
-    @media (hover: none) { .hover-lift:hover { transform: none; } }
-
     @media (prefers-reduced-motion: reduce) {
-      *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0s !important; transition-duration: .01ms !important; }
+      *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+      html.js .sr { opacity: 1; transform: none; }
     }
-
-    /* ---- house style: Verdana, flat rectangles, no motion ---- */
-    *, *::before, *::after { animation: none !important; transition: none !important; }
-    button:not(:disabled):active { transform: none; }
-    .hover-lift:hover { transform: none; box-shadow: none; }
-    .shadow-sm, .shadow, .shadow-md, .shadow-lg, .shadow-pop, .shadow-card { box-shadow: none !important; }
-    .rounded, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl, .tag, .stamp,
-    main .bg-white.border, main section.bg-white, main .rounded-xl,
-    input:not([type=checkbox]):not([type=radio]), select, textarea, input[type=file]::file-selector-button { border-radius: 2px !important; }
-    h1, h2, h3 { letter-spacing: 0 !important; }
     /* numbers: centred and bold wherever they sit in a table */
     main td.text-right, main th.text-right, main td.tabular-nums, main th.tabular-nums { text-align: center !important; }
-    main .tabular-nums, main td.text-right { font-weight: 700; }
+    main .tabular-nums, main td.text-right { font-weight: 600; }
+    /* faint warm tints read as beige on Apple's greys: rows in progress stay white and say so in colour */
+    main [class*="bg-amber-50/"] { background-color: transparent !important; }
+    main [class*="bg-rose-50/"] { background-color: #FFF1F0 !important; }
+    main [class*="bg-emerald-50/"] { background-color: #EFFAF2 !important; }
     /* the reminder in the bottom-right corner */
-    #pending-note { position: fixed; right: 1rem; bottom: 1rem; z-index: 60; width: 22rem; max-width: calc(100vw - 2rem); }
+    #pending-note { position: fixed; right: 1rem; bottom: 1rem; z-index: 60; width: 22rem; max-width: calc(100vw - 2rem); border-radius: 18px; box-shadow: 0 12px 40px rgba(0,0,0,.14); overflow: hidden; }
   </style>
 </head>
 <body class="min-h-screen">
@@ -148,7 +169,7 @@
   {% set vendor_page = path.startswith('/apply') or path.startswith('/status') or path == '/bill' or path.startswith('/bill?') or (path.startswith('/vendor') and not path.startswith('/vendors')) %}
   {% macro seal(size=32, light=false) -%}
     <svg width="{{ size }}" height="{{ size }}" viewBox="0 0 32 32" aria-hidden="true" class="shrink-0">
-      <rect width="32" height="32" rx="8" fill="#2950D3"/>
+      <rect width="32" height="32" rx="8" fill="#0071E3"/>
       <path d="M16 6.8l7 2.9v5.6c0 4.4-3 7.7-7 9.1-4-1.4-7-4.7-7-9.1V9.7z" fill="none" stroke="#fff" stroke-width="1.9" stroke-linejoin="round"/>
       <path d="M12.6 15.6l2.4 2.4 4.5-4.6" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
@@ -254,8 +275,8 @@
   {% set REVIEWER_ONLY = ['/relationships', '/purchase-orders', '/audit', '/documents', '/supplier-accounts', '/outbox', '/check', '/system'] %}
   {% set reviewer = actor and actor.role in ('maker', 'checker') %}
   {# desktop sidebar #}
-  <aside class="hidden lg:flex fixed inset-y-0 left-0 z-30 w-64 flex-col bg-[#0F1B2D] text-slate-200">
-    <div class="h-16 px-5 flex items-center border-b border-white/10 [&_span.text-slate-500]:!text-slate-400">{{ brand(BUYER.legal_name) }}</div>
+  <aside class="apple-side hidden lg:flex fixed inset-y-0 left-0 z-30 w-64 flex-col">
+    <div class="h-16 px-5 flex items-center border-b border-slate-200">{{ brand(BUYER.legal_name) }}</div>
     <nav class="flex-1 overflow-y-auto px-3 py-4 space-y-5" aria-label="Main">
       {% for group, items in NAV %}
       {% set shown = items | rejectattr('0', 'in', REVIEWER_ONLY if not reviewer else []) | list %}
@@ -263,27 +284,27 @@
       {% set open_group = shown | selectattr('0', 'equalto', path) | list or shown | selectattr('0', 'in', [path.rsplit('/', 1)[0]]) | list %}
       {% if group == 'Settings' %}
       <details class="group/set" {{ 'open' if open_group }}>
-        <summary class="px-3 mb-1.5 text-[10.5px] font-semibold uppercase tracking-[.08em] text-slate-500 cursor-pointer list-none flex items-center gap-1 hover:text-slate-300">{{ group }} <span class="transition-transform group-open/set:rotate-90">›</span></summary>
+        <summary class="px-3 mb-1.5 text-[10.5px] font-semibold uppercase tracking-[.08em] text-slate-500 cursor-pointer list-none flex items-center gap-1 hover:text-slate-900">{{ group }} <span class="transition-transform group-open/set:rotate-90">›</span></summary>
       {% else %}
-      <div class="{{ 'pt-4 border-t border-white/10' if group == 'In depth' }}">
-        <div class="px-3 mb-1.5 text-[10.5px] font-semibold uppercase tracking-[.08em] {{ 'text-indigo-300' if group == 'Approvals' else 'text-slate-500' }}">{{ group }}</div>
+      <div class="{{ 'pt-4 border-t border-slate-200' if group == 'In depth' }}">
+        <div class="px-3 mb-1.5 text-[10.5px] font-semibold uppercase tracking-[.08em] text-slate-500">{{ group }}</div>
       {% endif %}
         {% for href, label in shown %}
         {% set on = path == href or (href != '/console' and path.startswith(href ~ '/')) or (href == '/console' and path.startswith('/runs/')) %}
-        <a href="{{ href }}" class="side-link {{ '!text-[14.5px] !font-semibold' if group == 'Approvals' else '!text-[13px] opacity-90' }}" {{ 'aria-current=page' if on }}>{{ nav_icon(href) }}{{ label }}</a>
+        <a href="{{ href }}" class="side-link {{ '!font-semibold' if group == 'Approvals' else '' }}" {{ 'aria-current=page' if on }}>{{ nav_icon(href) }}{{ label }}</a>
         {% endfor %}
       {% if group == 'Settings' %}</details>{% else %}</div>{% endif %}
       {% endif %}
       {% endfor %}
     </nav>
     {% if actor %}
-    <div class="p-3 border-t border-white/10 space-y-2">
+    <div class="p-3 border-t border-slate-200 space-y-2">
       <a href="/assumptions" class="side-link !py-1.5 text-[12.5px]" title="How the checks work and which sources are live">{{ nav_icon('/help') }}Help</a>
       {% if DEMO_TOOLS %}
-      <div class="px-1 text-[10.5px] font-semibold uppercase tracking-[.08em] text-slate-500">Switch person (development)</div>
+      <div class="px-1 text-[10.5px] font-semibold uppercase tracking-[.08em] text-slate-500">Switch person</div>
       {{ persona('left-0 bottom-full mb-2') }}
       {% else %}
-      <div class="flex items-center gap-2.5 px-1.5 py-1">{{ avatar(actor, 'h-8 w-8 text-[11.5px]') }}<span class="min-w-0 leading-tight"><span class="block text-[13px] font-semibold text-white truncate">{{ actor.name }}</span><span class="block text-[11.5px] text-slate-400 truncate">{{ ROLE_LABEL[actor.role] }}</span></span></div>
+      <div class="flex items-center gap-2.5 px-1.5 py-1">{{ avatar(actor, 'h-8 w-8 text-[11.5px]') }}<span class="min-w-0 leading-tight"><span class="block text-[13px] font-semibold text-slate-900 truncate">{{ actor.name }}</span><span class="block text-[11.5px] text-slate-400 truncate">{{ ROLE_LABEL[actor.role] }}</span></span></div>
       {% endif %}
       <form method="post" action="/company/logout"><button class="side-link w-full" title="{{ ('Logged in as ' ~ staff.name) if staff else '' }}"><svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>Log out</button></form>
     </div>
@@ -366,5 +387,13 @@
       wrap.appendChild(b);
     });
   </script>
+<script>
+  (() => {
+    const els = document.querySelectorAll('main section, main article, main > div > div > section, main form.bg-white, main .grid > a.bg-white, main ol > li.relative');
+    if (!('IntersectionObserver' in window)) return;
+    const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { rootMargin: '0px 0px -8% 0px' });
+    els.forEach(el => { el.classList.add('sr'); io.observe(el); });
+  })();
+</script>
 </body>
 </html>
