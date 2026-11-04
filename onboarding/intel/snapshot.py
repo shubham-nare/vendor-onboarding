@@ -149,6 +149,9 @@ async def reconstruct(s, run) -> DecisionSnapshot | None:
     code = (form.get("ifsc") or "").strip().upper()
     srcs["ifsc"] = SourceResult(rec.get("source", "IFSC (as recorded)"), rec.get("status", "ERROR"), bool(rec.get("live")),
                                 snap["records"].get(code, {}) if rec.get("status") == "FOUND" else {})
+    pin = (ev.get("sources") or {}).get("pin")
+    if pin:
+        srcs["pin"] = SourceResult(pin.get("source", ""), pin.get("status", "ERROR"), bool(pin.get("live")), pin.get("data") or {})
     inv = await invite_context(s, app)
     ctx = await gather_context(s, app, form, docs_rows, infos, inv, as_of=run.finished_at or run.started_at, sources=srcs, before_run_id=run.id)
     expected = await stored_outcome(s, run)

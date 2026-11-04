@@ -82,3 +82,42 @@ def pin_problem(pin: str, state: str) -> str:
     if state and state not in states:
         return f"PIN code {pin} is in {' / '.join(states)}, not {state}."
     return ""
+
+
+# ---- the live India Post answer (sources.pin_lookup) ---------------------------------------------------------------
+# Old and new names of the same city, so "Bengaluru" matches India Post's "Bangalore" district.
+CITY_ALIASES = [
+    {"bengaluru", "bangalore"}, {"mumbai", "bombay"}, {"chennai", "madras"}, {"kolkata", "calcutta"}, {"pune", "poona"},
+    {"gurugram", "gurgaon"}, {"mysuru", "mysore"}, {"thiruvananthapuram", "trivandrum"}, {"vadodara", "baroda"},
+    {"kochi", "cochin", "ernakulam"}, {"mangaluru", "mangalore"}, {"belagavi", "belgaum"}, {"prayagraj", "allahabad"},
+    {"puducherry", "pondicherry"}, {"visakhapatnam", "vizag", "vishakhapatnam"}, {"new delhi", "delhi", "central delhi"},
+    {"hyderabad", "secunderabad", "rangareddy", "ranga reddy", "medchal"}, {"navi mumbai", "thane"}, {"noida", "gautam buddha nagar"},
+]
+
+
+def _norm(x: str) -> str:
+    return re.sub(r"[^a-z ]", "", (x or "").lower().replace("&", "and")).strip()
+
+
+def _names(city: str) -> set[str]:
+    c = _norm(city)
+    out = {c}
+    for group in CITY_ALIASES:
+        if c in group:
+            out |= group
+    return out
+
+
+def live_pin_problem(pin: str, state: str, city: str, data: dict) -> tuple[str, str]:
+    """Compare the address with India Post's own record of the PIN code.
+    Returns (problem, note): a problem means the state is wrong (the vendor must fix it); a note means only the
+    city name differs from the district (often a suburb or an old name), shown as a warning."""
+    states = {_norm(s) for s in data.get("states", [])}
+    if state and states and _norm(state) not in states:
+        where = ", ".join(data.get("districts", [])[:2])
+        return (f"India Post lists PIN code {pin} in {where + ', ' if where else ''}{' / '.join(data.get('states', []))}, not {state}.", "")
+    places = {_norm(x) for x in data.get("districts", []) + data.get("offices", []) + data.get("blocks", [])}
+    want = _names(city)
+    if city and places and not any(w and (w in p or p in w) for w in want for p in places):
+        return ("", f"PIN code {pin} is in {', '.join(data.get('districts', []))} district; the address says {city}.")
+    return ("", "")

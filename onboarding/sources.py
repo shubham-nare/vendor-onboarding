@@ -60,6 +60,31 @@ async def ifsc_lookup(ifsc: str, *, timeout: float = 3.0) -> SourceResult:
         return SourceResult("Razorpay IFSC directory", "ERROR", False, note=f"{type(e).__name__}: {e}"[:160])
 
 
+PIN_SOURCE = "India Post PIN directory (live)"
+
+
+async def pin_lookup(pin: str, *, timeout: float = 3.0) -> SourceResult:
+    """Live India Post PIN directory (api.postalpincode.in, free, no key): the post offices, district and state
+    of a PIN code. On failure the rules fall back to the postal-region check in onboarding/pincode.py."""
+    code = (pin or "").strip()
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as c:
+            r = await c.get(f"https://api.postalpincode.in/pincode/{code}")
+        r.raise_for_status()
+        d = (r.json() or [{}])[0]
+        offices = d.get("PostOffice") or []
+        if d.get("Status") != "Success" or not offices:
+            return SourceResult(PIN_SOURCE, "NOT_FOUND", True)
+        return SourceResult(PIN_SOURCE, "FOUND", True, {
+            "districts": sorted({o.get("District") or "" for o in offices} - {""}),
+            "states": sorted({o.get("State") or "" for o in offices} - {""}),
+            "offices": [o.get("Name") for o in offices][:12],
+            "blocks": sorted({o.get("Block") or "" for o in offices} - {"", "NA"}),
+        })
+    except Exception as e:
+        return SourceResult("India Post PIN directory", "ERROR", False, note=f"{type(e).__name__}: {e}"[:160])
+
+
 async def _sim(session: AsyncSession, kind: str, key: str, label: str) -> SourceResult:
     row = (await session.execute(select(SimRegistry).where(SimRegistry.kind == kind, SimRegistry.key == key))).scalar_one_or_none()
     return (SourceResult(label, "FOUND", False, dict(row.data), note=REGISTRY) if row

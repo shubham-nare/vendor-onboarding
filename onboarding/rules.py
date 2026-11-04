@@ -305,11 +305,24 @@ def evaluate(ctx: Context) -> list[R]:
               vendor_text="" if okst else f"Your GSTIN is registered in {sname} (code {code}), but you gave a principal place of business in {f.get('state')}. Please provide the GSTIN for the state you'll invoice us from, with that state's address."))
     pin = str(f.get("pin") or "").strip()
     if pin:
-        from onboarding.pincode import pin_problem
+        from onboarding.pincode import live_pin_problem, pin_problem
         why = pin_problem(pin, f.get("state", ""))
-        add(R("R-ID-10", "identifiers", FAIL if why else PASS, "PIN code fits the declared state" if not why else f"PIN code doesn't fit the address: {why}",
-              "VENDOR", {"pin": pin, "state": f.get("state")},
-              vendor_text=f"{why} Please check the PIN code and state of your registered address." if why else ""))
+        live = ctx.sources.get("pin")
+        ev = {"pin": pin, "state": f.get("state")}
+        note = ""
+        if not why and live and live.live and live.status == "NOT_FOUND":
+            why = f"PIN code {pin} isn't in India Post's directory."
+        elif not why and live and live.status == "FOUND":
+            why, note = live_pin_problem(pin, f.get("state", ""), f.get("city", ""), live.data)
+            ev |= {"source": live.source, "district": ", ".join(live.data.get("districts", [])), "post_offices": ", ".join(live.data.get("offices", [])[:4])}
+        if why:
+            add(R("R-ID-10", "identifiers", FAIL, f"PIN code doesn't fit the address: {why}", "VENDOR", ev,
+                  vendor_text=f"{why} Please check the PIN code and state of your registered address."))
+        elif note:
+            add(R("R-ID-10", "identifiers", WARN, f"PIN code and city differ: {note}", "WARN", ev))
+        else:
+            where = f" ({ev['district']}, India Post)" if ev.get("district") else ""
+            add(R("R-ID-10", "identifiers", PASS, f"PIN code fits the address{where}", evidence=ev))
     if pan:
         okp = V.validate_pan(pan)
         add(R("R-ID-03", "identifiers", PASS if okp else FAIL, "PAN format" + ("" if okp else " is not standard"), "VENDOR", {"pan": pan},

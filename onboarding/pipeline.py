@@ -179,7 +179,8 @@ async def run_pipeline(run_id: int, *, prefer_cache: bool = False, pace: float =
             if stage == "authenticity":
                 extra = {"documents": [{"slot": i.slot, "level": i.auth.level, "worst": i.auth.worst, "specimen": i.auth.specimen} for i in infos.values()]}
             if stage == "sources":
-                extra = {"sources": {k: {"source": v.source, "status": v.status, "live": v.live} for k, v in srcs.items()}}
+                extra = {"sources": {k: {"source": v.source, "status": v.status, "live": v.live, **({"data": v.data} if k == "pin" else {})}
+                                     for k, v in srcs.items()}}
             state = "failed" if fails else "done"
             summary = (f"{len(fails)} problem(s)" if fails else "All checks passed") + (f", {len(warns)} warning(s)" if warns else "") if rs else "Nothing to check"
             if stage == "authenticity" and not rs:
@@ -235,11 +236,14 @@ async def gather_context(s: AsyncSession, app: Application, form: dict, docs_row
     and only data that existed before that run."""
     if sources is None:
         ifsc_task = asyncio.create_task(S.ifsc_lookup(form.get("ifsc", "")))
+        pin_task = asyncio.create_task(S.pin_lookup(form.get("pin", ""))) if form.get("pin") else None
         srcs = {"gst": await S.gst_status(s, form.get("gstin", "")), "pan": await S.pan_status(s, form.get("pan", "")),
                 "bank": await S.penny_drop(s, form.get("bank_account", ""), form.get("ifsc", ""))}
         if form.get("cin"):
             srcs["cin"] = await S.cin_status(s, form["cin"])
         srcs["ifsc"] = await ifsc_task
+        if pin_task:
+            srcs["pin"] = await pin_task
     else:
         srcs = sources
     pan, gstin, acct = form.get("pan", "").upper(), form.get("gstin", "").upper(), form.get("bank_account", "")
