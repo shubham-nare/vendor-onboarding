@@ -275,7 +275,7 @@ def test_simulation_never_touches_real_data(intel):
 
 def test_simulation_refused_when_replay_is_not_exact(intel):
     assert "Simulation is off for this check" in intel["sim_refused"]
-    assert "Simulation is off for this check" in intel["sim_refused_panel"]
+    assert "What-if isn't available for this check" in intel["sim_refused_panel"]
     assert intel["sim_requester"] == 403
 
 

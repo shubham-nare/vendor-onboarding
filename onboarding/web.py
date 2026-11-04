@@ -208,6 +208,12 @@ def demo_catalog() -> dict[str, dict]:
         if all(p.exists() for p in paths.values()):  # private inputs exist only on Shubham's laptop
             out[key] = dict(base, title=title, expected=expected, files={**base["files"], **paths}, private=True)
     out["unsolicited_nilgiri"] = dict(base, title="Application with no invite (unsolicited)", expected="PENDING_REVIEW", invite_scenario=None, bill=False)
+    from onboarding.demo_data import PUBLISHED_SCENARIOS
+    for key, sc in PUBLISHED_SCENARIOS.items():   # real, self-published documents: only where the files are on this machine
+        paths = {slot: PRIVATE / "published" / fn for slot, fn in sc["files"].items()}
+        if all(p.exists() for p in paths.values()):
+            out[key] = dict(title=sc["title"], expected=sc["expected"], form=sc["form"], files=paths, invite_scenario=key,
+                            resubmission_of=None, private=True, bill=False)
     return out
 
 
@@ -455,7 +461,7 @@ async def create_invite(request: Request, company_name: str = Form(...), contact
     async with sessions()() as s:
         actor = await _actor(request, s)
         if not actor or actor.role != "sponsor":
-            raise HTTPException(403, "Only a requester (the employee who needs the vendor) can send an invite. Switch 'Acting as' to Priya Nair or Rahul Desai.")
+            raise HTTPException(403, "Only a requester (the employee who needs the vendor) can send an invite.")
         if len(business_reason.strip()) < 10:
             raise HTTPException(400, "Please give a business reason (at least a sentence): it's shown to the approver.")
         inv = Invite(token=secrets.token_urlsafe(18), sponsor_id=actor.id, company_name=company_name.strip(), contact_email=contact_email.strip(),
@@ -933,11 +939,11 @@ def _allowed_actions(run: Run, app: Application, inv: Invite | None, actor: Empl
         why = ""
         if a in ("confirm_engagement", "deny_engagement"):
             if not actor or actor.id != bill.engaged_employee_id:
-                why = f"Only {bill_emp.name}, who the vendor named, can answer this. Switch 'Acting as' to them."
+                why = f"Only {bill_emp.name}, who the vendor named, can answer this."
             out[a] = dict(label=ACTIONS[a], blocked=why, needs_comment=a == "deny_engagement")
             continue
         if not actor:
-            why = "Pick who you're acting as."
+            why = "Sign in as an employee first."
         elif actor.role == "sponsor" or (requester_id and requester_id == actor.id):
             why = "Segregation of duties: the employee who requested this vendor can't approve, activate or reject it."
         elif a in ("activate", "review_approve") and bill and bill.confirmation == "awaiting":

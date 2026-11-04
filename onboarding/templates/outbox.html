@@ -4,7 +4,7 @@
 <div class="reveal">
 <div class="kicker">Correspondence</div>
 <h1 class="text-[30px] sm:text-[38px] leading-tight mt-1">Vendor outbox</h1>
-<p class="text-slate-500 text-sm mt-1">Every message written to a vendor, including the reminders we send when a vendor goes quiet, and the notes to the employee who asked for them. {% if mail_on %}Each one is emailed to the vendor's contact (and alternate contact) when it is sent.{% else %}Email isn't set up on this server yet (SMTP settings in .env), so messages are kept here.{% endif %} Rejections and approvals are <b>held</b> until a person confirms; fraud-class cases get a neutral "under review" note.</p>
+<p class="text-slate-500 text-sm mt-1">Every message to vendors, reminders, and notes to requesters.</p>
 <div class="mt-6 grid xl:grid-cols-2 gap-3 items-start">
 {% for m, run, app in rows %}
   <div class="bg-white rounded-xl border p-4 sm:p-5">

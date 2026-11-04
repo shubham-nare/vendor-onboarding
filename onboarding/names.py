@@ -98,11 +98,68 @@ def compare(a: str, b: str, *, individual: bool = False) -> NameMatch:
             score = 95
             note = "middle name omitted"
 
+    # Institutions write themselves in initials and bank in a designated account:
+    # "IIT (BHU) RESEARCH & DEVELOPMENT ACCOUNT" is "Indian Institute of Technology (Banaras Hindu University)".
+    # Never a full match: a person confirms the designated account belongs to the institution.
+    if not individual and score < PARTIAL_AT:
+        hit = designated_account(a_stem, b_stem)
+        if hit:
+            score, note = 85, hit
+
     if a_suf and b_suf and a_suf != b_suf and score > 89:
         score = 89
         note = f"legal form differs ({a_suf} vs {b_suf})"
 
     return NameMatch(score=score, band=band_for(score), a_stem=a_stem, b_stem=b_stem, note=note)
+
+
+_STOP = {"OF", "AND", "THE", "FOR"}
+# words a bank adds after the holder's name for a designated account ("... RESEARCH & DEVELOPMENT ACCOUNT")
+_DESIGNATION = {"ACCOUNT", "AC", "A", "C", "CURRENT", "SAVINGS", "FUND", "FUNDS", "PROJECT", "PROJECTS", "RESEARCH", "AND",
+                "DEVELOPMENT", "R", "D", "RND", "CONSULTANCY", "SPONSORED", "CORPUS", "GRANT", "GRANTS", "REVENUE", "COLLECTION",
+                "MAIN", "GENERAL", "RECEIPT", "RECEIPTS"}
+
+
+def _expand(short: list[str], long_: list[str]) -> tuple[list[str], int]:
+    """Replace initials in `short` ("IIT", "BHU") with the words they stand for in `long_`."""
+    out, hits = [], 0
+    for t in short:
+        found = None
+        if 2 <= len(t) <= 6 and t.isalpha() and t not in long_:
+            for i in range(len(long_)):
+                run, ini = [], ""
+                for w in long_[i:]:
+                    run.append(w)
+                    if w not in _STOP:
+                        ini += w[0]
+                    if len(ini) >= len(t):
+                        break
+                if ini == t and run[-1] not in _STOP:
+                    found = run
+                    break
+        if found:
+            out += found
+            hits += 1
+        else:
+            out.append(t)
+    return out, hits
+
+
+def designated_account(a_stem: str, b_stem: str) -> str:
+    """'' unless one name is the other written in initials, optionally followed by an account designation.
+    Returns a note for the reviewer when it is."""
+    a, b = a_stem.split(), b_stem.split()
+    for short, long_ in ((a, b), (b, a)):
+        core = list(short)
+        tail = []
+        while core and core[-1] in _DESIGNATION:
+            tail.insert(0, core.pop())
+        exp, hits = _expand(core, long_)
+        if hits and exp and fuzz.token_sort_ratio(" ".join(exp), " ".join(long_)) >= MATCH_AT:
+            what = " ".join(short[:len(core)])
+            return (f"'{what}' is the initials of the same name" + (f"; the account is designated '{' '.join(tail)}'" if tail else "")
+                    + ": confirm the account belongs to this vendor")
+    return ""
 
 
 def full_form(name: str) -> str:

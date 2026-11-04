@@ -6,12 +6,6 @@
 {% set summary = run.summary or {} %}
 <div class="reveal">
 
-{% if from_vendor %}
-<div class="mb-5 rounded-lg border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-900 flex flex-wrap items-center justify-between gap-2">
-  <span>The vendor just submitted. This is the <b>internal</b> live view; the vendor only sees their status page and the messages we send.</span>
-  {% if vendor_token %}<a class="inline-flex items-center gap-1 text-xs font-medium underline underline-offset-4" href="/status/{{ vendor_token }}">Open the vendor's view {{ icon('arrow', 'h-3.5 w-3.5') }}</a>{% endif %}
-</div>
-{% endif %}
 
 <div class="flex flex-wrap items-end justify-between gap-4">
   <div class="min-w-0">
@@ -24,6 +18,7 @@
       {% else %}<span class="text-rose-600 font-medium">No invite from an employee: unsolicited application</span>{% endif %}
     </div>
   </div>
+  {% if vendor_token %}<a href="/status/{{ vendor_token }}" class="order-first sm:order-none inline-flex items-center gap-1.5 border border-slate-200 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-slate-700 hover:border-indigo-300">Vendor's view</a>{% endif %}
   {% if profile_id %}<a href="/vendors/{{ profile_id }}" class="order-first sm:order-none inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-slate-700 hover:border-indigo-300 hover:text-indigo-700 shadow-card">{{ icon('building', 'h-3.5 w-3.5') }} Open vendor profile <span class="mono font-normal text-slate-500">{{ profile_id }}</span></a>{% endif %}
   {% if history | length > 1 %}
   <nav class="flex flex-wrap items-center gap-1.5 text-xs" aria-label="Submissions">
@@ -35,7 +30,6 @@
   {% endif %}
 </div>
 
-{% if not full %}<div class="mt-5 rounded-lg border border-amber-200 bg-amber-50/70 px-4 py-2.5 text-[13px] text-amber-900 flex items-start gap-2">{{ icon('lock', 'h-4 w-4 shrink-0 mt-0.5') }}<span><b>Requester view.</b> You see the status, the bill and what the vendor was told. Documents, ID numbers, AI readings and the detailed checks are for Procurement and Finance only.</span></div>{% endif %}
 <div class="grid grid-cols-1 lg:grid-cols-[340px_1fr] xl:grid-cols-[360px_1fr] 2xl:grid-cols-[400px_1fr] gap-5 sm:gap-6 mt-6 sm:mt-7">
   <!-- live ledger -->
   <section class="bg-white rounded-xl border self-start lg:sticky lg:top-5 lg:max-h-[calc(100vh-2.5rem)] lg:overflow-y-auto min-w-0 {{ 'order-last lg:order-none' if done }}" aria-live="polite">
@@ -46,9 +40,7 @@
       </div>
       {% if done and run.finished_at and run.started_at %}
       {% set live_reads = docs | selectattr('read') | map(attribute='read') | selectattr('origin', 'equalto', 'live') | list %}
-      <p class="mt-1 text-[12px] text-slate-500">Ran in {{ '%.1f' % (run.finished_at - run.started_at).total_seconds() }} s · {{ docs | length }} document{{ 's' if docs | length != 1 }} read by AI ({{ live_reads | length }} live) · {{ rules | length }} rules checked</p>
-      {% elif not done %}
-      <p class="mt-1 text-[12px] text-slate-500">Each step appears here as the server finishes it.</p>
+      <p class="mt-1 text-[12px] text-slate-500"><b class="tabular-nums">{{ '%.1f' % (run.finished_at - run.started_at).total_seconds() }} s</b> · <b class="tabular-nums">{{ docs | length }}</b> document{{ 's' if docs | length != 1 }} · <b class="tabular-nums">{{ rules | length }}</b> checks</p>
       {% endif %}
     </div>
     <ol id="stages">
@@ -68,7 +60,6 @@
       </li>
       {% endfor %}
     </ol>
-    <p class="px-4 sm:px-5 py-2.5 border-t border-slate-200 text-[11px] text-slate-500">{{ 'Tap a stage to see every rule it ran.' if full else 'The individual checks are visible to Procurement and Finance.' }} Updates stream from the database, so refreshing is safe.</p>
   </section>
 
   <div class="space-y-6 min-w-0">
@@ -81,7 +72,6 @@
       {% else %}
         <div class="mx-auto h-24 w-24 rounded-full border-2 border-dashed border-slate-300 grid place-items-center"><span class="ink-dot"></span></div>
         <p class="mt-5 font-display text-2xl">Checking the application…</p>
-        <p class="text-sm text-slate-500 mt-1">Gemini reads each document (a few seconds each); the rules after that are instant. The decision is stamped here.</p>
       {% endif %}
     </section>
   {% else %}
@@ -121,12 +111,11 @@
                 <span class="text-[15px] font-medium leading-snug">{{ c.title }}</span>
               </div>
               {% if c.detail %}<p class="text-[14px] text-slate-700 mt-1">{{ c.detail }}</p>{% endif %}
-              <p class="text-xs text-slate-500 mt-1.5 flex items-start gap-1">{{ icon('arrow', 'h-3 w-3 mt-0.5 shrink-0') }} <span>{{ c.next }}</span></p>
             </li>
           {% endfor %}
           </ol>
         {% else %}
-          <p class="text-[15px] text-slate-700 flex items-start gap-2"><span class="text-emerald-600 mt-0.5">{{ icon('shield', 'h-5 w-5') }}</span><span>Every required check passed. {{ 'A person activates the vendor. Approval is not payment: invoices still go through PO and goods-receipt matching.' if run.status == 'APPROVED' }}</span></p>
+          <p class="text-[15px] text-slate-700 flex items-start gap-2"><span class="text-emerald-600 mt-0.5">{{ icon('shield', 'h-5 w-5') }}</span><span>Every required check passed.</span></p>
         {% endif %}
         {% if summary.diff and full %}
           <div class="mt-5 grid sm:grid-cols-3 gap-px bg-slate-200 rounded-lg overflow-hidden border border-slate-200 text-xs">
@@ -145,7 +134,6 @@
     <section id="bill" class="bg-white rounded-xl border overflow-hidden">
       <div class="px-4 sm:px-6 py-4 border-b border-slate-200 flex flex-wrap items-baseline justify-between gap-2">
         <h2 class="text-xl">The bill</h2>
-        <span class="kicker !text-[10px]">{{ 'read from the bill by AI · ' if f.bill_read_from_document }}submitted with the registration · never paid automatically</span>
       </div>
       <div class="p-4 sm:p-6 grid md:grid-cols-[1fr_auto] gap-6">
         <dl class="text-[14px] grid grid-cols-[8.5rem_1fr] gap-x-3 gap-y-1.5 min-w-0">
@@ -162,7 +150,6 @@
             <div class="text-xs text-slate-600 mt-1">{{ bill.decided_at | dt }}</div>
           {% elif conf == 'denied' %}
             <div class="font-medium text-rose-700 mt-1">{{ bill_emp.name }} says they didn't engage this vendor</div>
-            <div class="text-xs text-slate-600 mt-1">Treated as possible invoice fraud: the Finance controller decides.</div>
           {% elif bill_emp %}
             <div class="font-medium text-amber-800 mt-1">Waiting for {{ bill_emp.name }} to confirm</div>
             <div class="text-xs text-slate-600 mt-1">The vendor can't be activated until they do.</div>
@@ -184,20 +171,19 @@
     <section id="actions" class="bg-white rounded-xl border p-4 sm:p-6">
       <div class="flex flex-wrap items-baseline justify-between gap-2">
         <h2 class="text-xl">Decision by a person</h2>
-        {% if actor %}<span class="kicker !text-[10px]">acting as {{ actor.name }} · {{ ROLE_LABEL[actor.role] }}</span>{% endif %}
       </div>
       {% if not latest %}
         <p class="mt-2 text-sm text-slate-600">A newer submission exists. <a class="underline" href="/runs/{{ history[-1].id }}">Open it</a>.</p>
       {% elif vendor %}
         <p class="mt-3 flex flex-wrap items-center gap-3"><span class="stamp text-emerald-600 text-sm" style="transform:rotate(-2deg)">Active vendor</span><span class="text-[15px]">Vendor <b class="mono">{{ vendor.vendor_id }}</b> added to the vendor master.</span></p>
       {% elif app.current_status == 'PENDING_VENDOR' %}
-        <p class="mt-2 text-sm text-slate-600">Waiting for the vendor to fix and resubmit through their link. Nothing to do here.</p>
+        <p class="mt-2 text-sm text-slate-600">Waiting for the vendor to fix and resubmit.</p>
       {% elif app.current_status == 'REJECTED' and (actions | selectattr('0.run_id', 'equalto', run.id) | selectattr('0.action', 'in', ['confirm_reject', 'review_reject']) | list) %}
         <p class="mt-2 text-sm text-slate-600">Rejection confirmed; the vendor was told.</p>
       {% elif allowed %}
         {% if rights %}
-        <div class="mt-4 rounded-lg border border-slate-200 bg-slate-50/60 p-3.5">
-          <div class="text-[12px] font-semibold text-slate-600">Who can decide this <span class="font-normal text-slate-500">· segregation of duties</span></div>
+        <details class="mt-4 border border-slate-200 bg-slate-50/60 p-3.5">
+          <summary class="cursor-pointer text-[12px] font-semibold text-slate-600">Who can decide this</summary>
           <ul class="mt-2.5 grid sm:grid-cols-2 gap-2">
             {% for p in rights %}
             {% set me = actor and p.emp.id == actor.id %}
@@ -211,31 +197,46 @@
             </li>
             {% endfor %}
           </ul>
-        </div>
+        </details>
         {% endif %}
         {% set risky = run.risk_tier == 'high' or summary.fraud %}
         {% set ORDER = ['confirm_engagement', 'deny_engagement', 'ask_vendor', 'review_reject', 'confirm_reject', 'override_reject', 'review_approve', 'activate'] if risky
                   else ['confirm_engagement', 'deny_engagement', 'activate', 'review_approve', 'confirm_reject', 'ask_vendor', 'override_reject', 'review_reject'] %}
-        <div class="mt-4 grid gap-3">
-        {% for key in ORDER if key in allowed %}
+        {% set simple = ORDER | select('in', allowed) | reject('in', ['ask_vendor', 'review_reject', 'confirm_reject', 'override_reject', 'deny_engagement']) | list %}
+        {% set worded = ORDER | select('in', allowed) | select('in', ['ask_vendor', 'review_reject', 'confirm_reject', 'override_reject', 'deny_engagement']) | list %}
+        {% if simple %}
+        <div class="mt-4 flex flex-wrap gap-3">
+        {% for key in simple %}
           {% set a = allowed[key] %}
           {% set approve = key in ('activate', 'review_approve') %}
-          {% set btn = 'bg-rose-600 hover:bg-rose-700' if key in ('confirm_reject', 'review_reject', 'deny_engagement') else ('bg-slate-800 hover:bg-slate-900' if key in ('override_reject', 'ask_vendor') else ('bg-white !text-emerald-700 border border-emerald-600 hover:bg-emerald-50' if approve and risky else 'bg-emerald-600 hover:bg-emerald-700')) %}
-          <form method="post" action="/runs/{{ run.id }}/action" class="rounded-lg border {{ 'border-dashed border-slate-300 bg-slate-50' if a.blocked else 'border-slate-200' }} p-3.5">
+          <form method="post" action="/runs/{{ run.id }}/action" class="min-w-0">
             <input type="hidden" name="action" value="{{ key }}">
             {% if approve and summary.fraud and not a.blocked %}
-            <label class="mb-2.5 flex items-start gap-2 text-[12.5px] text-rose-800"><input type="checkbox" required class="mt-0.5"> I verified the flagged facts with an independent source, and I take responsibility for approving.</label>
+            <label class="mb-2 flex items-start gap-2 text-[12.5px] text-rose-800 max-w-md"><input type="checkbox" required class="mt-0.5"> I verified the flagged facts with an independent source, and I take responsibility for approving.</label>
             {% endif %}
-            <div class="flex flex-wrap items-center gap-3">
-              {% if a.needs_comment %}<input name="comment" aria-label="{{ 'Message to the vendor' if key == 'ask_vendor' else 'Reason' }}" class="flex-1 min-w-0 basis-full sm:basis-auto sm:min-w-[14rem] rounded-md border px-3 py-2.5 sm:py-2 text-sm" placeholder="{{ 'Message to the vendor' if key == 'ask_vendor' else ('What do you know about this bill? (audit trail)' if key == 'deny_engagement' else 'Reason (goes on the audit trail)') }}" {{ 'disabled' if a.blocked }}>
-              {% else %}<div class="flex-1 basis-full sm:basis-auto sm:min-w-[14rem] text-sm text-slate-600">{{ {'activate': 'Adds the vendor to the vendor master as active and sends the vendor their ID.',
-                   'confirm_engagement': 'You asked this vendor for the work on the bill. You become its requester, so someone else approves it.'}.get(key, 'Sends the held message to the vendor and closes the application.') }}</div>{% endif %}
-              <button class="w-full sm:w-auto rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium text-white {{ btn }} disabled:bg-slate-300 disabled:text-slate-600 disabled:cursor-not-allowed shadow-sm" {{ 'disabled' if a.blocked }}>{{ a.label }}</button>
-            </div>
-            {% if a.blocked %}<div class="mt-2 text-xs text-rose-600 flex items-start gap-1.5">{{ icon('lock', 'h-3.5 w-3.5 shrink-0 mt-px') }} <span>{{ a.blocked }}</span></div>{% endif %}
+            {% if a.needs_comment %}<input name="comment" aria-label="Reason" class="mb-2 w-full sm:w-80 border px-3 py-2 text-sm" placeholder="Reason" {{ 'disabled' if a.blocked }}>{% endif %}
+            <button class="px-5 py-2.5 text-sm font-semibold text-white {{ 'bg-white !text-emerald-700 border border-emerald-600 hover:bg-emerald-50' if approve and risky else 'bg-emerald-600 hover:bg-emerald-700' }} disabled:bg-slate-300 disabled:!text-slate-600 disabled:border-slate-300 disabled:cursor-not-allowed" {{ 'disabled' if a.blocked }}>{{ a.label }}</button>
+            {% if a.blocked %}<div class="mt-1.5 text-xs text-rose-600 flex items-start gap-1.5 max-w-xs">{{ icon('lock', 'h-3.5 w-3.5 shrink-0 mt-px') }} <span>{{ a.blocked }}</span></div>{% endif %}
           </form>
         {% endfor %}
         </div>
+        {% endif %}
+        {% for key in worded %}
+          {% set a = allowed[key] %}
+          {% set to_vendor = key == 'ask_vendor' %}
+          {% set red = key in ('confirm_reject', 'review_reject', 'deny_engagement') %}
+          <form method="post" action="/runs/{{ run.id }}/action" class="mt-4 border border-l-4 {{ 'border-indigo-200 border-l-indigo-600 bg-indigo-50' if to_vendor else ('border-rose-200 border-l-rose-600 bg-rose-50' if red else 'border-slate-200 border-l-slate-500 bg-slate-50') }} p-4">
+            <input type="hidden" name="action" value="{{ key }}">
+            <label class="block text-[13px] font-bold {{ 'text-indigo-900' if to_vendor else ('text-rose-900' if red else 'text-slate-800') }}" for="msg-{{ key }}">{{ 'Write to the vendor' if to_vendor else ('What do you know about this bill?' if key == 'deny_engagement' else a.label ~ ': reason') }}</label>
+            {% if a.needs_comment %}
+            <textarea id="msg-{{ key }}" name="comment" rows="{{ 4 if to_vendor else 2 }}" class="mt-2 w-full border border-slate-300 bg-white px-3 py-2 text-[14px]" placeholder="{{ 'What should the vendor send or correct?' if to_vendor else 'Reason' }}" {{ 'disabled' if a.blocked }}></textarea>
+            {% endif %}
+            <div class="mt-2 flex flex-wrap items-center gap-3">
+              <button class="px-5 py-2.5 text-sm font-semibold text-white {{ 'bg-indigo-600 hover:bg-indigo-700' if to_vendor else ('bg-rose-600 hover:bg-rose-700' if red else 'bg-slate-800 hover:bg-slate-900') }} disabled:bg-slate-300 disabled:text-slate-600 disabled:cursor-not-allowed" {{ 'disabled' if a.blocked }}>{{ a.label }}</button>
+              {% if a.blocked %}<span class="text-xs text-rose-600 inline-flex items-start gap-1.5">{{ icon('lock', 'h-3.5 w-3.5 shrink-0 mt-px') }} {{ a.blocked }}</span>{% endif %}
+            </div>
+          </form>
+        {% endfor %}
       {% endif %}
       {% if actions %}
         <div class="kicker mt-6 mb-2">Audit trail</div>
@@ -251,7 +252,6 @@
       <div class="px-4 sm:px-6 py-4 border-b border-slate-200 flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h2 class="text-xl">How well each fact is proven</h2>
-          <p class="text-[12.5px] text-slate-500 mt-0.5">The level says how strong the evidence is. "Problems" lists checks that put the fact in doubt, whatever its level.</p>
         </div>
         <a href="/assumptions#levels" class="text-xs text-indigo-700 underline underline-offset-4">more on levels</a>
       </div>
@@ -295,10 +295,6 @@
         </tbody>
       </table>
       </div>
-      <p class="px-4 sm:px-6 py-3 border-t border-slate-100 text-[12px] text-slate-500 flex flex-wrap gap-x-4 gap-y-1">
-        <span><span class="tag dot text-emerald-700 mr-1">Live source</span>asked the real service during this check</span>
-        <span><span class="tag dot text-indigo-700 mr-1">Registry</span>checked with the issuing registry (GST, PAN, penny-drop)</span>
-      </p>
     </section>
 
     {% if done and actor and actor.role in ('maker', 'checker') %}
@@ -306,12 +302,12 @@
     <section id="simulate" class="bg-white rounded-xl border overflow-hidden">
       <div class="px-4 sm:px-6 py-4 border-b border-slate-100">
         <h2 class="text-xl">What would change the decision?</h2>
-        <p class="text-[12.5px] text-slate-500 mt-0.5">Runs the same rules on a copy of this check's saved input. Nothing real changes: not the application, not the decision, not the audit trail. Each simulation is logged.</p>
+        <p class="text-[12.5px] text-slate-500 mt-0.5">Try a change on a copy of this check. Nothing real is changed.</p>
       </div>
       {% if not snap %}
         <p class="px-4 sm:px-6 py-4 text-[13px] text-slate-500">This check has no saved decision input yet, so a what-if can't be run.</p>
       {% elif not snap[0] %}
-        <p class="px-4 sm:px-6 py-4 text-[13px] text-slate-600 flex items-start gap-2">{{ icon('lock', 'h-4 w-4 shrink-0 mt-0.5 text-slate-400') }}<span>Simulation is off for this check: its saved input doesn't reproduce the original decision exactly{% if snap[1] %} ({{ snap[1] }}){% endif %}. A what-if on a decision we can't reproduce would be fiction.</span></p>
+        <p class="px-4 sm:px-6 py-4 text-[13px] text-slate-600 flex items-start gap-2">{{ icon('lock', 'h-4 w-4 shrink-0 mt-0.5 text-slate-400') }}<span>What-if isn't available for this check.</span></p>
       {% else %}
       {% set warns = rules | selectattr('result', 'equalto', 'WARN') | list %}
       {% set fails = rules | selectattr('result', 'equalto', 'FAIL') | list %}
@@ -320,20 +316,20 @@
           <input type="hidden" name="scenario" value="policy_bank_a4">
           <div class="text-[13.5px] font-semibold">Require the bank account at A4</div>
           <p class="mt-1 text-[12.5px] text-slate-500 flex-1">Hypothetical policy: the bank account must be confirmed at source (A4).</p>
-          <button class="mt-3 rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-indigo-700 hover:bg-indigo-50">Simulate</button>
+          <button class="mt-3 rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-indigo-700 hover:bg-indigo-50">Run what-if</button>
         </form>
         <form data-sim method="post" action="/runs/{{ run.id }}/simulate" class="rounded-lg border border-slate-200 p-3.5 flex flex-col">
           <input type="hidden" name="scenario" value="confirm_warning">
           <div class="text-[13.5px] font-semibold">A reviewer confirms a warning</div>
           {% if warns %}<select name="rule_id" aria-label="Warning to confirm" class="mt-2 rounded-lg border px-2 py-1.5 text-[12.5px]">{% for w in warns %}<option value="{{ w.rule_id }}">{{ w.rule_id }} · {{ w.title[:60] }}</option>{% endfor %}</select>
-          <button class="mt-3 rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-indigo-700 hover:bg-indigo-50">Simulate</button>
+          <button class="mt-3 rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-indigo-700 hover:bg-indigo-50">Run what-if</button>
           {% else %}<p class="mt-1 text-[12.5px] text-slate-500">No warnings in this check.</p>{% endif %}
         </form>
         <form data-sim method="post" action="/runs/{{ run.id }}/simulate" class="rounded-lg border border-slate-200 p-3.5 flex flex-col">
           <input type="hidden" name="scenario" value="clear_flag">
           <div class="text-[13.5px] font-semibold">A reviewer clears a failed check</div>
           {% if fails %}<select name="rule_id" aria-label="Failed check to clear" class="mt-2 rounded-lg border px-2 py-1.5 text-[12.5px]">{% for f in fails %}<option value="{{ f.rule_id }}">{{ f.rule_id }} · {{ f.title[:60] }}</option>{% endfor %}</select>
-          <button class="mt-3 rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-indigo-700 hover:bg-indigo-50">Simulate</button>
+          <button class="mt-3 rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-indigo-700 hover:bg-indigo-50">Run what-if</button>
           {% else %}<p class="mt-1 text-[12.5px] text-slate-500">No failed checks.</p>{% endif %}
         </form>
       </div>
@@ -342,9 +338,9 @@
         document.querySelectorAll('form[data-sim]').forEach(f => f.addEventListener('submit', async e => {
           e.preventDefault();
           const out = document.getElementById('simresult');
-          out.innerHTML = '<p class="text-[13px] text-slate-500">Simulating…</p>';
+          out.innerHTML = '<p class="text-[13px] text-slate-500">Running…</p>';
           try { const r = await fetch(f.action, {method: 'POST', body: new FormData(f)}); out.innerHTML = await r.text(); }
-          catch (err) { out.innerHTML = '<p class="text-[13px] text-rose-700">Could not run the simulation. Try again.</p>'; }
+          catch (err) { out.innerHTML = '<p class="text-[13px] text-rose-700">Could not run the what-if. Try again.</p>'; }
         }));
       </script>
       {% endif %}
@@ -353,7 +349,7 @@
 
     <!-- documents -->
     <section>
-      <div class="flex flex-wrap items-baseline justify-between gap-2"><h2 class="text-xl">Documents</h2><span class="kicker !text-[10px]">what the AI saw · what the file itself shows</span></div>
+      <div class="flex flex-wrap items-baseline justify-between gap-2"><h2 class="text-xl">Documents</h2></div>
       <div class="mt-3 grid md:grid-cols-2 gap-5">
       {% for d in docs %}
         {% set r = d.read or {} %}
@@ -362,12 +358,11 @@
           <span class="absolute -top-3 left-4 rounded-t-md border border-b-0 border-slate-200 bg-white px-3 pt-1 pb-0.5 kicker !text-[10px] !text-slate-700">{{ SLOT_TITLE.get(d.slot, d.slot) }}</span>
           <div class="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
             <a href="/files/{{ d.sha256 }}" target="_blank" class="inline-flex items-center gap-1.5 text-[13px] text-indigo-700 hover:underline mono break-all">{{ icon('doc', 'h-4 w-4 shrink-0') }}{{ d.filename }}</a>
-            {% if au.level %}<div class="sm:text-right shrink-0"><div class="kicker !text-[9px] mb-1">the file itself</div>{{ level_chip(au.level) }}{% if au.specimen %}<div class="mt-1"><span class="tag text-slate-500" title="This exact file is on record (matched by fingerprint), so visual checks are skipped. Its contents are not independently confirmed.">known file</span></div>{% endif %}</div>{% endif %}
+            {% if au.level %}<div class="sm:text-right shrink-0"><div class="kicker !text-[9px] mb-1">file check</div>{{ level_chip(au.level) }}{% if au.specimen %}<div class="mt-1"><span class="tag text-slate-500" title="This exact file is on record (matched by fingerprint), so visual checks are skipped. Its contents are not independently confirmed.">known file</span></div>{% endif %}</div>{% endif %}
           </div>
           <dl class="mt-3 text-[13px] grid grid-cols-[7.25rem_1fr] sm:grid-cols-[8rem_1fr] gap-x-2 gap-y-1">
-            <dt class="text-slate-500">AI read it as</dt><dd class="font-medium">{{ (r.doc_type or 'unreadable') | replace('_', ' ') | lower }}</dd>
+            <dt class="text-slate-500">Document</dt><dd class="font-medium">{{ (r.doc_type or 'unreadable') | replace('_', ' ') | lower }}</dd>
             <dt class="text-slate-500">How it was made</dt><dd>{{ (r.document_form or '—') | replace('_', ' ') | lower }}</dd>
-            <dt class="text-slate-500">Reading</dt><dd class="mono text-[11.5px] break-words">{% if r.origin == 'live' %}live · {{ r.model }} · {{ r.seconds }}s{% elif r.origin %}<span class="text-amber-700">{{ 'saved reading (AI unavailable)' if r.origin == 'cache-fallback' else ('saved reading' if r.origin == 'cache' else 'AI unavailable') }}</span>{% endif %}</dd>
           </dl>
           {% if r.document_form_evidence %}<p class="mt-2.5 italic text-[13.5px] text-slate-600 border-l-2 border-slate-200 pl-3">“{{ r.document_form_evidence }}”</p>{% endif %}
           {% set sigs = au.signals or [] %}
@@ -386,7 +381,7 @@
           {% endif %}
           {% if r.fields %}
           <details class="mt-3 group">
-            <summary class="text-xs text-indigo-700 inline-flex items-center gap-1"><span class="group-open:rotate-90 transition-transform">{{ icon('arrow', 'h-3 w-3') }}</span> What the AI read ({{ r.fields | length }} fields)</summary>
+            <summary class="text-xs text-indigo-700 inline-flex items-center gap-1"><span class="group-open:rotate-90 transition-transform">{{ icon('arrow', 'h-3 w-3') }}</span> Fields read ({{ r.fields | length }})</summary>
             <table class="mt-2 w-full text-xs">
               {% for fld in r.fields %}<tr class="border-t border-slate-100"><td class="py-1 pr-2 text-slate-500">{{ fld.name | replace('_', ' ') }}</td><td class="py-1 mono break-all">{{ fld.value | mask(fld.name) }}</td><td class="py-1 text-right {{ 'text-amber-700' if fld.legibility != 'clear' }}">{{ fld.legibility }}</td></tr>{% endfor %}
             </table>
@@ -403,7 +398,6 @@
       <div class="bg-white rounded-xl border p-4 sm:p-6 min-w-0">
         <div class="flex flex-wrap items-center justify-between gap-2"><h2 class="text-lg">Message to the vendor</h2>
           {% if vendor_msg %}{% set ms = vendor_msg.state %}<span class="tag dot {{ 'text-emerald-700' if ms == 'sent' else 'text-amber-700' }}">{{ {'sent': 'sent', 'held': 'held for a person', 'draft': 'not sent'}[ms] }}</span>{% endif %}</div>
-        {% if vendor_msg and vendor_msg.state == 'held' and full %}<p class="mt-1 text-[12.5px] text-slate-500">Nothing reaches the vendor until a person takes the decision above.</p>{% endif %}
         {% if vendor_msg and (full or vendor_msg.state == 'sent') %}
           <div class="mt-3 rounded-lg border border-slate-200 bg-slate-50/60 p-4">
             <div class="text-[12px] text-slate-500"><span class="font-medium text-slate-600">Subject:</span> {{ vendor_msg.subject }}</div>
@@ -412,15 +406,6 @@
         {% endif %}
         {% if all_vendor_msgs | length > 1 and full %}<p class="mt-3 text-xs text-slate-500">+ {{ all_vendor_msgs | length - 1 }} later message(s) in the <a class="underline" href="/outbox">outbox</a>.</p>{% endif %}
       </div>
-      {% if full and internal %}
-      <details class="bg-white rounded-xl border min-w-0 group">
-        <summary class="px-4 sm:px-6 py-4 flex items-center justify-between gap-2">
-          <span><span class="text-[15px] font-semibold">Internal note</span> <span class="text-[12.5px] text-slate-500">· plain-text summary for the audit file, reviewers only</span></span>
-          <span class="text-xs text-indigo-700 group-open:hidden">show</span><span class="text-xs text-indigo-700 hidden group-open:inline">hide</span>
-        </summary>
-        <pre class="px-4 sm:px-6 pb-5 whitespace-pre-wrap break-words text-[12px] leading-relaxed mono text-slate-700">{{ internal.body }}</pre>
-      </details>
-      {% endif %}
     </section>
 
     {% if full %}

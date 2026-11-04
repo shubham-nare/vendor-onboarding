@@ -33,6 +33,7 @@ INVITES = {  # scenario_key -> (sponsor, company, reason, category, band, high)
     "borrowed_gstin_kaveri": ("Priya Nair", dd.KAVERI_TRADERS["legal_name"], "Agri produce for the canteen contract", "Food & catering", "1-5 lakh", False),
     "shared_bank_rangoli": ("Rahul Desai", dd.RANGOLI["legal_name"], "Printed labels and operator manuals", "Printing", "5-10 lakh", False),
     "proprietor_shinde": ("Priya Nair", dd.SHINDE["trade_name"], "Electrical maintenance at the Pune office", "Facility services", "1-5 lakh", False),
+    "real_iitbhu": ("Rahul Desai", dd.IITBHU["legal_name"], "Sponsored R&D consultancy: vibration analysis of the Plant 2 press line", "Consultancy / R&D", "10-25 lakh", False),
 }
 
 
@@ -46,6 +47,7 @@ def sim_records() -> list[dict]:
         (dd.SHINDE, dd.SHINDE["proprietor"], dd.SHINDE["trade_name"]),
         (dd.KESARI, dd.KESARI["legal_name"], ""),
         (dd.BRINDAVAN, dd.BRINDAVAN["legal_name"], ""),
+        (dd.IITBHU, "INDIAN INSTITUTE OF TECHNOLOGY (BANARAS HINDU UNIVERSITY)", dd.IITBHU["trade_name"]),
     ]
     for b, legal, trade in gst:
         recs.append(dict(kind="gst", key=b["gstin"], data=dict(
@@ -59,10 +61,11 @@ def sim_records() -> list[dict]:
         (dd.KAVERI_TRADERS["pan"], dd.KAVERI_TRADERS["legal_name"]), (dd.KAVERI_FOODS["pan"], dd.KAVERI_FOODS["legal_name"]),
         (dd.RANGOLI["pan"], dd.RANGOLI["legal_name"]), (dd.SHINDE["pan"], dd.SHINDE["proprietor"]),
         (dd.KESARI["pan"], dd.KESARI["legal_name"]), (dd.BRINDAVAN["pan"], dd.BRINDAVAN["legal_name"]),
+        (dd.IITBHU["pan"], "INDIAN INSTITUTE OF TECHNOLOGY BANARAS HINDU UNIVERSITY"),
     ]
     for pan, name in pans:
         recs.append(dict(kind="pan", key=pan, data=dict(name=name.upper(), status="VALID", aadhaar_linked=True)))
-    banks = [dd.NILGIRI, dd.TEJAS, dd.KAVERI_TRADERS, dd.SHINDE, dd.KESARI, dd.BRINDAVAN]
+    banks = [dd.NILGIRI, dd.TEJAS, dd.KAVERI_TRADERS, dd.SHINDE, dd.KESARI, dd.BRINDAVAN, dd.IITBHU]
     for b in banks:
         recs.append(dict(kind="bank", key=f"{b['bank']['account']}@{b['bank']['ifsc']}",
                          data=dict(holder_name=b["bank"]["holder"], status="VALID")))
@@ -101,7 +104,7 @@ async def seed(reset: bool = False, dispose: bool = True) -> dict:
         for key, (sponsor, company, reason, cat, band, high) in INVITES.items():
             if key in existing:
                 continue
-            contact = dd.SCENARIOS[key]["form"]["contact_email"]
+            contact = (dd.SCENARIOS.get(key) or dd.PUBLISHED_SCENARIOS[key])["form"]["contact_email"]
             s.add(Invite(token=secrets.token_urlsafe(18), sponsor_id=emp[sponsor].id, company_name=company,
                          contact_email=contact, business_reason=reason, spend_category=cat, spend_band=band,
                          high_spend=high, scenario_key=key, expires_at=now() + timedelta(days=14)))

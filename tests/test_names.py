@@ -33,3 +33,10 @@ def test_honorifics_and_ampersand():
 def test_different_legal_forms_never_auto_match():
     m = compare("Kaveri Agro Private Limited", "Kaveri Agro LLP")
     assert m.score <= 89 and m.band == PARTIAL
+
+
+def test_institution_initials_and_designated_account_need_a_person():
+    from onboarding import names as N
+    m = N.compare("Indian Institute of Technology (Banaras Hindu University)", "IIT (BHU) RESEARCH & DEVELOPMENT ACCOUNT")
+    assert m.band == N.PARTIAL and "initials" in m.note and "RESEARCH AND DEVELOPMENT ACCOUNT" in m.note
+    assert N.compare("Rangoli Print House Private Limited", "DECCAN OFFICE SUPPLIES").band == N.MISMATCH

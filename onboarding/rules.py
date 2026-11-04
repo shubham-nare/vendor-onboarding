@@ -125,6 +125,8 @@ def constitution_type(text: str) -> str | None:
         return "PARTNERSHIP"
     if "proprietor" in t:
         return "PROPRIETORSHIP"
+    if any(w in t for w in ("government", "statutory", "university", "trust", "society", "local authority", "others")):
+        return "INSTITUTION"   # REG-06 prints "Others" for statutory bodies such as the IITs
     return None
 
 
@@ -154,7 +156,8 @@ def required_fields_abroad(form: dict) -> list[str]:
 def required_docs(form: dict) -> list[str]:
     if not C.is_india(form.get("country")):
         return ["bank_proof"]       # the tax registration certificate is collected by our team
-    return (["gst_certificate", "pan_card", "bank_proof"] + (["udyam_certificate"] if form.get("msme") else [])
+    pan = [] if form.get("business_type") == "INSTITUTION" else ["pan_card"]   # their PAN is proved by the GST certificate (and the bank's mandate)
+    return (["gst_certificate", *pan, "bank_proof"] + (["udyam_certificate"] if form.get("msme") else [])
             + (["invoice"] if form.get("bill_mode") else []))
 
 
@@ -330,7 +333,7 @@ def evaluate(ctx: Context) -> list[R]:
         exp = V.EXPECTED_PAN_CODE.get(bt)
         got = V.pan_code(pan)
         if exp:
-            okt = got == exp
+            okt = bool(got) and got in exp
             add(R("R-ID-06", "identifiers", PASS if okt else FAIL,
                   f"PAN holder type ({V.PAN_HOLDER_TYPES.get(got, got)}) " + ("fits" if okt else "doesn't fit") + f" the business type ({V.BUSINESS_TYPES.get(bt, bt)})",
                   "VENDOR", {"pan_type": got, "expected": exp},
@@ -443,7 +446,7 @@ def evaluate(ctx: Context) -> list[R]:
         if best.status == M.MATCH:
             add(R("R-NAME-03", "names", PASS, f"Account holder '{holder}' {note}", evidence={"holder": holder, "score": best.score, "candidate": lbl}))
         elif best.status == M.PARTIAL:
-            add(R("R-NAME-03", "names", FAIL, f"Account holder '{holder}' only partly matches ({best.score})", "REVIEW",
+            add(R("R-NAME-03", "names", FAIL, f"Account holder '{holder}' only partly matches ({best.score}{'; ' + best.note if best.note else ''})", "REVIEW",
                   {"holder": holder, "score": best.score}, internal="Borderline holder name: verify the account belongs to the vendor."))
         elif best.status == M.UNREADABLE:
             add(R("R-NAME-03", "names", FAIL, "Account holder name couldn't be read", "VENDOR", vendor_text=reupload("bank_proof", "account holder name")))
@@ -481,9 +484,15 @@ def evaluate(ctx: Context) -> list[R]:
         else:
             holder = b.data.get("holder_name", "")
             cands = names_ok + ([val(gst_doc, "legal_name")[0]] if (gst_doc and bt == "PROPRIETORSHIP") else [])
-            ok = any(M.compare_name(n, holder, individual=individual).status == M.MATCH for n in cands if n)
-            add(R("R-SRC-BANK", "sources", PASS if ok else FAIL, f"Bank confirms the account holder is '{holder}'" + ("" if ok else ", not the applicant"),
-                  "REVIEW", {"source": b.source, "holder": holder}, internal="" if ok else "The bank says this account belongs to someone else.", fraud=not ok))
+            res = [M.compare_name(n, holder, individual=individual) for n in cands if n]
+            ok = any(r.status == M.MATCH for r in res)
+            near = next((r for r in res if r.status == M.PARTIAL and r.note), None)   # e.g. initials + a designated account
+            if not ok and near:
+                add(R("R-SRC-BANK", "sources", FAIL, f"Bank names the account holder '{holder}': {near.note}", "REVIEW",
+                      {"source": b.source, "holder": holder}, internal="Confirm the designated account belongs to the vendor (call the bank or the vendor's accounts office)."))
+            else:
+                add(R("R-SRC-BANK", "sources", PASS if ok else FAIL, f"Bank confirms the account holder is '{holder}'" + ("" if ok else ", not the applicant"),
+                      "REVIEW", {"source": b.source, "holder": holder}, internal="" if ok else "The bank says this account belongs to someone else.", fraud=not ok))
     c = ctx.sources.get("cin")
     if c:
         add(R("R-SRC-CIN", "sources", PASS if c.status == "FOUND" else WARN,

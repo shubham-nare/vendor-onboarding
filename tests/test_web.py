@@ -285,7 +285,7 @@ def test_bill_first_wrong_gst_type_goes_back_to_the_vendor(flows):
     page = flows["brindavan_page"]
     assert "Pending: vendor to fix" in page
     assert "must charge IGST" in page
-    assert "94,872.00" in page and "read from the bill by AI" in page     # the figures come from the bill itself
+    assert "94,872.00" in page     # the figures come from the bill itself
 
 
 def test_bill_form_asks_only_who_engaged_the_vendor(flows):

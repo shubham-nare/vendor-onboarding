@@ -44,7 +44,10 @@ async def ifsc_lookup(ifsc: str, *, timeout: float = 3.0) -> SourceResult:
     code = (ifsc or "").strip().upper()
     try:
         async with httpx.AsyncClient(timeout=timeout) as c:
-            r = await c.get(f"https://ifsc.razorpay.com/{code}")
+            try:
+                r = await c.get(f"https://ifsc.razorpay.com/{code}")
+            except httpx.TransportError:   # one retry: a dropped connection is common on mobile networks
+                r = await c.get(f"https://ifsc.razorpay.com/{code}", timeout=timeout * 2)
         if r.status_code == 200:
             d = r.json()
             return SourceResult("Razorpay IFSC directory (live)", "FOUND", True,

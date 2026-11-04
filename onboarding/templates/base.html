@@ -188,7 +188,7 @@
   {%- endmacro %}
   {% macro persona(menu_cls, compact=false) -%}
     <details class="persona relative min-w-0 {{ '' if compact else 'w-full' }}">
-      <summary class="flex items-center gap-2.5 rounded-lg text-slate-900 {{ 'p-1 hover:bg-slate-100' if compact else 'w-full border border-slate-200 bg-white hover:bg-slate-50 p-2' }} select-none" aria-label="Acting as {{ actor.name }}, {{ ROLE_LABEL[actor.role] }}. Change person">
+      <summary class="flex items-center gap-2.5 rounded-lg text-slate-900 {{ 'p-1 hover:bg-slate-100' if compact else 'w-full border border-slate-200 bg-white hover:bg-slate-50 p-2' }} select-none" aria-label="{{ actor.name }}, {{ ROLE_LABEL[actor.role] }}. Switch person">
         {{ avatar(actor, 'h-8 w-8 text-[11.5px]' if compact else 'h-9 w-9 text-[12px]') }}
         <span class="leading-tight text-left min-w-0 flex-1 {{ 'hidden sm:block' if compact }}">
           <span class="block text-[13.5px] font-semibold truncate">{{ actor.name }}</span>
@@ -199,7 +199,7 @@
       <form method="post" action="/act-as" class="absolute {{ menu_cls }} z-50 w-[23rem] max-w-[calc(100vw-2rem)] rounded-xl border border-slate-200 bg-white text-slate-900 shadow-pop overflow-hidden fade-in">
         <div class="px-4 pt-3.5 pb-3 border-b border-slate-100 bg-slate-50">
           <div class="text-[13px] font-semibold">Switch person </div>
-          <p class="text-[12.5px] text-slate-600 mt-1 leading-snug">{% if staff %}Logged in as <b>{{ staff.name }}</b>. {% endif %}Act as anyone without logging out, to see what each person is allowed to do. In production each person logs in as themselves.</p>
+          {% if staff %}<p class="text-[12.5px] text-slate-600 mt-1 leading-snug">Logged in as <b>{{ staff.name }}</b></p>{% endif %}
         </div>
         <ul class="p-1.5">
           {% for e in employees %}

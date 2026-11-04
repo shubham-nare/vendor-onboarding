@@ -123,8 +123,12 @@ def assess(raw: bytes, mime: str, read: DocRead | None) -> Authenticity:
         # only asks for a human look. Corroborating signals below raise it to the fraud class.
         add("AU-2", "review", f"Document appears {what} (AI visual judgement, needs a human look)", read.document_form_evidence)
     if read and read.garbled_or_misspelled_text and form != "HANDWRITTEN_OR_PLAIN_PAPER":
-        add("AU-2", "fraud", "Printed text is garbled or misspelled (genuine bank/government printing never is)",
-            ", ".join(read.garbled_or_misspelled_text[:5]))
+        if doc_type == "BANK_LETTER" and form != "AI_GENERATED":
+            # a mandate or letter is typed by the vendor's own office and stamped by the bank: typos happen
+            add("AU-2", "warn", "Typing errors in the letter", ", ".join(read.garbled_or_misspelled_text[:5]))
+        else:
+            add("AU-2", "fraud", "Printed text is garbled or misspelled (genuine bank/government printing never is)",
+                ", ".join(read.garbled_or_misspelled_text[:5]))
     if read and any(re.search(r"sparkle|gemini|dall-?e|midjourney|stable diffusion|\bai[- ](?:generated|generator|watermark|logo|icon)|made with ai", w, re.I) for w in read.visible_watermarks_or_logos):
         add("AU-2", "fraud", "An AI generator's watermark is visible", ", ".join(read.visible_watermarks_or_logos[:3]))
     if read and read.obscured_regions:

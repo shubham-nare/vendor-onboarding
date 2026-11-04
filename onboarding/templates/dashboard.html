@@ -16,7 +16,6 @@
   <div>
     <h1>{% if actor %}Welcome back, {{ actor.name.split()[0] }}{% else %}Home{% endif %}</h1>
     <p class="text-slate-500 text-[14.5px] mt-1.5">{% if todo %}{{ todo | length }} thing{{ 's' if todo | length != 1 }} waiting for your decision.{% else %}Nothing is waiting for your decision.{% endif %}</p>
-    {% if not full %}<p class="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[12.5px] text-amber-900">{{ icon('lock', 'h-3.5 w-3.5') }} Requester view: only the vendors you asked for, and bills that name you.</p>{% endif %}
   </div>
   <a href="/invites" class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold px-4 py-2.5 hover:bg-indigo-700 shadow-sm">{{ icon('plus') }} Invite a vendor</a>
 </div>
@@ -38,7 +37,7 @@
 <section class="bg-white border rounded-xl min-w-0">
   <div class="px-4 sm:px-5 py-4 border-b border-slate-100">
     <h2 class="text-[16px]">Waiting for you {% if todo %}<span class="ml-1.5 inline-flex items-center justify-center rounded-full bg-amber-500 text-white text-[11.5px] font-semibold h-5 min-w-[20px] px-1.5 align-middle">{{ todo | length }}</span>{% endif %}</h2>
-    <p class="text-[12.5px] text-slate-500 mt-0.5">{% if actor %}What you can decide now, as {{ ROLE_LABEL[actor.role] }}. Most urgent first.{% else %}Sign in to see your queue.{% endif %}</p>
+    <p class="text-[12.5px] text-slate-500 mt-0.5">Most urgent first</p>
   </div>
   {% if todo %}
   <ul class="divide-y divide-slate-100">
@@ -76,7 +75,7 @@
   <div class="px-4 sm:px-5 py-4 border-b border-slate-100 flex flex-wrap items-baseline justify-between gap-2">
     <div>
       <h2 class="text-[16px]">Waiting on vendors <span class="ml-1.5 inline-flex items-center justify-center bg-amber-500 text-white text-[11.5px] font-semibold h-5 min-w-[20px] px-1.5 align-middle">{{ chasing | length }}</span></h2>
-      <p class="text-[12.5px] text-slate-500 mt-0.5">We chase these for you: a reminder after {{ FU.REMIND_AFTER_DAYS }} days, and after {{ FU.ESCALATE_AFTER_DAYS }} days a second reminder plus a note to the person who asked for the vendor.</p>
+      <p class="text-[12.5px] text-slate-500 mt-0.5">Reminder after {{ FU.REMIND_AFTER_DAYS }} days · escalated to the requester after {{ FU.ESCALATE_AFTER_DAYS }} days</p>
     </div>
   </div>
   <table class="w-full text-[13px]">
@@ -99,7 +98,6 @@
 </section>
 {% endif %}
 
-{% if full %}<p class="text-[12.5px] text-slate-500">Everything else is under <b class="font-medium text-slate-600">In depth</b> in the menu: <a class="text-indigo-700 hover:underline" href="/vendors">Vendors</a> · <a class="text-indigo-700 hover:underline" href="/applications">Applications</a> · <a class="text-indigo-700 hover:underline" href="/relationships">Relationships</a> · <a class="text-indigo-700 hover:underline" href="/audit">History</a> · <a class="text-indigo-700 hover:underline" href="/documents">Documents</a></p>{% endif %}
 
 {% if DEMO_TOOLS %}
 <details class="bg-white rounded-xl border overflow-hidden">

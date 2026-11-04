@@ -54,7 +54,7 @@ def can_open_bill(actor, vbill) -> bool:
 
 def forbid(what: str = "This") -> HTTPException:
     return HTTPException(403, f"{what} is visible to the Procurement reviewer and the Finance controller only. "
-                              "Requesters see their own requests (switch 'Acting as' to see another person's view).")
+                              "Requesters see their own requests.")
 
 
 def require_full(actor, what: str) -> None:

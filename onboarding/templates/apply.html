@@ -138,14 +138,14 @@
 
     <section class="bg-white rounded-xl border p-4 sm:p-5">
       <h2 class="text-xl flex items-baseline gap-3"><span class="mono text-[12px] text-indigo-600 tracking-widest">04</span>Documents</h2>
-      <p class="text-xs text-slate-500 mt-1">All documents are required. PDF, JPG or PNG, up to 10 MB each. Please upload the original files: the GST certificate as downloaded from the GST portal, and clear photos or scans of the PAN card and a cancelled cheque.</p>
+      <p class="text-xs text-slate-500 mt-1">All documents are required. PDF, JPG or PNG, up to 10 MB each. Please upload the original files: the GST certificate as downloaded from the GST portal, and clear photos or scans of the PAN card and a cancelled cheque (or a bank-certified mandate letter). Government bodies, universities and trusts don't need a PAN card: the PAN is taken from the GST certificate.</p>
       <div class="mt-4 space-y-3 text-sm">
         {% for slot in ['gst_certificate', 'pan_card', 'bank_proof', 'udyam_certificate'] %}
-        <div class="grid gap-2 sm:grid-cols-[11rem_1fr] lg:grid-cols-[12rem_1fr_12rem] sm:items-center sm:gap-4 rounded-lg border px-3 py-3 sm:py-2.5" {{ 'data-msme' if slot == 'udyam_certificate' }} {{ 'data-in' if slot in ('gst_certificate', 'pan_card') }}>
+        <div class="grid gap-2 sm:grid-cols-[11rem_1fr] lg:grid-cols-[12rem_1fr_12rem] sm:items-center sm:gap-4 rounded-lg border px-3 py-3 sm:py-2.5" {{ 'data-msme' if slot == 'udyam_certificate' }} {{ 'data-in' if slot in ('gst_certificate', 'pan_card') }} {{ 'data-show="PVT_LTD PUBLIC_LTD LLP PARTNERSHIP PROPRIETORSHIP"' | safe if slot == 'pan_card' }}>
           <div class="font-medium">{{ SLOT_LABEL[slot] }}{{ REQ }}</div>
           <input type="file" name="{{ slot }}" {{ 'data-req' if not (prev_docs.get(slot) or demo_files.get(slot)) }} {{ 'data-gst' if slot == 'gst_certificate' }} aria-label="{{ SLOT_LABEL[slot] }}" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/*" class="text-xs min-w-0 max-w-full">
           <div class="text-xs text-slate-500 sm:col-span-2 lg:col-span-1 lg:text-right truncate empty:hidden">
-            {%- if demo_files.get(slot) %}demo: <span class="mono">{{ demo_files[slot] }}</span>
+            {%- if demo_files.get(slot) %}attached: <span class="mono">{{ demo_files[slot] }}</span>
             {%- elif prev_docs.get(slot) %}keeps: <span class="mono">{{ prev_docs[slot].filename }}</span>{% endif -%}
           </div>
         </div>
@@ -163,7 +163,7 @@
         <div class="font-medium">Bill (tax invoice){{ REQ }}</div>
         <input type="file" name="invoice" {{ 'data-req' if not (prev_docs.get('invoice') or demo_files.get('invoice')) }} aria-label="Bill (tax invoice)" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/*" class="text-xs min-w-0 max-w-full">
         <div class="text-xs text-slate-500 sm:col-span-2 lg:col-span-1 lg:text-right truncate empty:hidden">
-          {%- if demo_files.get('invoice') %}demo: <span class="mono">{{ demo_files['invoice'] }}</span>
+          {%- if demo_files.get('invoice') %}attached: <span class="mono">{{ demo_files['invoice'] }}</span>
           {%- elif prev_docs.get('invoice') %}keeps: <span class="mono">{{ prev_docs['invoice'].filename }}</span>{% endif -%}
         </div>
       </div>

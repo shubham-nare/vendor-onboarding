@@ -344,6 +344,35 @@ def form(b: dict, business_type: str, *, msme: bool = False, udyam_no: str = "",
     }
 
 
+# Real vendors whose documents they publish themselves (on their own website, for sponsors and vendors).
+# The files stay on this laptop (private_inputs/published, git-ignored); the scenario appears only when they're there.
+IITBHU = {
+    "legal_name": "Indian Institute of Technology (Banaras Hindu University)",
+    "trade_name": "M/S Indian Institute of Technology (B.H.U.)",
+    "pan": "AAAJI0396R",
+    "gstin": "09AAAJI0396R1ZJ",
+    "address": "Indian Institute of Technology BHU, BHU Campus",
+    "city": "Varanasi",
+    "state": "Uttar Pradesh",
+    "pin": "221005",
+    "constitution": "Others",
+    "liability_date": "01/07/2017",
+    "bank": {"ifsc": "SBIN0011445", "bank": "State Bank of India", "branch": "IT Branch, Banaras Hindu University, Varanasi",
+             "account": "34923598941", "holder": "IIT (BHU) RESEARCH & DEVELOPMENT ACCOUNT", "type": "Current"},
+    "contact": {"name": "Dean (Research & Development) office", "email": "rnd.office@iitbhu-vendor.example.com", "phone": "0542 670 1808"},
+}
+
+PUBLISHED_SCENARIOS: dict[str, dict] = {
+    "real_iitbhu": {
+        "title": "Real documents: IIT (BHU) registers for an R&D consultancy",
+        "expected": "PENDING_REVIEW",
+        "form": form(IITBHU, "INSTITUTION"),
+        "files": {"gst_certificate": "iitbhu_gst_reg06.pdf", "bank_proof": "iitbhu_bank_mandate.pdf"},
+        "note": "The GST certificate and the bank's mandate letter are published by IIT (BHU) on its website. The account is in the "
+                "name of its R&D account ('IIT (BHU) Research & Development Account'), not the legal name, so a person decides.",
+    },
+}
+
 SCENARIOS: dict[str, dict] = {
     "happy_nilgiri": {
         "title": "Happy path: a clean, consistent submission",

@@ -205,6 +205,7 @@ BUSINESS_TYPES = {
     "LLP": "Limited Liability Partnership",
     "PARTNERSHIP": "Partnership Firm",
     "PROPRIETORSHIP": "Sole Proprietorship",
+    "INSTITUTION": "Government body, university or trust",
 }
 
 # PAN 4th character expected for each business type.
@@ -214,6 +215,7 @@ EXPECTED_PAN_CODE = {
     "LLP": "F",
     "PARTNERSHIP": "F",
     "PROPRIETORSHIP": "P",
+    "INSTITUTION": "JGTAL",   # artificial juridical person (IITs, universities), government, trust, AOP/society, local authority
 }
 
 _GSTIN_SHAPE_RE = re.compile(r"^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$")

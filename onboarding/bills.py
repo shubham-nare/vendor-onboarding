@@ -228,9 +228,9 @@ def allowed_bill_actions(b: VendorBill, actor: Employee | None, engaged: Employe
         why = ""
         if a in ("confirm_engagement", "deny_engagement"):
             if not actor or actor.id != b.engaged_employee_id:
-                why = f"Only {engaged.name}, who the vendor named, can answer this. Switch 'Acting as' to them."
+                why = f"Only {engaged.name}, who the vendor named, can answer this."
         elif not actor:
-            why = "Pick who you're acting as."
+            why = "Sign in as an employee first."
         elif actor.role == "sponsor" or actor.id == b.engaged_employee_id:
             why = "Segregation of duties: the employee who engaged the vendor can't approve or reject its bill."
         elif a == "approve_payment" and b.confirmation != "confirmed":
