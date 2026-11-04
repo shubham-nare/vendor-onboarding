@@ -140,3 +140,17 @@ class AuditEvent(Base):
     reason: Mapped[str] = mapped_column(Text, default="")
     detail: Mapped[dict] = mapped_column(JSON, default=dict)
     override: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class BillTag(Base):
+    """A teammate tagged on an invoice: who asked whom, about what, and the answer. Open until the tagged
+    person marks it done. Every tag and answer is also written to the invoice's audit trail."""
+    __tablename__ = "bill_tags"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    bill_id: Mapped[int] = mapped_column(ForeignKey("vendor_bills.id"), index=True)
+    from_employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id"))
+    to_employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id"), index=True)
+    note: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reply: Mapped[str] = mapped_column(Text, default="")

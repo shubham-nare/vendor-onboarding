@@ -406,7 +406,10 @@ async def bill_page(request: Request, bill_id: int):
         if not b:
             raise HTTPException(404, "No such bill")
         actor = await _actor(request, s)
-        if not access.can_open_bill(actor, b):
+        from onboarding.ap.models import BillTag
+        tags = (await s.execute(select(BillTag).where(BillTag.bill_id == b.id).order_by(BillTag.id))).scalars().all()
+        tagged_me = bool(actor and any(t.to_employee_id == actor.id for t in tags))
+        if not access.can_open_bill(actor, b) and not tagged_me:
             raise access.forbid("This bill")
         vm = (await s.execute(select(VendorMaster).where(VendorMaster.vendor_id == b.vendor_id))).scalar_one()
         app = await s.get(Application, b.application_id)
@@ -427,7 +430,57 @@ async def bill_page(request: Request, bill_id: int):
         return await render(request, s, "bill.html", b=b, vm=vm, app=app, acct=acct, engaged=engaged, reg_run=reg_run, facts=facts, other=other,
                             full=access.full_view(actor), full_bank=access.sees_full_bank(actor), case=case, po=po, po_lines=po_lines, audit=audit,
                             emps=emps, vendor=vendor, allowed=B.allowed_bill_actions(b, actor, engaged, case), labels=B.BILL_ACTION_LABEL, B=B,
-                            replies=suggested_replies(b, case, po, vm, BUYER))
+                            replies=suggested_replies(b, case, po, vm, BUYER), tags=tags, team=[e for e in emps.values() if not actor or e.id != actor.id])
+
+
+@router.post("/bills/{bill_id}/tag")
+async def bill_tag(request: Request, bill_id: int, to_employee_id: int = Form(...), note: str = Form("")):
+    """Tag a teammate on an invoice problem. They see it on Home and in their reminder, and get an email."""
+    from onboarding.ap.audit import record
+    from onboarding.ap.models import BillTag
+    note = note.strip()
+    async with sessions()() as s:
+        b = await s.get(VendorBill, bill_id)
+        if not b:
+            raise HTTPException(404, "No such bill")
+        actor = await _actor(request, s)
+        if not actor:
+            raise HTTPException(403, "Sign in first.")
+        mine = (await s.execute(select(BillTag).where(BillTag.bill_id == b.id, BillTag.to_employee_id == actor.id))).scalars().first()
+        if not access.can_open_bill(actor, b) and not mine:
+            raise access.forbid("This bill")
+        to = await s.get(Employee, to_employee_id)
+        if not to or to.id == actor.id:
+            raise HTTPException(400, "Pick a teammate to tag.")
+        if len(note) < 3:
+            raise HTTPException(400, "Say what you need from them.")
+        s.add(BillTag(bill_id=b.id, from_employee_id=actor.id, to_employee_id=to.id, note=note))
+        record(s, entity="invoice", entity_id=b.id, action="tagged", actor=actor, entity_label=b.ref, reason=f"{to.name}: {note}")
+        await s.commit()
+        ref, inv, to_email, frm = b.ref, b.invoice_number, to.email, actor.name
+    from onboarding import mailer
+    mailer.notify(to_email, f"{frm} tagged you on invoice {inv or ref}",
+                  f"{frm} tagged you on invoice {inv or ref} ({ref}):\n\n{note}\n\nOpen it: /bills/{bill_id}#team")
+    return RedirectResponse(f"/bills/{bill_id}#team", status_code=303)
+
+
+@router.post("/bills/{bill_id}/tag/{tag_id}/done")
+async def bill_tag_done(request: Request, bill_id: int, tag_id: int, reply: str = Form("")):
+    """The tagged teammate answers and closes the tag."""
+    from onboarding.ap.audit import record
+    from onboarding.ap.models import BillTag
+    async with sessions()() as s:
+        tag = await s.get(BillTag, tag_id)
+        actor = await _actor(request, s)
+        if not tag or tag.bill_id != bill_id:
+            raise HTTPException(404, "No such tag")
+        if not actor or actor.id != tag.to_employee_id:
+            raise HTTPException(403, "Only the person tagged can answer this.")
+        tag.done_at, tag.reply = now(), reply.strip()
+        b = await s.get(VendorBill, bill_id)
+        record(s, entity="invoice", entity_id=bill_id, action="tag_answered", actor=actor, entity_label=b.ref if b else "", reason=tag.reply)
+        await s.commit()
+    return RedirectResponse(f"/bills/{bill_id}#team", status_code=303)
 
 
 @router.post("/bills/{bill_id}/action")

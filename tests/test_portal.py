@@ -206,6 +206,22 @@ def flows(tmp_path_factory):
             staff.cookies.set("actor", "2")
             out["rahul_action"] = (await staff.post(f"/bills/{bid2}/action", data={"action": "confirm_engagement"})).status_code
             staff.cookies.set("actor", "3")
+            # tag a teammate: Arjun asks Rahul about the invoice; Rahul sees it, opens it, answers
+            out["rahul_bill_before_tag"] = seen[2]["bill"].status_code
+            out["tag"] = (await staff.post(f"/bills/{bid2}/tag", data={"to_employee_id": "2", "note": "Did the team ask Kesari for this extra cleaning?"})).status_code
+            out["tag_self"] = (await staff.post(f"/bills/{bid2}/tag", data={"to_employee_id": "3", "note": "me"})).status_code
+            staff.cookies.set("actor", "2")
+            out["rahul_console_tagged"] = (await staff.get("/console")).text
+            page = await staff.get(f"/bills/{bid2}")
+            out["rahul_bill_tagged"] = page
+            tag_id = re.search(r'/bills/\d+/tag/(\d+)/done', page.text).group(1)
+            staff.cookies.set("actor", "1")
+            out["tag_wrong_person"] = (await staff.post(f"/bills/{bid2}/tag/{tag_id}/done", data={"reply": "x"})).status_code
+            staff.cookies.set("actor", "2")
+            out["tag_done"] = (await staff.post(f"/bills/{bid2}/tag/{tag_id}/done", data={"reply": "Yes, I asked them on 2 Nov."})).status_code
+            out["rahul_console_after"] = (await staff.get("/console")).text
+            staff.cookies.set("actor", "3")
+            out["bill_after_tag"] = (await staff.get(f"/bills/{bid2}")).text
 
             await other.post("/vendor/register", data={"company_name": "Someone Else", "contact_name": "A B", "email": "a@else.example.com", "password": PW})
             out["other_bill"] = (await other.get(f"/vendor/bills/{bid}")).status_code
@@ -507,3 +523,14 @@ def test_ready_replies_carry_the_right_figures():
     assert "27AAKCK4417F1ZJ" in replies["gstin"]["text"]
     assert "price" not in replies                                    # rates matched: no reply about them
     assert {"clear_copy", "addressed"} <= set(replies)               # the general ones are always there
+
+
+def test_tag_a_teammate_on_an_invoice(flows):
+    assert flows["rahul_bill_before_tag"] == 403                      # not his bill ...
+    assert flows["tag"] == 303 and flows["tag_self"] == 400
+    assert "tagged you" in flows["rahul_console_tagged"]              # ... until he is tagged on it
+    assert flows["rahul_bill_tagged"].status_code == 200 and "Mark done" in flows["rahul_bill_tagged"].text
+    assert flows["tag_wrong_person"] == 403 and flows["tag_done"] == 303
+    assert "tagged you" not in flows["rahul_console_after"]
+    page = flows["bill_after_tag"]
+    assert "@Rahul Desai" in page and "Yes, I asked them on 2 Nov." in page and "Tag a teammate" in page

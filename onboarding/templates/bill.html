@@ -228,6 +228,37 @@
         {% endif %}
       </section>
 
+      <section id="team" class="bg-white rounded-xl border p-4 sm:p-5">
+        <h2 class="text-[16px]">Team</h2>
+        {% for t in tags %}
+          {% set by, to = emps.get(t.from_employee_id), emps.get(t.to_employee_id) %}
+          <div class="mt-3 border border-l-4 {{ 'border-emerald-200 border-l-emerald-500 bg-emerald-50' if t.done_at else 'border-violet-200 border-l-violet-500 bg-violet-50' }} p-3 text-[13px]">
+            <div class="flex flex-wrap items-baseline gap-x-2"><b>{{ by.name if by else '?' }}</b> <span class="text-slate-500">tagged</span> <b>@{{ to.name if to else '?' }}</b>
+              <span class="ml-auto text-[12px] text-slate-500">{{ t.created_at | dt }}</span></div>
+            <p class="mt-1 text-slate-800 whitespace-pre-wrap">{{ t.note }}</p>
+            {% if t.done_at %}
+              <p class="mt-2 text-emerald-800"><b>{{ to.name.split()[0] if to else '' }}:</b> {{ t.reply or 'Done.' }} <span class="text-[12px] text-slate-500">· {{ t.done_at | dt }}</span></p>
+            {% elif actor and to and actor.id == to.id %}
+              <form method="post" action="/bills/{{ b.id }}/tag/{{ t.id }}/done" class="mt-2 flex flex-wrap gap-2">
+                <input name="reply" class="flex-1 min-w-[12rem] border px-3 py-2 text-[13px]" placeholder="Your answer (optional)" aria-label="Your answer">
+                <button class="bg-emerald-600 text-white px-4 py-2 text-[13px] font-semibold hover:bg-emerald-700">Mark done</button>
+              </form>
+            {% else %}<p class="mt-1 text-[12px] text-violet-700">Waiting for {{ to.name.split()[0] if to else 'them' }}</p>{% endif %}
+          </div>
+        {% endfor %}
+        {% if actor %}
+        <form method="post" action="/bills/{{ b.id }}/tag" class="mt-3 border border-l-4 border-violet-200 border-l-violet-500 bg-violet-50 p-4">
+          <label class="block text-[13px] font-bold text-violet-900" for="tag-to">Tag a teammate</label>
+          <select id="tag-to" name="to_employee_id" required class="mt-2 w-full border px-3 py-2 text-[14px] bg-white">
+            <option value="">Choose someone</option>
+            {% for e in team %}<option value="{{ e.id }}">{{ e.name }} · {{ ROLE_LABEL[e.role] }}</option>{% endfor %}
+          </select>
+          <textarea name="note" rows="3" required class="mt-2 w-full border px-3 py-2 text-[14px] bg-white" placeholder="What do you need from them? e.g. Did we receive all 40 cartons on PO-2026-0012?" aria-label="Note for your teammate"></textarea>
+          <button class="mt-2 bg-violet-600 text-white px-5 py-2.5 text-[13.5px] font-semibold hover:bg-violet-700">Tag</button>
+        </form>
+        {% endif %}
+      </section>
+
       {% if full %}
       <section class="bg-white rounded-xl border p-4 sm:p-5" id="payment">
         <h2 class="text-[16px]">Payment</h2>

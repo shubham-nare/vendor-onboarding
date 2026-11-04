@@ -269,7 +269,7 @@
 
   {% else %}
   {% set NAV = [('Approvals', [('/console', 'Home'), ('/review', 'Review'), ('/invoices', 'Invoices'), ('/invites', 'Invites')]),
-                ('In depth', [('/vendors', 'Vendors'), ('/applications', 'Applications'), ('/purchase-orders', 'Orders'), ('/relationships', 'Relationships'), ('/audit', 'History'), ('/documents', 'Documents')]),
+                ('In depth', [('/vendors', 'Vendors'), ('/applications', 'Applications'), ('/purchase-orders', 'Orders'), ('/audit', 'History'), ('/documents', 'Documents')]),
                 ('Settings', [('/supplier-accounts', 'Accounts'), ('/outbox', 'Outbox'), ('/check', 'Checker'), ('/system', 'System')])] %}
   {% set REVIEWER_ONLY = ['/relationships', '/purchase-orders', '/audit', '/documents', '/supplier-accounts', '/outbox', '/check', '/system'] %}
   {% set reviewer = actor and actor.role in ('maker', 'checker') %}

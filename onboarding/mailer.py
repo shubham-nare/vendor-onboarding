@@ -125,6 +125,21 @@ async def deliver_note(message_id: int, to_addr: str) -> bool:
         return False
 
 
+def notify(to_addr: str, subject: str, body: str) -> None:
+    """Email an employee (a tag on an invoice) in the background. Does nothing when email isn't set up."""
+    if not (configured() and to_addr):
+        return
+
+    async def go():
+        try:
+            await asyncio.to_thread(_smtp_send, compose(subject, body, [to_addr]))
+        except Exception as e:
+            log.warning("notification to %s failed: %s", to_addr, type(e).__name__)
+    task = asyncio.create_task(go())
+    _tasks.add(task)
+    task.add_done_callback(_tasks.discard)
+
+
 def start(run_id: int) -> None:
     """Deliver in the background, so a decision page never waits on the mail server."""
     task = asyncio.create_task(deliver_for_run(run_id))

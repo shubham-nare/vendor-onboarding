@@ -329,6 +329,16 @@ async def _dashboard_ctx(request: Request, s) -> dict:
     from onboarding.ap.models import InvoiceCase
     bill_cases = {c.bill_id: c for c in (await _reads(c=_all(select(InvoiceCase))))["c"]}
     todo = _todo(actor, runs, sponsors, emps, r["acted"], r["open_vbills"], bill_cases)
+    if actor:   # invoices a teammate tagged me on come first: someone is waiting for my answer
+        from onboarding.ap.models import BillTag
+        mine = (await _reads(t=_rows(select(BillTag, VendorBill).join(VendorBill, VendorBill.id == BillTag.bill_id)
+                                    .where(BillTag.to_employee_id == actor.id, BillTag.done_at.is_(None)).order_by(BillTag.id))))["t"]
+        names = {x["app"].id: x["app"].legal_name for x in runs}
+        tagged = [dict(href=f"/bills/{vb.id}#team", ref=vb.ref, name=names.get(vb.application_id, vb.vendor_id), verb="Answer",
+                       detail=f"{emps[tg.from_employee_id].name.split()[0] if tg.from_employee_id in emps else 'A teammate'} tagged you: {tg.note[:70]}",
+                       status="BILL", risk=vb.risk_tier, fraud=False, since=tg.created_at, amount=vb.amount, waiting=_waiting(tg.created_at))
+                  for tg, vb in mine]
+        todo = tagged + [t for t in todo if t["href"] not in {x["href"].split("#")[0] for x in tagged}]
     work = await _work_summary(s, actor, full, counts, todo)
     vnames = {pk: (vid, name) for pk, vid, name in r.get("vnames", [])}
     alerts = [dict(ev=ev, vendor=vend, related=vnames.get(ev.related_vendor_pk)) for ev, vend in r.get("alerts", [])]
