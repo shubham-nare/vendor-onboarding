@@ -2,6 +2,92 @@
 {% from "_macros.html" import icon %}
 {% block title %}Welcome{% endblock %}
 {% block content %}
+{# the moving sky behind the home page: clouds drift, parcels ride the cables, everything leans a little toward the cursor #}
+<style>
+  .sky { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none;
+         background: linear-gradient(180deg, #CFE2FA 0%, #E2EEFC 38%, #EEF4FC 70%, #F5F7FB 100%); }
+  .sky-glow { position: absolute; inset: 0; background: radial-gradient(520px circle at var(--cx, 50%) var(--cy, 30%), rgba(255,255,255,.55), transparent 65%); transition: background .2s linear; }
+  .sky-layer { position: absolute; inset: -24px; transition: transform .9s cubic-bezier(.2,.7,.2,1); will-change: transform; }
+  .sky-far  { transform: translate(calc(var(--mx, 0) * -8px),  calc(var(--my, 0) * -5px)); }
+  .sky-near { transform: translate(calc(var(--mx, 0) * -20px), calc(var(--my, 0) * -12px)); }
+  .cloud { position: absolute; left: 0; border-radius: 999px; background: #fff; filter: blur(14px); opacity: .75;
+           animation: drift linear infinite; }
+  .cloud::before, .cloud::after { content: ""; position: absolute; border-radius: 999px; background: inherit; }
+  .cloud::before { width: 55%; height: 140%; left: 14%; top: -55%; }
+  .cloud::after  { width: 40%; height: 115%; right: 12%; top: -38%; }
+  @keyframes drift { from { transform: translateX(-30vw); } to { transform: translateX(130vw); } }
+  .sky svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  @media (prefers-reduced-motion: reduce) { .cloud { animation: none; } .sky-layer, .sky-glow { transition: none; } }
+</style>
+<div class="sky" id="sky" aria-hidden="true">
+  <div class="sky-glow"></div>
+  <div class="sky-layer sky-far">
+    <div class="cloud" style="top: 9%;  width: 220px; height: 54px; animation-duration: 140s; animation-delay: -30s"></div>
+    <div class="cloud" style="top: 26%; width: 160px; height: 40px; animation-duration: 170s; animation-delay: -110s; opacity: .6"></div>
+    <div class="cloud" style="top: 58%; width: 260px; height: 60px; animation-duration: 190s; animation-delay: -70s; opacity: .55"></div>
+    <div class="cloud" style="top: 80%; width: 180px; height: 44px; animation-duration: 155s; animation-delay: -140s; opacity: .6"></div>
+  </div>
+  <div class="sky-layer sky-near">
+    <svg viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice">
+      <defs>
+        {# a parcel hanging from its trolley; the group is moved along a cable #}
+        <g id="parcel">
+          <circle r="4" fill="#fff" stroke="#7FA3CF" stroke-width="1.5"/>
+          <path d="M0 4 V15" stroke="#7FA3CF" stroke-width="1.5"/>
+          <rect x="-13" y="15" width="26" height="21" rx="3.5" fill="#F3DDB8" stroke="#C9A06A" stroke-width="1.2"/>
+          <path d="M-13 22 H13" stroke="#E2BE88" stroke-width="3"/>
+          <path d="M0 15 V36" stroke="#E2BE88" stroke-width="3" opacity=".7"/>
+        </g>
+        <g id="parcel-blue">
+          <circle r="4" fill="#fff" stroke="#7FA3CF" stroke-width="1.5"/>
+          <path d="M0 4 V13" stroke="#7FA3CF" stroke-width="1.5"/>
+          <rect x="-11" y="13" width="22" height="17" rx="3.5" fill="#DCEBFF" stroke="#6E9BD6" stroke-width="1.2"/>
+          <path d="M-11 19 H11" stroke="#9EC2F0" stroke-width="2.5"/>
+        </g>
+      </defs>
+      {# three ropeways, each sagging between posts #}
+      <g fill="none" stroke="#8FB0D8" stroke-width="1.6" stroke-linecap="round" opacity=".75">
+        <path id="cable-a" d="M-80 132 Q 160 190 400 132 T 880 132 T 1360 132 T 1840 132"/>
+        <path id="cable-b" d="M-80 610 Q 200 680 480 610 T 1040 610 T 1600 610"/>
+        <path id="cable-c" d="M-80 812 Q 140 860 360 812 T 800 812 T 1240 812 T 1680 812" opacity=".7"/>
+      </g>
+      <g fill="#fff" stroke="#8FB0D8" stroke-width="1.5" opacity=".9">
+        {% for x, y in [(400, 132), (880, 132), (1360, 132), (480, 610), (1040, 610), (360, 812), (800, 812), (1240, 812)] %}<circle cx="{{ x }}" cy="{{ y }}" r="5"/>{% endfor %}
+      </g>
+      {# parcels: [cable, which box, seconds to cross, start offset, backwards?] #}
+      {% for cable, box, dur, start, back in [
+          ('a', 'parcel', 46, 0, false), ('a', 'parcel-blue', 46, 15, false), ('a', 'parcel', 46, 31, false),
+          ('b', 'parcel-blue', 58, 4, true), ('b', 'parcel', 58, 24, true), ('b', 'parcel-blue', 58, 43, true),
+          ('c', 'parcel', 70, 10, false), ('c', 'parcel-blue', 70, 45, false)] %}
+      <use href="#{{ box }}" opacity="{{ '.85' if cable != 'c' else '.6' }}">
+        <animateMotion dur="{{ dur }}s" begin="{{ -start }}s" repeatCount="indefinite" calcMode="linear"{% if back %} keyPoints="1;0" keyTimes="0;1"{% endif %}>
+          <mpath href="#cable-{{ cable }}"/>
+        </animateMotion>
+      </use>
+      {% endfor %}
+    </svg>
+  </div>
+</div>
+<script>
+  (() => {
+    const sky = document.getElementById('sky');
+    if (!sky) return;
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) { sky.querySelector('svg').pauseAnimations(); return; }
+    let raf = 0, ev = null;
+    addEventListener('pointermove', e => {
+      ev = e;
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        const mx = ev.clientX / innerWidth * 2 - 1, my = ev.clientY / innerHeight * 2 - 1;
+        sky.style.setProperty('--mx', mx.toFixed(3));
+        sky.style.setProperty('--my', my.toFixed(3));
+        sky.style.setProperty('--cx', ev.clientX + 'px');
+        sky.style.setProperty('--cy', ev.clientY + 'px');
+      });
+    }, { passive: true });
+  })();
+</script>
 <div class="reveal max-w-7xl mx-auto">
   <div class="text-center max-w-2xl mx-auto pt-2 sm:pt-6">
     <span class="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-white px-3 py-1 text-[12.5px] font-medium text-indigo-700 shadow-sm"><span class="h-1.5 w-1.5 rounded-full bg-indigo-600"></span>Vendor onboarding &amp; bills</span>
