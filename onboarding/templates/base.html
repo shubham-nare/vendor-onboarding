@@ -482,7 +482,7 @@
 
   </div>
   {% endif %}
-  {% if actor %}
+  {% if actor and not (landing or vendor_page) %}   {# staff pages only: public and supplier pages have no counts #}
   {# bottom-right reminder: decisions still waiting (amber); nothing shows when the queue is empty #}
   {% if path != '/console' %}<aside id="pending-note" hidden role="status" aria-live="polite" class="bg-white border border-amber-300 border-l-4 border-l-amber-500 text-[13px]">
     <div class="flex items-start gap-3 px-4 py-3">
@@ -527,7 +527,13 @@
           remind(d);
         } catch (e) { if (tries > 0) setTimeout(() => load(tries - 1), 1500); }
       };
+      // Home, Review and Applications already have the count in the page: no request now, only the minute refresh
+      {% if todo is defined %}
+      const fresh = { count: {{ todo | length }}, apps: {{ todo | rejectattr('status', 'in', ['BILL', 'CHANGE']) | list | length }} };
+      try { sessionStorage.setItem(KEY, fresh.count); sessionStorage.setItem(AKEY, fresh.apps); } catch (e) {}
+      {% else %}
       load(1);
+      {% endif %}
       setInterval(() => { if (!document.hidden) load(0); }, 60000);
       document.addEventListener('visibilitychange', () => { if (!document.hidden) load(0); });
     })();
