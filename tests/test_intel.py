@@ -102,7 +102,7 @@ def intel(tmp_path_factory):
             await c.post("/company/login", data={"email": DEMO_COMPANY_EMAIL, "password": DEMO_PASSWORD})
             rangoli, deccan = out["vendor_of"]["shared_bank_rangoli"][0], out["deccan"].vendor_id
             c.cookies.set("actor", str(emp["maker"]))
-            out["dir"] = (await c.get("/vendors")).text
+            out["dir"] = (await c.get("/api/v1/vendors")).text
             out["rangoli_page"] = (await c.get(f"/vendors/{rangoli}")).text
             out["deccan_page"] = (await c.get(f"/vendors/{deccan}")).text
             out["dash"] = (await c.get("/api/v1/console/home")).text
@@ -111,7 +111,7 @@ def intel(tmp_path_factory):
             out["accounts"] = (await c.get("/supplier-accounts")).status_code
             c.cookies.set("actor", str(emp["Priya Nair"]))          # didn't request Rangoli
             out["priya_rangoli"] = (await c.get(f"/vendors/{rangoli}")).status_code
-            out["priya_dir"] = (await c.get("/vendors")).text
+            out["priya_dir"] = (await c.get("/api/v1/vendors")).text
             c.cookies.set("actor", str(emp["Rahul Desai"]))         # requested Rangoli
             out["rahul_rangoli"] = (await c.get(f"/vendors/{rangoli}")).text
             # counterfactuals: same rules, a copy of the saved input, nothing real touched

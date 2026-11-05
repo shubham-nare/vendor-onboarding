@@ -246,3 +246,26 @@ async def invoices(request: Request, status: str = "", q: str = "", vendor: str 
     return {"invoices": rows, "chips": chips, "full": full, "total": d["total"] if full else None,
             "vendors": [{"id": v, "name": n} for v, n in d["vendors_seen"]],
             "filters": {"status": status, "q": q, "vendor": vendor, "amin": amin, "amax": amax, "sort": sort}}
+
+
+# --- vendors -------------------------------------------------------------------------------------------------------
+@router.get("/vendors")
+async def vendors(request: Request, q: str = "", status: str = "", risk: str = "", pay: str = "", inv: str = "", sort: str = ""):
+    """One row per legal entity. Requesters see only the vendors they asked for, without PAN, GSTIN or risk."""
+    from onboarding.intel.vendor360 import STATUS_TEXT
+    from onboarding.web import vendor_directory
+    async with read_sessions()() as s:
+        await _staff_or_401(request, s)
+    d = await vendor_directory(request, q, status, risk, pay, inv, sort)
+    full = d["full"]
+    out = []
+    for r in d["rows"]:
+        v = r["v"]
+        own = [f for f in r["flags"] if f != "linked"]
+        out.append({"id": v.vendor_id, "name": v.display_name, "erp_id": v.erp_vendor_id, "status": v.status, "status_label": STATUS_TEXT.get(v.status, v.status),
+                    "latest_application": r["apps"][-1].ref if r["apps"] else None,
+                    "pan": r["pan"] or None if full else None, "gstins": r["gstins"][:2] if full else [],
+                    "risk": ({"open": len(own), "fraud": "fraud" in own, "linked": "linked" in r["flags"]} if full else None),
+                    "payment": r["pay"], "active_invoices": r["msum"]["active"], "awaiting_review": r["msum"]["awaiting_review"],
+                    "approved_unpaid": r["msum"]["approved_unpaid"], "last_activity": _when(r["last"]), "next": r["next"] or None})
+    return {"vendors": out, "full": full, "filters": {"q": q, "status": status, "risk": risk, "pay": pay, "inv": inv, "sort": sort}}

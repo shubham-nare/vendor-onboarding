@@ -1312,9 +1312,15 @@ def _owned_app_ids(actor, apps, invites: dict, bills: dict) -> set[int]:
     return {a.id for a in apps if access.owns_application(actor, invites.get(a.invite_id), bills.get(a.id))}
 
 
-@router.get("/vendors", response_class=HTMLResponse)
-async def vendor_directory(request: Request, q: str = "", status: str = "", risk: str = "", pay: str = "", inv: str = "", sort: str = ""):
-    """Every canonical vendor: one row per legal entity, however many applications it made."""
+@router.get("/vendors")
+async def vendor_directory_page():
+    """Drawn by the browser app from GET /api/v1/vendors."""
+    from onboarding.appshell import app_shell
+    return app_shell()
+
+
+async def vendor_directory(request: Request, q: str = "", status: str = "", risk: str = "", pay: str = "", inv: str = "", sort: str = "") -> dict:
+    """Every canonical vendor: one row per legal entity, however many applications it made (for the API)."""
     async with read_sessions()() as s:
         actor = await _actor(request, s)
         full = access.full_view(actor)
@@ -1395,8 +1401,7 @@ async def vendor_directory(request: Request, q: str = "", status: str = "", risk
             rows.sort(key=lambda x: -x["msum"]["approved_unpaid"])
         else:
             rows.sort(key=lambda x: (not x["next"], x["v"].display_name.lower()))
-        return await render(request, s, "vendors_dir.html", rows=rows, full=full, q=q, STATUS_TEXT=V360.STATUS_TEXT,
-                            f=dict(status=status, risk=risk, pay=pay, inv=inv, sort=sort))
+        return dict(rows=rows, full=full)
 
 
 @router.get("/vendors/{vendor_key}", response_class=HTMLResponse)

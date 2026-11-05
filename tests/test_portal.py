@@ -5,6 +5,7 @@ bills (clean, and one asking for a new bank account). Throwaway SQLite, saved AI
 import asyncio
 import html
 import os
+import json
 import re
 import secrets
 from pathlib import Path
@@ -170,10 +171,10 @@ def flows(tmp_path_factory):
                                                {k: "1" for k in re.findall(r'name="(qty_\d+)"', (await staff.get(f"/purchase-orders/{po3}")).text)})).status_code
             staff.cookies.set("actor", "3")
             out["po3_page"] = (await staff.get(f"/purchase-orders/{po3}")).text
-            out["vendor_dir"] = (await staff.get("/vendors")).text
-            vnd = re.search(r'href="/vendors/(VND-\d{4})" class="[^"]*">Kesari', out["vendor_dir"]).group(1)
+            out["vendor_dir"] = (await staff.get("/api/v1/vendors")).text
+            vnd = next(v["id"] for v in json.loads(out["vendor_dir"])["vendors"] if v["name"].startswith("Kesari"))
             out["kesari_360"] = (await staff.get(f"/vendors/{vnd}")).text
-            out["vendor_dir_unpaid"] = (await staff.get("/vendors?inv=needs_review")).text
+            out["vendor_dir_unpaid"] = (await staff.get("/api/v1/vendors?inv=needs_review")).text
 
             # bank-account change request: the vendor asks, Finance (only) approves after an independent check
             out["profile"] = (await v.get("/vendor/profile")).text
@@ -390,7 +391,7 @@ def test_vendor_360_is_the_supplier_record(flows):
                  "Cancelled cheque", "Blocked for investigation"):
         assert text in page or text.lower() in page.lower(), text
     assert "Investigate before anything is paid" in page          # the blocked duplicate leads the next actions
-    assert "Kesari" in flows["vendor_dir"] and "Eligible" in flows["vendor_dir"] or "Blocked" in flows["vendor_dir"]
+    assert "Kesari" in flows["vendor_dir"] and ('"eligible"' in flows["vendor_dir"] or '"blocked"' in flows["vendor_dir"])
     assert "Kesari" in flows["vendor_dir_unpaid"]
 
 
