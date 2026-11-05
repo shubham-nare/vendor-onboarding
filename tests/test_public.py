@@ -98,3 +98,13 @@ def test_home_has_the_employee_log_in_and_the_ropeway(pub):
     assert 'id="home-login"' in page and 'action="/company/login"' in page and 'name="password"' in page
     assert "I work at Mamoni" in page and "Nare" not in page
     assert 'id="cables"' in page and "rope-tip" in page
+
+
+def test_every_language_covers_the_same_phrases():
+    from onboarding import i18n
+    assert set(i18n.LANGS) == {"en", "hi", "mr", "te", "zh"}
+    used = set(i18n.MR)                                       # the phrases the pages use today
+    for code in ("mr", "te", "zh"):
+        assert set(i18n.TABLES[code]) == used, code
+        assert i18n.translate("View demo", code) != "View demo"
+    assert i18n.translate("View demo", "zh") == "查看演示" and i18n.translate("Not a phrase", "te") == "Not a phrase"
