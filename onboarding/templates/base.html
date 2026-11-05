@@ -282,9 +282,9 @@
   {% set CHEV %}<svg class="h-3.5 w-3.5 opacity-60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>{% endset %}
   {% set SUPPLIER_LINKS = [('/apply', 'Register for future work'), ('/bill', 'Submit a bill'), ('/vendor', 'Track your registration')] + ([] if vendor_account else [('/vendor/login', 'Log in')]) %}
   <header class="pub-bar sticky top-0 z-40">
-    <div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center gap-2">
+    <div class="w-full px-4 sm:px-8 lg:px-12 2xl:px-16 h-16 flex items-center gap-2">
       {{ brand(BUYER.legal_name) }}
-      <nav class="hidden lg:flex items-center gap-0.5 ml-6" aria-label="Main">
+      <nav class="hidden lg:flex items-center gap-1 ml-10 xl:ml-14" aria-label="Main">
         <a href="/tour" class="pub-link" {{ 'aria-current=page' if path == '/tour' }}>{{ 'How it works' | t }}</a>
         <details class="pub-menu relative">
           <summary class="pub-link">{{ 'For suppliers' | t }} {{ CHEV }}</summary>
