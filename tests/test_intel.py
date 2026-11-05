@@ -265,7 +265,7 @@ def test_simulation_explains_what_still_decides(intel):
     assert "No change: still Pending: internal review" in page and "R-RISK-02" in page
     assert "Rejected →" in intel["sim_clear_conflict"]
     assert "did not fail in this check" in intel["sim_bad_rule"]
-    assert "What would change the decision?" in intel["sim_panel"]
+    assert "What would change the decision?" not in intel["sim_panel"]   # removed from the page
 
 
 def test_simulation_never_touches_real_data(intel):
@@ -275,7 +275,7 @@ def test_simulation_never_touches_real_data(intel):
 
 def test_simulation_refused_when_replay_is_not_exact(intel):
     assert "Simulation is off for this check" in intel["sim_refused"]
-    assert "What-if isn't available for this check" in intel["sim_refused_panel"]
+    assert "What-if" not in intel["sim_refused_panel"]
     assert intel["sim_requester"] == 403
 
 
