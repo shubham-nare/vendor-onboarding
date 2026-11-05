@@ -73,10 +73,11 @@
       c.path = document.createElementNS(NS, 'path');
       c.path.setAttribute('opacity', c.op);
       gCables.appendChild(c.path);
-      c.posts.slice(1, -1).forEach(x => {
+      c.postEls = c.posts.slice(1, -1).map(x => {
         const p = document.createElementNS(NS, 'circle');
         p.setAttribute('cx', x); p.setAttribute('cy', c.y); p.setAttribute('r', 5);
         gPosts.appendChild(p);
+        return p;
       });
       c.items = c.parcels.map(([u, kind]) => {
         const el = document.createElementNS(NS, 'use');
@@ -130,6 +131,20 @@
     const tip = document.getElementById('rope-tip');
     setTimeout(() => { if (!pulled) tip.style.opacity = 1; }, 3500);
     setTimeout(() => { tip.style.opacity = 0; }, 14000);
+
+    // keep the lower cables out from behind the cards: the middle one hangs just under them, the last one further down
+    const layout = () => {
+      const doors = document.getElementById('doors'), m = svg.getScreenCTM();
+      if (!doors || !m) return;
+      const yAt = py => new DOMPoint(0, py).matrixTransform(m.inverse()).y;
+      const under = yAt(doors.getBoundingClientRect().bottom + window.scrollY + 40);
+      const place = (c, y) => { c.y = y; c.postEls.forEach(el => el.setAttribute('cy', y)); c.items.forEach(it => { it.px = null; }); };
+      place(CABLES[1], Math.max(CABLES[1].base, under));
+      place(CABLES[2], Math.max(CABLES[2].base, CABLES[1].y + 120));
+    };
+    CABLES.forEach(c => { c.base = c.y; });
+    addEventListener('DOMContentLoaded', layout); addEventListener('load', layout); addEventListener('resize', layout);
+    if (document.fonts) document.fonts.ready.then(layout);
 
     let last = performance.now();
     const frame = now => {
@@ -206,23 +221,24 @@
           <stop offset="0" stop-color="#fff"/><stop offset=".9" stop-color="#fff"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
         </linearGradient>
         <mask id="write"><rect class="hello-pen" x="-1400" y="0" width="1400" height="230" fill="url(#wipe)"/></mask>
-        <mask id="word"><text x="320" y="168" text-anchor="middle" class="hello-text" fill="#fff" stroke="#fff">Mamoni</text></mask>
+        <mask id="word"><text x="320" y="168" text-anchor="middle" class="hello-text" fill="#fff" stroke="#fff"><tspan class="hello-cap">M</tspan>amoni</text></mask>
         <filter id="glass-shadow" x="-10%" y="-20%" width="120%" height="150%">
           <feDropShadow dx="0" dy="8" stdDeviation="9" flood-color="#1E9E4A" flood-opacity=".28"/>
         </filter>
       </defs>
       <g mask="url(#write)">
-        <text x="320" y="168" text-anchor="middle" class="hello-text" fill="url(#glass-fill)" stroke="url(#glass-fill)" filter="url(#glass-shadow)" opacity=".92">Mamoni</text>
+        <text x="320" y="168" text-anchor="middle" class="hello-text" fill="url(#glass-fill)" stroke="url(#glass-fill)" filter="url(#glass-shadow)" opacity=".92"><tspan class="hello-cap">M</tspan>amoni</text>
         {# a rim of light along the top edge of each stroke #}
-        <text x="318.8" y="166.2" text-anchor="middle" class="hello-text hello-rim" fill="none" stroke="#fff">Mamoni</text>
+        <text x="318.8" y="166.2" text-anchor="middle" class="hello-text hello-rim" fill="none" stroke="#fff"><tspan class="hello-cap">M</tspan>amoni</text>
         <g mask="url(#word)"><rect class="hello-sheen" x="-200" y="0" width="160" height="230" fill="url(#sheen)"/></g>
       </g>
     </svg>
   </div>
   <style>
-    .hello-wrap { max-width: 946px; margin-top: -8px; }
+    .hello-wrap { max-width: 728px; margin-top: -8px; }
     .hello { width: 100%; height: auto; overflow: visible; }
     .hello-text { font-family: 'Sacramento', cursive; font-size: 190px; stroke-width: 5.5; stroke-linejoin: round; stroke-linecap: round; paint-order: stroke; }
+    .hello-cap { font-size: 138px; }
     .hello-rim { stroke-width: 1.4; opacity: .75; }
     .hello-pen { animation: hello-write 2.6s cubic-bezier(.45,.05,.35,1) .3s forwards; }
     .hello-sheen { animation: hello-sheen 6s ease-in-out 3s infinite; }
@@ -233,7 +249,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Sacramento&display=block" rel="stylesheet">
 
-  <div class="mt-2 sm:mt-6 grid md:grid-cols-2 gap-6 md:gap-16 lg:gap-28">
+  <div id="doors" class="mt-2 sm:mt-6 grid md:grid-cols-2 gap-6 md:gap-16 lg:gap-28">
     <section class="relative bg-white rounded-xl border p-6 sm:p-8 flex flex-col hover-lift">
       <span class="absolute -top-3 left-6 rounded-t-md border border-b-0 border-slate-200 bg-white px-3 pt-1 pb-0.5 kicker !text-[10px] !text-slate-700">Company</span>
       <div class="flex items-center gap-3">
