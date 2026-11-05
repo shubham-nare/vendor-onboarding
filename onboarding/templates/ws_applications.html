@@ -6,7 +6,6 @@
   <div class="flex flex-wrap items-end justify-between gap-4">
     <div>
       <h1>Applications</h1>
-      <p class="text-slate-500 text-[14px] mt-1.5 max-w-3xl">Every registration attempt and its latest check. A vendor can have several applications; Vendor 360 joins them.</p>
     </div>
     <form method="get" class="flex gap-2 w-full sm:w-auto">
       <select name="status" class="rounded-lg border px-2 py-2 text-[13px]" aria-label="Status">{% for k, l in [('', 'Any status'), ('PENDING_REVIEW', 'Internal review'), ('PENDING_VENDOR', 'Vendor to fix'), ('APPROVED', 'Approved'), ('ACTIVE', 'Active'), ('REJECTED', 'Rejected')] %}<option value="{{ k }}" {{ 'selected' if status == k }}>{{ l }}</option>{% endfor %}</select>

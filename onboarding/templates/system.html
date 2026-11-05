@@ -5,7 +5,6 @@
 <div class="reveal">
 <div class="kicker">Health</div>
 <h1 class="text-[30px] sm:text-[38px] leading-tight mt-1">System check</h1>
-<p class="text-slate-500 text-sm mt-1">Live status of everything the process depends on.</p>
 {% if done == 'reset' %}<div class="mt-4 rounded-md bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-900">Reset done: all runs cleared, reference data reloaded.</div>{% endif %}
 <div class="mt-6 bg-white rounded-xl border divide-y divide-slate-100 max-w-3xl">
   {% for name, ok, detail in checks %}

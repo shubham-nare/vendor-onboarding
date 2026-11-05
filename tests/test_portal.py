@@ -544,7 +544,7 @@ def test_review_badge_home_and_review_count_the_same_things(flows):
     fin, mk = flows["pending_finance_cr"], flows["pending_maker_cr"]
     assert any(i["href"] == "/review#changes" for i in fin["items"])           # a bank change waits for Finance ...
     assert not any(i["href"] == "/review#changes" for i in mk["items"])        # ... not for the reviewer
-    assert f"{fin['count']} waiting for you" in html.unescape(flows["review_finance"])
+    assert f'aria-label="{fin["count"]} waiting"' in flows["review_finance"]          # the Review badge on the Review page
     page = flows["console_page"]
     assert 'id="invite-box"' in page and 'class="review-count"' in page
     fin_review = html.unescape(flows["review_finance"])                       # drawn into the page, no wait for the count request

@@ -62,7 +62,6 @@
 <section class="bg-white border rounded-xl overflow-hidden" id="next">
   <div class="px-4 sm:px-6 py-4 border-b border-slate-100">
     <h2 class="text-[16px]">What to do next</h2>
-    <p class="text-[12.5px] text-slate-500 mt-0.5">Worked out from the rules, the evidence and the relationships below. Each item says why and who may act; nothing here decides by itself.</p>
   </div>
   <ol class="divide-y divide-slate-100">
     {% for a in nba %}
@@ -90,7 +89,6 @@
   <div class="px-4 sm:px-6 py-4 border-b border-slate-100 flex flex-wrap items-start justify-between gap-3">
     <div>
       <h2 class="text-[16px]">Invoices and payments</h2>
-      <p class="text-[12.5px] text-slate-500 mt-0.5">Approval to onboard is not approval to pay: each invoice is matched to its purchase order and delivery, approved, then released by Finance.</p>
     </div>
     {% if full %}<dl class="grid grid-cols-3 gap-4 text-right text-[12px]">
       <div><dt class="text-slate-500">Approved, unpaid</dt><dd class="text-[15px] font-semibold tabular-nums">{{ inr(msum.approved_unpaid) }}</dd></div>
@@ -131,7 +129,6 @@
   <section class="bg-white border rounded-xl overflow-hidden min-w-0" id="identity">
     <div class="px-4 sm:px-6 py-4 border-b border-slate-100">
       <h2 class="text-[16px]">Identity</h2>
-      <p class="text-[12.5px] text-slate-500 mt-0.5">Every identifier this vendor has used. Sensitive ones are matched by a keyed fingerprint and stored encrypted.</p>
     </div>
     <table class="w-full text-sm">
       <tbody class="divide-y divide-slate-100">
@@ -159,7 +156,6 @@
   <section class="bg-white border rounded-xl overflow-hidden min-w-0" id="facts">
     <div class="px-4 sm:px-6 py-4 border-b border-slate-100">
       <h2 class="text-[16px]">Evidence and fact history</h2>
-      <p class="text-[12.5px] text-slate-500 mt-0.5">How well each fact is proven now, from which evidence, and what we believed before. A0 typed only · A1 a document shows it · A2 the document looks genuine · A3 signed by the issuer · A4 confirmed by the official source.</p>
     </div>
     <ul class="divide-y divide-slate-100">
     {% for f in facts %}{% set c = f.current %}{% set dz = doubts.get(f.fact, []) %}
@@ -196,7 +192,6 @@
   <div class="px-4 sm:px-6 py-4 border-b border-slate-100 flex flex-wrap items-start justify-between gap-3">
     <div>
       <h2 class="text-[16px]">Relationships</h2>
-      <p class="text-[12.5px] text-slate-500 mt-0.5">Shared information is a question, not a finding. Only a shared bank account, the same document file or an identity conflict needs a reviewer; shared addresses, emails and phones are shown for context.</p>
     </div>
     <div class="flex flex-wrap gap-1.5 text-[11.5px]">{% for st in ['verified', 'declared', 'inferred', 'unresolved'] %}{{ estatus(st) }}{% endfor %}</div>
   </div>
@@ -289,7 +284,6 @@
 <section class="bg-white border rounded-xl overflow-hidden" id="risk">
   <div class="px-4 sm:px-6 py-4 border-b border-slate-100">
     <h2 class="text-[16px]">Risk flags</h2>
-    <p class="text-[12.5px] text-slate-500 mt-0.5">Raised only where an onboarding rule already raised the alert. A flag never rejects anyone: a person decides, and the flag closes with that decision.</p>
   </div>
   <ul class="divide-y divide-slate-100">
   {% for r in risks %}
@@ -320,7 +314,6 @@
 <section class="bg-white border rounded-xl overflow-hidden" id="documents">
   <div class="px-4 sm:px-6 py-4 border-b border-slate-100">
     <h2 class="text-[16px]">Documents</h2>
-    <p class="text-[12.5px] text-slate-500 mt-0.5">Everything the vendor uploaded, kept after approval as the permanent evidence record. Each shows what was read from it and which facts rely on it.</p>
   </div>
   {% if documents %}
   <div class="overflow-x-auto">
@@ -348,7 +341,6 @@
 <section class="bg-white border rounded-xl overflow-hidden" id="applications">
   <div class="px-4 sm:px-6 py-4 border-b border-slate-100">
     <h2 class="text-[16px]">Applications and decisions</h2>
-    <p class="text-[12.5px] text-slate-500 mt-0.5">An application is one registration attempt; each submission is checked. Decisions by people are listed with who took them.</p>
   </div>
   <ul class="divide-y divide-slate-100">
   {% for a in apps if full or a.owned %}
