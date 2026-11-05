@@ -202,3 +202,25 @@ onboarding/
 - The CLI guard on writing to a remote database (`--production` + typed host) covers scripts only, not the in-app passcode reset.
 - `docs/DEPLOY.md` gets a "Submission / interview settings" section (Render env vars, reset before a recording, warm-up).
 - Step 8 / agent J: `docs/DEMO_SCRIPT.md` with a 5-minute recording plan. The happy path goes through the real invite → upload (files in `fixtures/documents/`) → live run → activation flow. The edge cases (wrong document + resubmission, borrowed GSTIN, shared bank, proprietor, registry down) use the scenario launcher. Each beat says what to point at on screen.
+
+## 10. Lean plan (2026-11-07, replaces phases 4–8)
+One-week take-home: optimise for a reliable, focused demo, not a full refactor.
+
+1. Phase 3 E (reliability) finishes: saved readings first + one reading deadline per run; every reading error caught; CPU work off the event loop; stuck/interrupted runs recoverable (re-queue once if < 1 h old, else PENDING_REVIEW; "Re-run checks"; vendor resubmit after a failed run); post-decision errors can't flip a finished run; no ref/vendor-ID collisions on a double submit.
+2. Phase 3 F (security), lean: demo parameter guard; X-Forwarded-For right-most hop; SESSION_SECRET required in production; demo logins only from DEMO_PASSWORD; /docs, /redoc, /openapi.json off; signed actor cookie, audit records both people; upload caps; reset passcode with no default + rate limit; empty-DB startup crash; seed --reset refuses a remote DB without --production + host confirmation; startup warning for demo tools on a remote DB; tests blank GEMINI_API_KEY and stub IFSC/PIN.
+3. One lean phase:
+   a) Hide out-of-scope features (no deletion): off the navigation, routes behind FEATURE_* flags (off by default), background work stopped (Intel projection, reliability lookups, follow-up loop, startup backfill); the run page shows no reliability panel. No table drops, no restructuring.
+   b) Demo readiness: curated reset (passcode), scenario invites seeded, demo logins via DEMO_PASSWORD, stage pacing ≈0.4 s, docs/DEMO_SCRIPT.md, the DEPLOY "submission settings". Scenario launcher only if under half a day.
+   c) Small UX fixes: /history 404, the "waiting for you" toast covering content, Why cards leading with the problem.
+   d) If time remains: the discrepancy table on the run page, one Mermaid diagram in docs/ARCHITECTURE.md.
+4. Demo rehearsal (all 5 golden scenarios through the invite flow, timed), then ONE PR. Ask before merging to main or touching production.
+
+At most 2 agents at a time. Golden tests green after every merge.
+
+### Deferred
+- PAN/account encryption at rest with a blind index (S9) + migration script: WIP parked on branch `parked/s9-encryption` (not merged; no production migrations before the demo).
+- Transitional CSP on Jinja pages.
+- SPA → Jinja rewrite; Tailwind CLI build; table merges (→17); restructure (domain/, services/, web/ split); query/SSE optimisation (≤3 round trips); NFR and CI docs.
+- Step 9 items 2–9 (market patterns), including `registry_down` and `bank_change_after_approval`.
+- Cuts C1–C8 as deletions (now hidden behind FEATURE_* flags instead).
+- Deferred, live Q&A talking points: the scenarios `unreadable_scan`, `forged_document`, `invite_hijack`.
