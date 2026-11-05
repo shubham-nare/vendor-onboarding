@@ -194,3 +194,11 @@ onboarding/
   - The tests use a SQLite file for the whole session; it is seeded once and restored after each module.
   - `pytest_configure` aborts the session if the database URL is not local.
   - `onboarding.db.engine()` refuses any non-local URL while pytest is loaded.
+
+### Demo mode in the deployed site (2026-11-06)
+- The deployed site runs with `DEMO_TOOLS=true` for the submission video, grader trials and the interview (all data fictional). Everything demo-related works there behind login: the four demo logins (`DEMO_PASSWORD`), the person switcher, the scenario launcher, the passcode-protected curated reset, `/check`, stage pacing.
+- `/docs`, `/redoc`, `/openapi.json` are off in every mode, demo included.
+- Secrets (`SESSION_SECRET`, `DATA_KEY`, `INDEX_KEY`, `ADMIN_PASSCODE`) are required whenever the database is remote, whatever `DEMO_TOOLS` says; derived/random keys only with a local database.
+- The CLI guard on writing to a remote database (`--production` + typed host) covers scripts only, not the in-app passcode reset.
+- `docs/DEPLOY.md` gets a "Submission / interview settings" section (Render env vars, reset before a recording, warm-up).
+- Step 8 / agent J: `docs/DEMO_SCRIPT.md` with a 5-minute recording plan. The happy path goes through the real invite → upload (files in `fixtures/documents/`) → live run → activation flow. The edge cases (wrong document + resubmission, borrowed GSTIN, shared bank, proprietor, registry down) use the scenario launcher. Each beat says what to point at on screen.
