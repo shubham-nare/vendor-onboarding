@@ -203,7 +203,7 @@ onboarding/
 - `docs/DEPLOY.md` gets a "Submission / interview settings" section (Render env vars, reset before a recording, warm-up).
 - Step 8 / agent J: `docs/DEMO_SCRIPT.md` with a 5-minute recording plan. The happy path goes through the real invite → upload (files in `fixtures/documents/`) → live run → activation flow. The edge cases (wrong document + resubmission, borrowed GSTIN, shared bank, proprietor, registry down) use the scenario launcher. Each beat says what to point at on screen.
 
-## 10. Lean plan (2026-11-07, replaces phases 4–8)
+## 10. Lean plan (2026-11-06, replaces phases 4–8; overrides §9 where they differ)
 One-week take-home: optimise for a reliable, focused demo, not a full refactor.
 
 1. Phase 3 E (reliability) finishes: saved readings first + one reading deadline per run; every reading error caught; CPU work off the event loop; stuck/interrupted runs recoverable (re-queue once if < 1 h old, else PENDING_REVIEW; "Re-run checks"; vendor resubmit after a failed run); post-decision errors can't flip a finished run; no ref/vendor-ID collisions on a double submit.
@@ -224,3 +224,15 @@ At most 2 agents at a time. Golden tests green after every merge.
 - Step 9 items 2–9 (market patterns), including `registry_down` and `bank_change_after_approval`.
 - Cuts C1–C8 as deletions (now hidden behind FEATURE_* flags instead).
 - Deferred, live Q&A talking points: the scenarios `unreadable_scan`, `forged_document`, `invite_hijack`.
+
+### Additions (2026-11-06, review session)
+- §10 overrides §9's DEMO_SCRIPT edge-case list. `registry_down` is deferred.
+- Review gate: after each merge into `refactor/ps2-lean`, report the merge hash, the pytest summary line, the golden scenario results and ruff status. The next merge waits until those are green.
+- DEMO_SCRIPT.md is based on the video plan (outside the repo, not copied verbatim). Order:
+  1. Nilgiri happy path, fully live: invite → upload → live run → Arjun activates; Priya is blocked from activating.
+  2. Tejas wrong document, then resubmit with the diff.
+  3. Kaveri borrowed GSTIN: held rejection, Kavita confirms.
+  4. Rangoli shared bank: neutral vendor message, Arjun blocked, Kavita clears.
+  Shinde is the backup. The rehearsal times all of these and must fit 5 minutes at ≈0.4 s per stage.
+- DEPLOY "submission settings" includes a cold-start note: Render free sleeps after 15 min. Either use Starter for the review window or set an external pinger on `/readyz` every 10 min. `/readyz` stays cheap but touches the database once (also wakes Neon). Documentation only; no Render changes.
+- Not decided (don't do): making R-XD-03 a high-risk fraud signal.
