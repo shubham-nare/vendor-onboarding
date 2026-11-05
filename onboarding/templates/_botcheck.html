@@ -1,0 +1,8 @@
+{# bot check: a field people never see (bots fill it in), plus Cloudflare Turnstile when a key is set #}
+<div aria-hidden="true" style="position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden">
+  <label>Website<input type="text" name="website" tabindex="-1" autocomplete="off"></label>
+</div>
+{% if captcha_key %}
+<div class="cf-turnstile mt-1" data-sitekey="{{ captcha_key }}" data-theme="light" data-size="flexible"></div>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+{% endif %}

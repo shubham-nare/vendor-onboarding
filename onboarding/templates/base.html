@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{ lang or 'en' }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}Vendor onboarding{% endblock %} · Vendor Assurance</title>
+  <title>{% block title %}Vendor onboarding{% endblock %} · Mamoni Vendor Onboarding</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -169,6 +169,20 @@
     .star-tile:hover svg { transform: rotate(30deg) scale(1.04); filter: drop-shadow(0 14px 28px rgba(0,113,227,.24)); }
     .star-body { position: relative; max-width: 140px; }
     @media (prefers-reduced-motion: reduce) { .star-tile svg { transition: none; } .star-tile:hover svg { transform: none; } }
+    /* the public top bar: links, a menu for suppliers, View demo (filled), Contact us (outlined), language */
+    .pub-bar { background: rgba(255,255,255,.86); backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px); border-bottom: 1px solid #D2D2D7; }
+    .pub-link { display: inline-flex; align-items: center; gap: 4px; padding: 7px 12px; border-radius: 980px; font-size: 14.5px; font-weight: 500; color: #1D1D1F; cursor: pointer; list-style: none; }
+    .pub-link:hover, .pub-link[aria-current] { background: rgba(0,0,0,.05); }
+    details.pub-menu > summary { list-style: none; cursor: pointer; }
+    details.pub-menu > summary::-webkit-details-marker { display: none; }
+    .pub-drop { position: absolute; left: 0; top: calc(100% + 8px); min-width: 15rem; padding: 6px; border-radius: 14px; background: #fff; border: 1px solid #D2D2D7;
+                box-shadow: 0 16px 40px rgba(0,0,0,.12); display: flex; flex-direction: column; z-index: 50; }
+    .pub-drop a, .pub-drop button { display: block; width: 100%; text-align: left; padding: 9px 12px; border-radius: 9px; font-size: 14px; color: #1D1D1F; }
+    .pub-drop a:hover, .pub-drop button:hover { background: #F5F5F7; }
+    .pill-demo { align-items: center; padding: 8px 18px; border-radius: 980px; background: #5AC8FA; color: #1D1D1F; font-size: 13.5px; font-weight: 600; }
+    .pill-demo:hover { background: #40BDF5; }
+    .pill-line { align-items: center; padding: 7px 17px; border-radius: 980px; border: 1.5px solid #1D1D1F; color: #1D1D1F; font-size: 13.5px; font-weight: 600; }
+    .pill-line:hover { background: #1D1D1F; color: #fff; }
     /* Review's count: a red circle, gone when nothing is waiting */
     .review-count { margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: #FF3B30; color: #fff;
                     font-size: 11.5px; font-weight: 600; line-height: 20px; text-align: center; font-variant-numeric: tabular-nums; }
@@ -179,7 +193,7 @@
   </style>
 </head>
 <body class="min-h-screen">
-  {% set landing = path == '/' or path.startswith('/company/') %}
+  {% set landing = path == '/' or path.startswith('/company/') or path in ('/tour', '/contact', '/thanks') %}
   {% set vendor_page = path.startswith('/apply') or path.startswith('/status') or path == '/bill' or path.startswith('/bill?') or (path.startswith('/vendor') and not path.startswith('/vendors')) %}
   {% macro seal(size=32, light=false) -%}
     <svg width="{{ size }}" height="{{ size }}" viewBox="0 0 32 32" aria-hidden="true" class="shrink-0">
@@ -192,7 +206,7 @@
     <a href="/" title="Home" class="flex items-center gap-2.5 min-w-0">
       {{ seal(32) }}
       <span class="leading-tight min-w-0">
-        <span class="block text-[15px] font-semibold tracking-tight whitespace-nowrap">Vendor Assurance</span>
+        <span class="block text-[15px] font-semibold tracking-tight leading-tight">Mamoni <span class="font-normal text-slate-500">Vendor Onboarding</span></span>
         <span class="block text-[11.5px] text-slate-500 truncate">{{ sub }}</span>
       </span>
     </a>
@@ -265,23 +279,58 @@
   {%- endmacro %}
 
   {% if landing or vendor_page %}
-  <header class="sticky top-0 z-40 border-b border-slate-200 bg-white/85 backdrop-blur">
-    <div class="{{ 'max-w-5xl' if vendor_page else 'max-w-6xl' }} mx-auto px-4 sm:px-6 h-16 flex items-center gap-3">
-      {{ brand('Supplier portal' if vendor_page else BUYER.legal_name) }}
-      {% if vendor_page and vendor_account %}
-      <div class="ml-auto flex items-center gap-3 min-w-0">
-        <a href="/vendor" class="hidden sm:flex items-center gap-2.5 rounded-lg px-2 py-1 hover:bg-slate-100 min-w-0">
-          <span class="h-8 w-8 shrink-0 rounded-full bg-indigo-100 text-indigo-700 text-[11.5px] font-semibold inline-flex items-center justify-center">{% set w = vendor_account.company_name.split() or ['?'] %}{{ w[0][0] }}{{ w[1][0] if w | length > 1 else '' }}</span>
-          <span class="text-left leading-tight min-w-0"><span class="block text-[13px] font-semibold truncate max-w-[15rem]">{{ vendor_account.company_name }}</span><span class="block text-[11.5px] text-slate-500 truncate max-w-[15rem]">{{ vendor_account.email }}</span></span>
-        </a>
-        <a href="/vendor" class="sm:hidden text-[13px] font-medium text-indigo-700">My account</a>
-        <form method="post" action="/vendor/logout"><button class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[13px] font-medium text-slate-700 hover:bg-slate-50">Log out</button></form>
+  {% set CHEV %}<svg class="h-3.5 w-3.5 opacity-60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>{% endset %}
+  {% set SUPPLIER_LINKS = [('/apply', 'Register for future work'), ('/bill', 'Submit a bill'), ('/vendor', 'Track your registration')] + ([] if vendor_account else [('/vendor/login', 'Log in')]) %}
+  <header class="pub-bar sticky top-0 z-40">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center gap-2">
+      {{ brand(BUYER.legal_name) }}
+      <nav class="hidden lg:flex items-center gap-0.5 ml-6" aria-label="Main">
+        <a href="/tour" class="pub-link" {{ 'aria-current=page' if path == '/tour' }}>{{ 'How it works' | t }}</a>
+        <details class="pub-menu relative">
+          <summary class="pub-link">{{ 'For suppliers' | t }} {{ CHEV }}</summary>
+          <div class="pub-drop">{% for href, label in SUPPLIER_LINKS %}<a href="{{ href }}">{{ label | t }}</a>{% endfor %}</div>
+        </details>
+        {% if staff %}<a href="/console" class="pub-link">{{ 'Open the console' | t }}</a>{% else %}<a href="/company/login" class="pub-link">{{ 'Employee log in' | t }}</a>{% endif %}
+      </nav>
+      <div class="ml-auto flex items-center gap-2">
+        {% if vendor_account %}
+        <a href="/vendor" class="hidden md:inline-flex items-center gap-2 rounded-full px-2 py-1 hover:bg-slate-100 min-w-0" title="{{ vendor_account.email }}">
+          <span class="h-7 w-7 shrink-0 rounded-full bg-indigo-100 text-indigo-700 text-[11px] font-semibold inline-flex items-center justify-center">{% set w = vendor_account.company_name.split() or ['?'] %}{{ w[0][0] }}{{ w[1][0] if w | length > 1 else '' }}</span>
+          <span class="text-[13px] font-medium truncate max-w-[10rem]">{{ 'My account' | t }}</span></a>
+        <form method="post" action="/vendor/logout" class="hidden md:block"><button class="pub-link">{{ 'Log out' | t }}</button></form>
+        {% endif %}
+        <a href="/tour#try" class="pill-demo hidden sm:inline-flex">{{ 'View demo' | t }}</a>
+        <a href="/contact" class="pill-line hidden sm:inline-flex">{{ 'Contact us' | t }}</a>
+        <details class="pub-menu relative">
+          <summary class="h-9 w-9 grid place-items-center rounded-full hover:bg-slate-100" aria-label="{{ 'Language' | t }}: {{ LANGS[lang] }}" title="{{ 'Language' | t }}">
+            <svg class="h-[19px] w-[19px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg>
+          </summary>
+          <form method="post" action="/lang" class="pub-drop !right-0 !left-auto !min-w-[10rem]">
+            <input type="hidden" name="next" value="{{ request.url.path }}{{ '?' ~ request.url.query if request.url.query }}">
+            {% for code, name in LANGS.items() %}<button name="to" value="{{ code }}" class="{{ 'font-semibold' if code == lang }}">{{ name }}{% if code == lang %} <span class="text-[#0071E3]">✓</span>{% endif %}</button>{% endfor %}
+          </form>
+        </details>
+        <details class="pub-menu relative lg:hidden">
+          <summary class="h-9 w-9 grid place-items-center rounded-full hover:bg-slate-100" aria-label="{{ 'Menu' | t }}">
+            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+          </summary>
+          <div class="pub-drop !right-0 !left-auto !min-w-[15rem]">
+            <a href="/tour">{{ 'How it works' | t }}</a>
+            {% for href, label in SUPPLIER_LINKS %}<a href="{{ href }}">{{ label | t }}</a>{% endfor %}
+            {% if staff %}<a href="/console">{{ 'Open the console' | t }}</a>{% else %}<a href="/company/login">{{ 'Employee log in' | t }}</a>{% endif %}
+            <a href="/tour#try" class="sm:hidden">{{ 'View demo' | t }}</a>
+            <a href="/contact" class="sm:hidden">{{ 'Contact us' | t }}</a>
+            {% if vendor_account %}<a href="/vendor" class="md:hidden">{{ 'My account' | t }}</a>
+            <form method="post" action="/vendor/logout" class="md:hidden"><button>{{ 'Log out' | t }}</button></form>{% endif %}
+          </div>
+        </details>
       </div>
-      {% elif vendor_page %}
-      <a href="/" class="ml-auto shrink-0 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900">← Home</a>
-      {% endif %}
     </div>
   </header>
+  <script>
+    document.addEventListener('click', e => document.querySelectorAll('details.pub-menu[open]').forEach(d => { if (!d.contains(e.target)) d.open = false; }));
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') document.querySelectorAll('details.pub-menu[open]').forEach(d => d.open = false); });
+  </script>
   <main class="{{ 'max-w-5xl' if vendor_page else 'max-w-6xl' }} mx-auto px-4 sm:px-6 py-6 sm:py-10">
     {{ self.content() }}
   </main>

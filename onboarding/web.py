@@ -94,6 +94,8 @@ def signal_text(s) -> dict:
     return dict(title=title, detail=detail.replace("[not applied: known test specimen]", "[not applied: known file]"))
 
 
+from onboarding.i18n import t as _t  # noqa: E402
+templates.env.filters["t"] = _t
 templates.env.globals.update(signal_text=signal_text)
 # One palette everywhere: amber = still in progress, red = invalid / blocked / rejected, green = verified / done.
 # The old tone names map onto it so every page reads the same way.
@@ -138,8 +140,10 @@ async def _actor(request: Request, s) -> Employee | None:
 
 
 async def render(request: Request, s, name: str, **ctx) -> HTMLResponse:
+    from onboarding import captcha, i18n
     ctx.update(request=request, actor=await _actor(request, s), employees=await _employees(s), path=request.url.path,
-               staff=await staff_member(request, s), DEMO_TOOLS=get_settings().demo_tools)
+               staff=await staff_member(request, s), DEMO_TOOLS=get_settings().demo_tools,
+               lang=i18n.lang_of(request), LANGS=i18n.LANGS, captcha_key=captcha.site_key())
     if "vendor_account" not in ctx:
         ctx["vendor_account"] = await vendor_account(request, s)
     return templates.TemplateResponse(request, name, ctx)
@@ -786,15 +790,16 @@ async def apply_submit(request: Request, token: str):
             app.current_status = "IN_PROGRESS"
         if acct:
             await claim(s, acct, invite=inv, app=await s.get(Application, run.application_id))
+        ref = (await s.get(Application, run.application_id)).ref
         await s.commit()
     runner.start(run.id)
-    return _after_submit(run, acct, demo)
+    return _after_submit(run, acct, demo, ref, "update" if parent else "registration")
 
 
-def _after_submit(run: Run, acct: VendorAccount | None, demo: str) -> RedirectResponse:
-    """Portal vendors go back to their portal; demo shortcuts open the internal live view."""
+def _after_submit(run: Run, acct: VendorAccount | None, demo: str, ref: str = "", kind: str = "registration") -> RedirectResponse:
+    """Portal vendors see the thank-you page; demo shortcuts open the internal live view."""
     if acct and not demo:
-        return RedirectResponse(f"/vendor?submitted={run.id}", status_code=303)
+        return RedirectResponse(f"/thanks?for={kind}&ref={ref}", status_code=303)
     return RedirectResponse(f"/runs/{run.id}?from=vendor", status_code=303)
 
 
@@ -815,9 +820,10 @@ async def bill_submit(request: Request):
                    engaged_employee_id=emp.id if emp else None))
         if acct:
             await claim(s, acct, app=await s.get(Application, run.application_id))
+        ref = (await s.get(Application, run.application_id)).ref
         await s.commit()
     runner.start(run.id)
-    return _after_submit(run, acct, demo)
+    return _after_submit(run, acct, demo, ref, "bill")
 
 
 @router.post("/apply")
@@ -829,11 +835,12 @@ async def apply_unsolicited_submit(request: Request):
         if not acct and not demo:
             return login_redirect("/apply")
         run = await create_run(s, form, files, invite_token=None)
+        ref = (await s.get(Application, run.application_id)).ref
         if acct:
             await claim(s, acct, app=await s.get(Application, run.application_id))
             await s.commit()
     runner.start(run.id)
-    return _after_submit(run, acct, demo)
+    return _after_submit(run, acct, demo, ref, "future")
 
 
 @router.get("/status/{token}", response_class=HTMLResponse)
@@ -1196,7 +1203,9 @@ async def outbox(request: Request):
         from onboarding.models import EmailDelivery
         mails = {d.message_id: d for d in (await s.execute(select(EmailDelivery).where(EmailDelivery.message_id.in_([m.id for m, _, _ in rows] or [-1])))).scalars()}
         from onboarding import mailer
-        return await render(request, s, "outbox.html", rows=rows, mails=mails, mail_on=mailer.configured(), kind=kind,
+        from onboarding.models import ContactMessage
+        inbox = (await s.execute(select(ContactMessage).order_by(ContactMessage.id.desc()).limit(50))).scalars().all()
+        return await render(request, s, "outbox.html", rows=rows, mails=mails, mail_on=mailer.configured(), kind=kind, inbox=inbox,
                             note_to={k: emps.get(v) for k, v in emp_by_note.items()})
 
 

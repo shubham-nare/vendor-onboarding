@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}{{ 'How it works' | t }}{% endblock %}
+{% block content %}
+<div class="reveal">
+  <div class="text-center max-w-3xl mx-auto pt-2 sm:pt-6">
+    <h1 class="text-[40px] sm:text-[64px] leading-[1.03] tracking-tight">{{ 'See how it works' | t }}</h1>
+    <p class="mt-4 text-[19px] sm:text-[21px] text-slate-500">{{ 'From the first document to the first payment, in four steps.' | t }}</p>
+  </div>
+
+  <ol class="mt-12 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    {% for n, title, text, tint in [
+        ('1', 'The supplier uploads documents', 'GST certificate, PAN card and a cancelled cheque. We read them and fill in the form; the supplier checks every value.', '#0071E3'),
+        ('2', 'Every number is checked', 'GSTIN and PAN maths, the bank branch, PIN code, GST and PAN registries, the bank account holder, and whether the documents are genuine.', '#5AC8FA'),
+        ('3', 'A person decides', 'Clear cases are ready to activate. Anything doubtful goes to a reviewer with the reason. The person who asked for a vendor never approves it.', '#FF9F0A'),
+        ('4', 'Invoices are matched, then paid', 'Each invoice is matched to its purchase order and the delivery we recorded. Finance releases the payment.', '#34C759')] %}
+    <li class="bg-white border rounded-[18px] p-6 flex flex-col">
+      <span class="h-10 w-10 rounded-full grid place-items-center text-white text-[17px] font-semibold" style="background: {{ tint }}">{{ n }}</span>
+      <h2 class="mt-4 text-[20px] leading-snug">{{ title }}</h2>
+      <p class="mt-2 text-[14.5px] leading-relaxed text-slate-600">{{ text }}</p>
+    </li>
+    {% endfor %}
+  </ol>
+
+  <section id="try" class="mt-14 rounded-[24px] bg-white border px-6 sm:px-12 py-10 sm:py-12 text-center">
+    <h2 class="text-[30px] sm:text-[40px] tracking-tight">{{ 'View demo' | t }}</h2>
+    <p class="mt-2 text-[17px] text-slate-500 max-w-2xl mx-auto">Try both sides with the demo accounts on the log-in pages.</p>
+    <div class="mt-7 grid sm:grid-cols-2 gap-4 max-w-3xl mx-auto text-left">
+      <a href="{{ '/vendor' if vendor_account else '/vendor/login' }}" class="group rounded-[18px] border p-6 hover:border-[#0071E3]">
+        <div class="text-[19px] font-semibold group-hover:text-[#0066CC]">{{ 'Try it as a supplier' | t }} ›</div>
+        <p class="mt-1.5 text-[14px] text-slate-600">Register a business, upload documents, follow the checks and send a bill.</p>
+      </a>
+      <a href="{{ '/console' if staff else '/company/login' }}" class="group rounded-[18px] border p-6 hover:border-[#0071E3]">
+        <div class="text-[19px] font-semibold group-hover:text-[#0066CC]">{{ 'Try it as our team' | t }} ›</div>
+        <p class="mt-1.5 text-[14px] text-slate-600">Invite a vendor, watch the checks run live, decide, and match invoices to orders.</p>
+      </a>
+    </div>
+  </section>
+</div>
+{% endblock %}

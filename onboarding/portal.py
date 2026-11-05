@@ -23,6 +23,7 @@ from sqlalchemy import select, func
 
 from onboarding.demo_data import BUYER
 from onboarding.ap.replies import suggested_replies
+from onboarding import captcha
 from onboarding import access, auth
 from onboarding import bills as B
 from onboarding.demo_data import KESARI, SCENARIOS
@@ -77,6 +78,8 @@ async def company_login_form(request: Request, next: str = ""):
 async def company_login(request: Request, email: str = Form(""), password: str = Form(""), next: str = Form("")):
     email, nxt = email.strip().lower(), safe_next(next, "/console")
     async with sessions()() as s:
+        if bot := await captcha.check(request):
+            return await render(request, s, "company_login.html", next=nxt, email=email, demo=_demo(), error=bot)
         emp = (await s.execute(select(Employee).where(Employee.email == email))).scalars().first()
         login = (await s.execute(select(StaffLogin).where(StaffLogin.employee_id == emp.id))).scalar_one_or_none() if emp else None
         if not await auth.verify_password_async(password, login.password_hash if login else None):
@@ -102,6 +105,65 @@ async def company_logout():
 async def landing(request: Request):
     async with sessions()() as s:
         return await render(request, s, "landing.html")
+
+
+@router.get("/tour", response_class=HTMLResponse)
+async def tour(request: Request):
+    async with sessions()() as s:
+        return await render(request, s, "tour.html")
+
+
+CONTACT_TOPICS = ("Registering as a supplier", "My registration", "A bill or payment", "Something else")
+
+
+@router.get("/contact", response_class=HTMLResponse)
+async def contact_form(request: Request):
+    async with sessions()() as s:
+        return await render(request, s, "contact.html", values={}, error="", topics=CONTACT_TOPICS)
+
+
+@router.post("/contact", response_class=HTMLResponse)
+async def contact_send(request: Request, name: str = Form(""), company: str = Form(""), email: str = Form(""), topic: str = Form(""),
+                       body: str = Form("")):
+    from onboarding.models import ContactMessage
+    values = dict(name=name.strip()[:120], company=company.strip()[:200], email=email.strip().lower()[:200], topic=topic, body=body.strip()[:4000])
+    async with sessions()() as s:
+        error = await captcha.check(request)
+        if not error and (not values["name"] or len(values["body"]) < 10):
+            error = "Please give your name and a short message."
+        elif not error and not EMAIL_RE.match(values["email"]):
+            error = "Please enter a valid email address, so we can reply."
+        if error:
+            return await render(request, s, "contact.html", values=values, error=error, topics=CONTACT_TOPICS)
+        s.add(ContactMessage(name=values["name"], company=values["company"], email=values["email"],
+                             topic=topic if topic in CONTACT_TOPICS else "", body=values["body"]))
+        await s.commit()
+    return RedirectResponse("/thanks?for=contact", status_code=303)
+
+
+THANKS = {
+    "registration": ("Thank you for registering.", "We are checking your details and will email you shortly."),
+    "future": ("Thank you for registering for future work.", "We are checking your details and will email you shortly."),
+    "update": ("Thank you for updating your registration.", "We are checking your details and will email you shortly."),
+    "bill": ("Thank you for submitting your bill.", "We are checking your details and will email you shortly."),
+    "contact": ("Thank you for getting in touch.", "We'll reply by email within two working days."),
+}
+
+
+@router.get("/thanks", response_class=HTMLResponse)
+async def thanks(request: Request, ref: str = ""):
+    kind = request.query_params.get("for", "registration")
+    title, lead = THANKS.get(kind, THANKS["registration"])
+    async with sessions()() as s:
+        return await render(request, s, "thanks.html", kind=kind, title=title, lead=lead, ref=re.sub(r"[^A-Z0-9-]", "", ref.upper())[:20])
+
+
+@router.post("/lang")
+async def set_language(request: Request, to: str = Form("en"), next: str = Form("/")):
+    from onboarding import i18n
+    resp = RedirectResponse(safe_next(next, "/"), status_code=303)
+    resp.set_cookie(i18n.COOKIE, to if to in i18n.LANGS else "en", max_age=365 * 24 * 3600, samesite="lax")
+    return resp
 
 
 # --- vendor accounts ------------------------------------------------------------------------------
@@ -130,8 +192,10 @@ async def register(request: Request, company_name: str = Form(""), contact_name:
     email, nxt = email.strip().lower(), safe_next(next)
     values = {"company_name": company_name.strip(), "contact_name": contact_name.strip(), "email": email}
     async with sessions()() as s:
-        error = ""
-        if not values["company_name"] or not values["contact_name"]:
+        error = await captcha.check(request)
+        if error:
+            pass
+        elif not values["company_name"] or not values["contact_name"]:
             error = "Please fill in your company and your name."
         elif not EMAIL_RE.match(email):
             error = "Please enter a valid email address."
@@ -159,6 +223,8 @@ async def login_form(request: Request, next: str = ""):
 async def login(request: Request, email: str = Form(""), password: str = Form(""), next: str = Form("")):
     email, nxt = email.strip().lower(), safe_next(next)
     async with sessions()() as s:
+        if bot := await captcha.check(request):
+            return await render(request, s, "vendor_auth.html", mode="login", next=nxt, values={"email": email}, invite=None, error=bot, demo=_demo())
         acct = (await s.execute(select(VendorAccount).where(VendorAccount.email == email))).scalar_one_or_none()
         if not await auth.verify_password_async(password, acct.password_hash if acct else None):
             # same message either way: don't reveal which emails have accounts

@@ -5,8 +5,8 @@
 <div class="reveal max-w-6xl mx-auto">
   <div class="text-center max-w-2xl mx-auto pt-2 sm:pt-6">
     <span class="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-white px-3 py-1 text-[12.5px] font-medium text-indigo-700 shadow-sm"><span class="h-1.5 w-1.5 rounded-full bg-indigo-600"></span>Vendor onboarding &amp; bills</span>
-    <h1 class="hero text-[36px] sm:text-[56px] leading-[1.05] tracking-tight mt-4">Who are <em class="text-indigo-600">you?</em></h1>
-    <p class="text-slate-600 text-[15px] mt-3">Suppliers register, prove who they are and send their bills. The company checks every document, every number and every bill before anyone is paid.</p>
+    <h1 class="hero text-[36px] sm:text-[56px] leading-[1.05] tracking-tight mt-4">{{ 'Who are' | t }} <em class="text-indigo-600">{{ 'you?' | t }}</em></h1>
+    <p class="text-slate-600 text-[15px] mt-3">{{ 'Suppliers register, prove who they are and send their bills. The company checks every document, every number and every bill before anyone is paid.' | t }}</p>
   </div>
 
   <div class="mt-8 sm:mt-12 grid md:grid-cols-2 gap-5 sm:gap-6">
@@ -22,10 +22,10 @@
         <li class="flex gap-2.5"><span class="text-emerald-600 mt-0.5">{{ icon('check', 'h-4 w-4') }}</span>Confirm work you asked for, approve vendors and bills</li>
       </ul>
       {% if staff %}
-        <a href="/console" class="mt-7 inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 text-white font-medium px-5 py-3 hover:bg-slate-800 shadow-sm">Open the console {{ icon('arrow') }}</a>
+        <a href="/console" class="mt-7 inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 text-white font-medium px-5 py-3 hover:bg-slate-800 shadow-sm">{{ 'Open the console' | t }} {{ icon('arrow') }}</a>
         <p class="mt-2 text-xs text-slate-500 text-center truncate">Logged in as {{ staff.name }} · {{ ROLE_LABEL[staff.role] }}</p>
       {% else %}
-        <a href="/company/login" class="mt-7 inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 text-white font-medium px-5 py-3 hover:bg-slate-800 shadow-sm">Employee log in {{ icon('arrow') }}</a>
+        <a href="/company/login" class="mt-7 inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 text-white font-medium px-5 py-3 hover:bg-slate-800 shadow-sm">{{ 'Employee log in' | t }} {{ icon('arrow') }}</a>
       {% endif %}
       <p class="mt-3 text-xs text-slate-500">Employees log in with their work email .</p>
     </section>
@@ -34,7 +34,7 @@
       <span class="absolute -top-3 left-6 rounded-t-md border border-b-0 border-slate-200 bg-white px-3 pt-1 pb-0.5 kicker !text-[10px] !text-indigo-700">Supplier portal</span>
       <div class="flex items-center gap-3">
         <span class="h-11 w-11 rounded-full bg-indigo-600 text-white grid place-items-center">{{ icon('doc', 'h-5 w-5') }}</span>
-        <h2 class="text-[26px] leading-tight">I'm a vendor or supplier</h2>
+        <h2 class="text-[26px] leading-tight">{{ "I'm a vendor or supplier" | t }}</h2>
       </div>
       <ul class="mt-5 space-y-2.5 text-[14.5px] text-slate-700 flex-1">
         <li class="flex gap-2.5"><span class="text-indigo-600 mt-0.5">{{ icon('check', 'h-4 w-4') }}</span>Create your account, then register with your GST, PAN and bank details</li>
@@ -42,12 +42,12 @@
         <li class="flex gap-2.5"><span class="text-indigo-600 mt-0.5">{{ icon('check', 'h-4 w-4') }}</span>Track your registration and send your bills</li>
       </ul>
       {% if vendor_account %}
-        <a href="/vendor" class="mt-7 inline-flex items-center justify-center gap-2 rounded-md bg-indigo-600 text-white font-medium px-5 py-3 hover:bg-indigo-700 shadow-sm">Go to my account {{ icon('arrow') }}</a>
+        <a href="/vendor" class="mt-7 inline-flex items-center justify-center gap-2 rounded-md bg-indigo-600 text-white font-medium px-5 py-3 hover:bg-indigo-700 shadow-sm">{{ 'Go to my account' | t }} {{ icon('arrow') }}</a>
         <p class="mt-2 text-xs text-slate-500 text-center truncate">Signed in as {{ vendor_account.company_name }}</p>
       {% else %}
         <div class="mt-7 grid sm:grid-cols-2 gap-3">
-          <a href="/vendor/register" class="inline-flex items-center justify-center gap-2 rounded-md bg-indigo-600 text-white font-medium px-5 py-3 hover:bg-indigo-700 shadow-sm">Create an account</a>
-          <a href="/vendor/login" class="inline-flex items-center justify-center gap-2 rounded-md border border-slate-300 bg-white font-medium px-5 py-3 hover:border-slate-500">Log in</a>
+          <a href="/vendor/register" class="inline-flex items-center justify-center gap-2 rounded-md bg-indigo-600 text-white font-medium px-5 py-3 hover:bg-indigo-700 shadow-sm">{{ 'Create an account' | t }}</a>
+          <a href="/vendor/login" class="inline-flex items-center justify-center gap-2 rounded-md border border-slate-300 bg-white font-medium px-5 py-3 hover:border-slate-500">{{ 'Log in' | t }}</a>
         </div>
       {% endif %}
       <p class="mt-3 text-xs text-slate-500">New suppliers create an account; invited suppliers use the link from their invitation.</p>

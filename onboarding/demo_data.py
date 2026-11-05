@@ -167,6 +167,8 @@ BUYER = {
     "gstin": gstin("27", "AAKFN3382N"),
     "address": "Gat No. 418, Chakan Industrial Area Phase I, Pune, Maharashtra, 410501",
     "state": "Maharashtra",
+    "support_email": "suppliers@nareenterprises.com",
+    "payments_email": "payables@nareenterprises.com",
 }
 
 # Bill-first vendors: they already did work for us and register to get paid.

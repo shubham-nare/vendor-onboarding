@@ -183,6 +183,18 @@ class Message(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
+class ContactMessage(Base):
+    """A message sent through the public "Contact us" form. Shown to reviewers in the Outbox."""
+    __tablename__ = "contact_messages"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(120))
+    company: Mapped[str] = mapped_column(String(200), default="")
+    email: Mapped[str] = mapped_column(String(200))
+    topic: Mapped[str] = mapped_column(String(60), default="")
+    body: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
 class ReliabilityCheck(Base):
     """How reliable a vendor looks, from our own history and outside sources (onboarding/reliability.py).
     One row per check; the newest for an application is the one shown. Advisory only: a person decides."""

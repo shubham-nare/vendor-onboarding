@@ -21,6 +21,7 @@
     <label class="block">Work email<input name="email" type="email" required value="{{ values.get('email', '') }}" autocomplete="email" class="mt-1 w-full rounded-md border px-3 py-2.5"></label>
     <label class="block">Password<input name="password" type="password" required minlength="{{ 8 if mode == 'register' else 1 }}"{% if mode == 'register' %} pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{8,}" title="At least 8 characters, with an uppercase letter, a lowercase letter, a number and a symbol such as @"{% endif %} autocomplete="{{ 'new-password' if mode == 'register' else 'current-password' }}" class="mt-1 w-full rounded-md border px-3 py-2.5">
       {% if mode == 'register' %}<span class="block text-xs text-slate-500 mt-1">At least 8 characters, with an uppercase letter, a lowercase letter, a number and a symbol such as @. Stored only as a salted hash.</span>{% endif %}</label>
+    {% include "_botcheck.html" %}
     <button class="w-full rounded-md bg-indigo-600 text-white font-medium py-3 hover:bg-indigo-700 shadow-sm">{{ 'Create account' if mode == 'register' else 'Log in' }}</button>
   </form>
   <p class="mt-4 text-sm text-center text-slate-600">
