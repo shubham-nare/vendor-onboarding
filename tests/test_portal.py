@@ -198,8 +198,8 @@ def flows(tmp_path_factory):
             out["cr_nonote"] = (await staff.post(f"/change-requests/{cr_id}/decide", data={"decision": "approve", "note": ""})).status_code
             out["cr_checker"] = (await staff.post(f"/change-requests/{cr_id}/decide", data={"decision": "approve", "note": "Called the number on record; Sneha confirmed"})).status_code
             out["profile_done"] = (await v.get("/vendor/profile")).text
-            out["documents"] = (await staff.get("/documents")).text
-            out["documents_bills"] = (await staff.get("/documents?kind=invoice&show=all")).text
+            out["documents"] = (await staff.get("/api/v1/documents")).text
+            out["documents_bills"] = (await staff.get("/api/v1/documents?kind=invoice&show=all")).json()
             for path in ("/review", "/applications", "/relationships", "/audit?entity=change_request"):
                 out[path] = await staff.get(path.replace("/audit", "/api/v1/history"))
             out["kesari_360_after_change"] = (await staff.get(f"/vendors/{vnd}")).text
@@ -487,8 +487,9 @@ def test_home_is_only_what_needs_approving(flows):
 
 def test_documents_page_lists_every_upload(flows):
     page = flows["documents"]
-    assert "Documents" in page and "GST certificate" in page and "/files/" in page and "Kesari" in page
-    assert "Onboarding bill" in flows["documents_bills"] and "GST certificate</div>" not in flows["documents_bills"]
+    assert "\"documents\"" in page and "GST certificate" in page and "/files/" in page and "Kesari" in page
+    bills = flows["documents_bills"]["documents"]
+    assert bills and {d["title"] for d in bills} == {"Onboarding bill"}             # only bills when filtered to bills
 
 
 

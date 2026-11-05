@@ -68,8 +68,14 @@ async def relationships(request: Request):
         return await render(request, s, "ws_relationships.html", risks=risks, shared=shared, vendors=vendors)
 
 
-@router.get("/documents", response_class=HTMLResponse)
-async def documents(request: Request, q: str = "", kind: str = "", show: str = ""):
+@router.get("/documents")
+async def documents_page():
+    """Drawn by the browser app from GET /api/v1/documents."""
+    from onboarding.appshell import app_shell
+    return app_shell()
+
+
+async def documents(request: Request, q: str = "", kind: str = "", show: str = "") -> dict:
     """Every file vendors uploaded, newest first; documents from older submissions are marked replaced."""
     async with read_sessions()() as s:
         actor = await _actor(request, s)
@@ -89,5 +95,5 @@ async def documents(request: Request, q: str = "", kind: str = "", show: str = "
             rows = [x for x in rows if x["doc"].slot == kind]
         if q:
             rows = [x for x in rows if q.lower() in f"{x['app'].legal_name} {x['doc'].filename} {x['app'].ref}".lower()]
-        return await render(request, s, "ws_documents.html", rows=rows, kinds=kinds, q=q, kind=kind, show=show)
+        return dict(rows=rows, kinds=kinds)
 

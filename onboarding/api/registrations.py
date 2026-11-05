@@ -155,3 +155,42 @@ async def create_invite(request: Request, body: NewInvite):
         await staff_or_401(request, s)
     token = await create_invite_core(request, body.company_name, body.contact_email, body.business_reason, body.spend_category, body.spend_band)
     return {"ok": True, "token": token, "link": f"/apply/{token}"}
+
+
+# --- documents ------------------------------------------------------------------------------------------------------
+EXPECTED_TYPES = {"gst_certificate": ["GST_CERTIFICATE"], "pan_card": ["PAN_CARD"], "bank_proof": ["CANCELLED_CHEQUE", "BANK_LETTER"],
+                  "udyam_certificate": ["UDYAM_CERTIFICATE"], "invoice": ["TAX_INVOICE"]}
+
+
+def _document_status(slot: str, read_as: str | None, level: str | None, current: bool) -> str:
+    """replaced | wrong | verified | closer_look | not_usable"""
+    if not current:
+        return "replaced"
+    if read_as and slot in EXPECTED_TYPES and read_as not in EXPECTED_TYPES[slot]:
+        return "wrong"
+    if level in ("A2", "A3", "A4"):
+        return "verified"
+    return "closer_look" if level == "A1" else "not_usable"
+
+
+@router.get("/documents")
+async def documents(request: Request, q: str = "", kind: str = "", show: str = ""):
+    """Every file vendors uploaded (reviewers and Finance only), what it was read as and how well it is proven."""
+    from onboarding.rules import SLOT_TITLE
+    from onboarding.web import LEVEL_NAMES
+    from onboarding.workspace import documents as document_rows
+    async with read_sessions()() as s:
+        await staff_or_401(request, s)
+    d = await document_rows(request, q, kind, show)
+    title = lambda slot: "Onboarding bill" if slot == "invoice" else SLOT_TITLE.get(slot, slot)  # noqa: E731
+    out = []
+    for x in d["rows"]:
+        doc, level = x["doc"], (x["doc"].authenticity or {}).get("level")
+        read_as = (doc.read or {}).get("doc_type")
+        out.append({"title": title(doc.slot), "file": {"name": doc.filename, "href": f"/files/{doc.sha256}"},
+                    "vendor": {"name": x["app"].legal_name, "id": x["vendor"].vendor_id if x["vendor"] else None},
+                    "application": {"ref": x["app"].ref, "run_id": x["run"].id},
+                    "read_as": (read_as or "not read").replace("_", " ").lower(),
+                    "proof": {"level": level, "name": LEVEL_NAMES.get(level, "")} if level else None,
+                    "status": _document_status(doc.slot, read_as, level, x["current"]), "uploaded": when(x["run"].started_at)})
+    return {"documents": out, "kinds": [{"key": k, "label": title(k)} for k in d["kinds"]], "filters": {"q": q, "kind": kind, "show": show}}
