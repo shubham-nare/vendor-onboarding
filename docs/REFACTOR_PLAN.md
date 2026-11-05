@@ -171,3 +171,26 @@ onboarding/
    - Also add a reviewer "Re-run checks" action and let the vendor resubmit after a failed or interrupted run.
    - OK?
 5. **S1:** drop the anonymous "guest" path entirely: `demo` is honoured only with `DEMO_TOOLS=true` **and** a known scenario key, and still needs a vendor login or an invite token. OK?
+
+## 9. Decisions (approved 2026-11-06)
+- **Cuts C1–C8: approved**, with two amendments:
+  - **/check** stays, **only in demo mode** (`DEMO_TOOLS=true`). It shows the authenticity checks on any file, including the real GSTN-signed certificate.
+  - The console Home stars and clouds may go. The **public landing page keeps its design exactly as it is.**
+- **Tables:**
+  - merge `email_deliveries` into `messages`, and `staff_logins` into `employees`;
+  - **keep** `vendor_links`: a vendor account claims an invite before any application exists;
+  - **keep** `revoked_sessions`.
+
+  About 17 tables is fine; about 15 was a guide, not a target.
+- **UI:** Jinja.
+- **Interrupted runs:**
+  - re-queue automatically on startup, **once per run**, and only for runs interrupted **less than 1 hour ago**;
+  - older runs go to `PENDING_REVIEW` with an event saying "interrupted, re-run available";
+  - a re-queue creates a **new run** with `parent_run_id` set to the old run. It never resumes mid-state;
+  - add a reviewer "Re-run checks" action;
+  - the vendor may resubmit after a failed or interrupted run.
+- **S1:** approved as written.
+- **Production guard:** done before phase 2 (commit `f524177`).
+  - The tests use a SQLite file for the whole session; it is seeded once and restored after each module.
+  - `pytest_configure` aborts the session if the database URL is not local.
+  - `onboarding.db.engine()` refuses any non-local URL while pytest is loaded.
