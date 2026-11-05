@@ -1204,8 +1204,15 @@ async def run_action(request: Request, run_id: int, action: str = Form(...), com
 
 
 # --- outbox, document check, assumptions, system -----------------------------------------------------
-@router.get("/outbox", response_class=HTMLResponse)
-async def outbox(request: Request):
+@router.get("/outbox")
+async def outbox_page():
+    """Drawn by the browser app from GET /api/v1/outbox."""
+    from onboarding.appshell import app_shell
+    return app_shell()
+
+
+async def outbox(request: Request) -> dict:
+    """Every message to vendors, follow-up notes to requesters, and the Contact us inbox (reviewers and Finance only)."""
     async with read_sessions()() as s:
         access.require_full(await _actor(request, s), "The outbox")
         from onboarding.models import FollowUp
@@ -1218,11 +1225,9 @@ async def outbox(request: Request):
                                 .where(or_(Message.audience == "vendor", Message.id.in_(notes or [-1]))).order_by(Message.id.desc()).limit(100))).all()
         from onboarding.models import EmailDelivery
         mails = {d.message_id: d for d in (await s.execute(select(EmailDelivery).where(EmailDelivery.message_id.in_([m.id for m, _, _ in rows] or [-1])))).scalars()}
-        from onboarding import mailer
         from onboarding.models import ContactMessage
         inbox = (await s.execute(select(ContactMessage).order_by(ContactMessage.id.desc()).limit(50))).scalars().all()
-        return await render(request, s, "outbox.html", rows=rows, mails=mails, mail_on=mailer.configured(), kind=kind, inbox=inbox,
-                            note_to={k: emps.get(v) for k, v in emp_by_note.items()})
+        return dict(rows=rows, mails=mails, kind=kind, inbox=inbox, note_to={k: emps.get(v) for k, v in emp_by_note.items()})
 
 
 @router.get("/check", response_class=HTMLResponse)

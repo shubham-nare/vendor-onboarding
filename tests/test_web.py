@@ -199,7 +199,7 @@ def flows(tmp_path_factory):
             out["console_chasing"] = (await c.get("/api/v1/console/home")).text
 
             for p in ("/", "/outbox", "/assumptions", "/system", "/check?sample=genuine", "/invites"):
-                out[p] = await c.get(p)
+                out[p] = await c.get("/api/v1/outbox" if p == "/outbox" else p)
             for who in ("maker", "checker", "Rahul Desai"):  # each person's "Needs your action" queue
                 await as_(who)
                 out[f"todo_{who}"] = json.dumps((await c.get("/api/v1/console/home")).json()["todo"])   # the Waiting for you list

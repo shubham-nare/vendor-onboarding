@@ -194,3 +194,29 @@ async def documents(request: Request, q: str = "", kind: str = "", show: str = "
                     "proof": {"level": level, "name": LEVEL_NAMES.get(level, "")} if level else None,
                     "status": _document_status(doc.slot, read_as, level, x["current"]), "uploaded": when(x["run"].started_at)})
     return {"documents": out, "kinds": [{"key": k, "label": title(k)} for k in d["kinds"]], "filters": {"q": q, "kind": kind, "show": show}}
+
+
+# --- outbox ---------------------------------------------------------------------------------------------------------
+MESSAGE_STATE = {"sent": "sent", "held": "held for a person", "draft": "not sent"}
+EMAIL_STATE = {"sent": "emailed", "failed": "email failed", "not_configured": "email not set up", "no_address": "no email address"}
+
+
+@router.get("/outbox")
+async def outbox(request: Request):
+    """What we told vendors (and whether it was emailed), notes to requesters, and messages from the Contact us form."""
+    from onboarding.web import outbox as outbox_data
+    async with read_sessions()() as s:
+        await staff_or_401(request, s)
+    d = await outbox_data(request)
+    messages = []
+    for m, run, app in d["rows"]:
+        mail, kind = d["mails"].get(m.id), d["kind"].get(m.id)
+        to = d["note_to"].get(m.id)
+        messages.append({"ref": app.ref, "vendor": app.legal_name, "run_id": run.id, "sent": when(m.created_at), "kind": kind,
+                         "to": (to.name if to else "the requester") if kind == "note" else None,
+                         "state": MESSAGE_STATE.get(m.state, m.state), "subject": m.subject, "body": m.body,
+                         "email": {"status": mail.status, "label": EMAIL_STATE.get(mail.status, mail.status),
+                                   "to": mail.delivered_to if mail.status == "sent" else None} if mail else None})
+    return {"messages": messages,
+            "inbox": [{"name": c.name, "company": c.company, "email": c.email, "topic": c.topic, "body": c.body, "received": when(c.created_at)}
+                      for c in d["inbox"]]}

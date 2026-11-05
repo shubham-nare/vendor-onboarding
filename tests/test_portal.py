@@ -86,7 +86,7 @@ def flows(tmp_path_factory):
             out["console_page"] = (await staff.get("/api/v1/console/home")).text
             out["pending"] = (await staff.get("/api/v1/console/pending")).json()
             out["pending_anon"] = (await other.get("/api/v1/console/pending")).status_code
-            out["applications_page"] = (await staff.get("/outbox")).text   # a staff page still drawn by the server
+            out["applications_page"] = (await staff.get("/system")).text   # a staff page still drawn by the server
             r = await other.post("/vendor/login", data={"email": DEMO_VENDOR["email"], "password": DEMO_PASSWORD})
             out["demo_vendor"] = (r.status_code, (await other.get("/vendor")).text)
             out["vendor_cookie_on_console"] = (await other.get("/console")).headers.get("location", "")
@@ -211,7 +211,7 @@ def flows(tmp_path_factory):
                 staff.cookies.set("actor", str(who))
                 seen[who] = dict(bills=(await staff.get("/bills")).text, bill=await staff.get(f"/bills/{bid2}"), run=await staff.get(f"/runs/{run_id}"),
                                  events=(await staff.get(f"/runs/{run_id}/events")).status_code, file=(await staff.get(f"/files/{sha}")).status_code,
-                                 outbox=(await staff.get("/outbox")).status_code, console=(await staff.get("/api/v1/console/home")).text,
+                                 outbox=(await staff.get("/api/v1/outbox")).status_code, console=(await staff.get("/api/v1/console/home")).text,
                                  vendors=(await staff.get("/api/v1/supplier-accounts")).text,
                                  accounts_status=(await staff.get("/api/v1/supplier-accounts")).status_code)
             out["seen"] = seen

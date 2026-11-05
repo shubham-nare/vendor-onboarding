@@ -37,7 +37,7 @@ def pub(tmp_path_factory):
             out["contact_ok"] = (r.status_code, r.headers.get("location"))
             from onboarding.seeding import DEMO_COMPANY_EMAIL, DEMO_PASSWORD
             await c.post("/company/login", data={"email": DEMO_COMPANY_EMAIL, "password": DEMO_PASSWORD})
-            out["outbox"] = (await c.get("/outbox")).text
+            out["outbox"] = (await c.get("/api/v1/outbox")).text
             # signing up twice (a double click): the second one just logs in; a wrong password still gets the message
             c.cookies.clear()
             twice = {"company_name": "Twice Co", "contact_name": "T", "email": "twice@twice.example.com", "password": "Str0ng!pass"}
@@ -93,7 +93,7 @@ def test_language_switch(pub):
 def test_contact_form_reaches_the_team(pub):
     assert "valid email" in pub["contact_bad"]
     assert pub["contact_ok"] == (303, "/thanks?for=contact")
-    assert "From the Contact us form" in pub["outbox"] and "TIS-0042" in pub["outbox"]
+    assert '"inbox"' in pub["outbox"] and "TIS-0042" in pub["outbox"]
 
 
 def test_bot_check_on_sign_up_and_log_in(pub):
