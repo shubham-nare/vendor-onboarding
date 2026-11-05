@@ -12,7 +12,11 @@ from pathlib import Path
 
 import pytest
 
+from tests.flags import flags_on
 from tests.helpers import set_actor
+
+# this module covers bills, supplier accounts, Vendor 360 and the like, which are hidden unless switched on
+_features = flags_on("payables", "intel", "reliability", "followups", "unsolicited")
 
 ROOT = Path(__file__).resolve().parent.parent
 CACHE = ROOT / "fixtures" / "read_cache"   # committed saved readings of the fictional demo documents

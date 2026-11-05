@@ -29,6 +29,9 @@ async function show(path) {
   view.setAttribute('aria-busy', 'true');
   try {
     leaveView = (await screen.render(view, params)) || null;
+    dropDeadLinks(view);
+    const note = qs('#pending-note');   // the reminder never covers a run page
+    if (note && path.startsWith('/runs/')) note.hidden = true;
     if (location.hash) qs(location.hash.replace(/[^#\w-]/g, ''), view)?.scrollIntoView();
   } catch (e) {
     if (e.status === 401) return;

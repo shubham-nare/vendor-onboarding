@@ -105,7 +105,21 @@ def _card(r: R, status: str) -> dict:
     nxt = {REJECTED: "A person confirms the rejection before the vendor is told.",
            PENDING_REVIEW: "A reviewer decides: approve, ask the vendor, or reject.",
            PENDING_VENDOR: "The vendor has been asked to fix this."}.get(status, "")
-    return {"rule": r.rule_id, "title": r.title, "detail": r.internal or r.vendor_text, "fraud": r.fraud, "next": nxt}
+    title, detail = r.title, r.internal or r.vendor_text
+    lead = _PROBLEM_FIRST.get(r.rule_id)
+    if lead and r.result in (FAIL, WARN) and r.title.startswith(lead[0]):
+        # these titles state what the source said ("GST registry: active, name is ..."), which reads like a pass:
+        # lead with the problem, then the facts
+        title, detail = lead[1], " ".join(x for x in (r.title.rstrip(".") + ".", detail) if x)
+    return {"rule": r.rule_id, "title": title, "detail": detail, "fraud": r.fraud, "next": nxt}
+
+
+# rule id -> (the start of a title that reads like a pass, the problem to lead with instead)
+_PROBLEM_FIRST = {
+    "R-SRC-GST": ("GST registry: active", "GST registry: the registered name doesn't match the application"),
+    "R-SRC-PAN": ("PAN registry: valid", "PAN registry: the registered name doesn't match the application"),
+    "R-SRC-BANK": ("Bank confirms the account holder", "Bank account: the account holder doesn't match the applicant"),
+}
 
 
 def grade(rules: list[R], ctx: Context) -> list[Fact]:

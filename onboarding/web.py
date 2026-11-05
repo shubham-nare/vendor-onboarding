@@ -26,7 +26,8 @@ from urllib.parse import quote
 from onboarding import access, auth, runner, security, staff_cache
 from onboarding import validators as V
 from onboarding.authenticity.assess import assess
-from onboarding.config import get_settings
+from onboarding.config import db_label, feature, features, get_settings
+from onboarding.features import scenario_on
 from onboarding.db import WARM_CONNECTIONS, is_dropped_connection
 from onboarding.demo_data import BUYER, SCENARIOS
 from onboarding.models import (Application, Bill, Document, Employee, Fact, HumanAction, Invite, Message, Run, RunEvent, RuleResult, StoredFile,
@@ -134,7 +135,7 @@ async def _actor(request: Request, s) -> Employee | None:
 async def render(request: Request, s, name: str, **ctx) -> HTMLResponse:
     from onboarding import captcha, google_auth, i18n
     ctx.update(request=request, actor=await _actor(request, s), employees=await _employees(s), path=request.url.path,
-               staff=await staff_member(request, s), DEMO_TOOLS=get_settings().demo_tools,
+               staff=await staff_member(request, s), DEMO_TOOLS=get_settings().demo_tools, FEATURES=features(),
                lang=i18n.lang_of(request), LANGS=i18n.LANGS, captcha_key=captcha.site_key(), google_on=google_auth.configured())
     if "vendor_account" not in ctx:
         ctx["vendor_account"] = await vendor_account(request, s)
@@ -354,12 +355,17 @@ async def _dashboard_ctx(request: Request, s) -> dict:
                      detail="Bank account change" if c.kind == "bank_account" else "Contact change", status="CHANGE",
                      risk="high" if c.kind == "bank_account" else "low", fraud=False, since=c.created_at, waiting=_waiting(c.created_at))
                 for c in cr["c"] if c.kind != "bank_account" or actor.role == "checker"] + todo
+    if not feature("payables"):   # no bills or change requests on the to-do list (or the menu counts) when Payables is off
+        todo = [t for t in todo if t["status"] not in ("BILL", "CHANGE")]
     work =await _work_summary(s, actor, full, counts, todo)
     vnames = {pk: (vid, name) for pk, vid, name in r.get("vnames", [])}
     alerts = [dict(ev=ev, vendor=vend, related=vnames.get(ev.related_vendor_pk)) for ev, vend in r.get("alerts", [])]
     alerts.sort(key=lambda a: a["ev"].severity != "fraud")
+    if not feature("intel"):
+        alerts = []   # risk flags come from Vendor Intelligence
     from onboarding import followups
-    chasing = [w for w in await followups.waiting(s) if full or (actor and w.requester and w.requester.id == actor.id)]
+    chasing = ([w for w in await followups.waiting(s) if full or (actor and w.requester and w.requester.id == actor.id)]
+               if feature("followups") else [])
     open_invites = sum(1 for i in r["invites"] if i.status == "open" and (full or (actor and i.sponsor_id == actor.id))
                        and (not i.expires_at or _utc(i.expires_at) > now()))
     return dict(runs=runs, counts=counts, stats=stats, catalog=demo_catalog(), full=full, open_invites=open_invites,
@@ -524,7 +530,7 @@ async def demo_start(key: str):
     if not get_settings().demo_tools:
         raise HTTPException(404, "Not found")
     cat = demo_catalog()
-    if key not in cat:
+    if key not in cat or not scenario_on(cat[key]):
         raise HTTPException(404, "Unknown scenario")
     sc = cat[key]
     if sc.get("bill"):
@@ -953,14 +959,14 @@ async def run_view(request: Request, run_id: int):
         history = r["history"]
         latest = history[-1].id == run.id
         return await render(request, s, "run.html", run=run, app=app, invite=inv, sponsor=sponsor, bill=bill, bill_emp=bill_emp, full=full,
-                            fact_issues=_fact_issues(r["rules"]) if full else {}, profile_id=(r["profile"] or [[None]])[0][0], snap=(r["snap"] or [None])[0],
+                            fact_issues=_fact_issues(r["rules"]) if full else {}, profile_id=(r["profile"] or [[None]])[0][0] if feature("intel") else None, snap=(r["snap"] or [None])[0],
                             rights=_decision_rights(run, app, inv, bill, bill_emp, list(emps.values())) if latest else [],
                             vendor_token=inv.token if inv else (bill.token if bill else ""), events=events, stages=stages_for(run.form), docs=docs,
                             rules=r["rules"], facts=r["facts"], vendor_msg=msgs.get("vendor"),
                             all_vendor_msgs=[m for m in r["msgs"] if m.audience == "vendor"], internal=msgs.get("internal"),
                             actions=r["actions"], history=history, latest=latest, vendor=(r["vendor"] or [None])[0],
                             allowed=_allowed_actions(run, app, inv, actor, bill, bill_emp), from_vendor=request.query_params.get("from") == "vendor",
-                            reliab=await _reliability(s, app.id) if full else None)
+                            reliab=await _reliability(s, app.id) if full and feature("reliability") else None)
 
 
 async def _reliability(s, application_id: int):
@@ -1202,7 +1208,7 @@ async def run_action(request: Request, run_id: int, action: str = Form(...), com
             new = await rerun(s, run)
             runner.start(new.id)
             return RedirectResponse(f"/runs/{new.id}", status_code=303)
-        if action in ("activate", "review_approve") and reliability_ack != "1":
+        if feature("reliability") and action in ("activate", "review_approve") and reliability_ack != "1":
             rc = await _reliability(s, app.id)
             if rc and rc.level == "high":
                 raise HTTPException(400, "This vendor's reliability check found serious concerns. Read the warning on the page before approving.")
@@ -1246,8 +1252,9 @@ async def run_action(request: Request, run_id: int, action: str = Form(...), com
         ha = HumanAction(run_id=run.id, employee_id=actor.id, action=action, comment=auth.audit_comment(request, comment))
         s.add(ha)
         await s.commit()
-    from onboarding.intel.project import on_decision
-    await on_decision(ha.id)   # Vendor Intelligence: evidence of the decision, closes the risk flags it addressed; never raises
+    if feature("intel"):
+        from onboarding.intel.project import on_decision
+        await on_decision(ha.id)   # Vendor Intelligence: evidence of the decision, closes the risk flags it addressed; never raises
     from onboarding import mailer
     mailer.start(run.id)       # email the vendor the message this decision released, in the background
     return RedirectResponse(f"/runs/{run_id}#actions", status_code=303)
@@ -1339,7 +1346,7 @@ async def system(request: Request) -> dict:
         async def db_counts():
             try:  # one query for all the counts, sent while the bank lookup is in flight
                 row = (await s.execute(select(*(select(func.count()).select_from(m).scalar_subquery() for m in models)))).one()
-                return ("Database (Neon Postgres)", True, f"connected in {round((time.monotonic() - t) * 1000)} ms; "
+                return (db_label(st.database_url), True,f"connected in {round((time.monotonic() - t) * 1000)} ms; "
                         + ", ".join(f"{m.__tablename__}: {v}" for m, v in zip(models, row)))
             except Exception as e:
                 return ("Database", False, type(e).__name__)
@@ -1352,7 +1359,7 @@ async def system(request: Request) -> dict:
         from onboarding import followups
         from onboarding.models import FollowUp
         last = (await s.execute(select(FollowUp).order_by(FollowUp.id.desc()).limit(1))).scalar()
-        chasing = await followups.waiting(s)
+        chasing = await followups.waiting(s) if feature("followups") else []
         return dict(checks=checks, chasing=chasing, last_fu=last)
 
 
