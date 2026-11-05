@@ -243,27 +243,10 @@
   </script>
   {% set landing = path == '/' or path.startswith('/company/') or path in ('/tour', '/contact', '/thanks') %}
   {% set vendor_page = path.startswith('/apply') or path.startswith('/status') or path == '/bill' or path.startswith('/bill?') or (path.startswith('/vendor') and not path.startswith('/vendors')) %}
-  <style>
-    /* cloudy edges on every page (public, supplier and the staff console): an outer white box has no grey outline;
-       layers of white haze fade it into the sky. Boxes inside a white box keep their borders; buttons and pills are left alone. */
-    main :is(section.bg-white, article.bg-white, details.bg-white, form.bg-white, .bg-white.border,
-             .bg-white:is(.rounded-xl, .rounded-2xl, [class*="rounded-["])):not(.bg-white *):not(button, input, select, textarea, .rounded-full, .rounded-md),
-    main ol.rounded-xl.border {
-      border: 0 !important; border-radius: 22px !important; --tw-ring-shadow: 0 0 #0000;
-      box-shadow: 0 0 6px 3px rgba(255,255,255,.95), 0 0 22px 10px rgba(255,255,255,.7), 0 0 52px 24px rgba(255,255,255,.35) !important;
-    }
-    main ol.rounded-xl.border { background: #fff !important; }
-    @media (min-width: 640px) { main ol.rounded-xl.border > li + li { box-shadow: -1px 0 0 #EDF0F4; } }
-  </style>
   {% if not (landing or vendor_page) %}
   <style>
-    /* the staff console: a paler sky, and box edges that blend in quietly instead of glowing */
+    /* the staff console: a paler sky */
     .sky { background: linear-gradient(180deg, #BBD6F8 0%, #D6E7FB 38%, #E7F0FB 70%, #F1F4F9 100%); }
-    main :is(section.bg-white, article.bg-white, details.bg-white, form.bg-white, .bg-white.border,
-             .bg-white:is(.rounded-xl, .rounded-2xl, [class*="rounded-["])):not(.bg-white *):not(button, input, select, textarea, .rounded-full, .rounded-md),
-    main ol.rounded-xl.border {
-      box-shadow: 0 0 3px 1px rgba(255,255,255,.55), 0 0 14px 5px rgba(255,255,255,.28), 0 4px 22px rgba(60,90,140,.06) !important;
-    }
   </style>
   {% endif %}
   {% macro seal(size=32, light=false) -%}
