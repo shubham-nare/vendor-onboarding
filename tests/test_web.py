@@ -11,8 +11,8 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-CACHE = ROOT / ".read_cache"
-pytestmark = pytest.mark.skipif(not CACHE.exists() or not any(CACHE.iterdir()), reason="no cached AI readings")
+CACHE = ROOT / "fixtures" / "read_cache"   # committed saved readings of the fictional demo documents
+pytestmark = pytest.mark.skipif(not CACHE.exists() or not any(CACHE.iterdir()), reason="committed saved AI readings (fixtures/read_cache/) missing")
 
 from pathlib import Path as _Path  # noqa: E402
 

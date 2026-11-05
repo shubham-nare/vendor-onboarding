@@ -1,5 +1,6 @@
 """End-to-end: every scenario through a throwaway SQLite database, using cached AI readings
-(no API calls). Skipped if the reading cache hasn't been built (it's git-ignored)."""
+(no API calls). Uses the committed readings in fixtures/read_cache/; the variants built from private inputs
+(private_inputs/, git-ignored) are left out when those files are absent."""
 
 import asyncio
 import importlib
@@ -10,8 +11,8 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-CACHE = ROOT / ".read_cache"
-pytestmark = pytest.mark.skipif(not CACHE.exists() or not any(CACHE.iterdir()), reason="no cached AI readings")
+CACHE = ROOT / "fixtures" / "read_cache"   # committed saved readings of the fictional demo documents
+pytestmark = pytest.mark.skipif(not CACHE.exists() or not any(CACHE.iterdir()), reason="committed saved AI readings (fixtures/read_cache/) missing")
 
 
 @pytest.fixture(scope="module")
