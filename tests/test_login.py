@@ -73,7 +73,7 @@ def test_wrong_password_and_unknown_email_get_the_same_message(app_client):
     async def go():
         async with await _client(app_client) as c:
             a = await c.post("/company/login", data={"email": DEMO_COMPANY_EMAIL, "password": "not-the-password"})
-            b = await c.post("/company/login", data={"email": "nobody@nareenterprises.com", "password": "whatever-1"})
+            b = await c.post("/company/login", data={"email": "nobody@mamoni.in", "password": "whatever-1"})
             return a, b
     a, b = _run(go())
     for r in (a, b):

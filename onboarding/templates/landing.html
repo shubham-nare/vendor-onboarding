@@ -45,43 +45,145 @@
           <path d="M-11 19 H11" stroke="#9EC2F0" stroke-width="2.5"/>
         </g>
       </defs>
-      {# three ropeways, each sagging between posts #}
-      <g fill="none" stroke="#8FB0D8" stroke-width="1.6" stroke-linecap="round" opacity=".75">
-        <path id="cable-a" d="M-80 132 Q 160 190 400 132 T 880 132 T 1360 132 T 1840 132"/>
-        <path id="cable-b" d="M-80 610 Q 200 680 480 610 T 1040 610 T 1600 610"/>
-        <path id="cable-c" d="M-80 812 Q 140 860 360 812 T 800 812 T 1240 812 T 1680 812" opacity=".7"/>
-      </g>
-      <g fill="#fff" stroke="#8FB0D8" stroke-width="1.5" opacity=".9">
-        {% for x, y in [(400, 132), (880, 132), (1360, 132), (480, 610), (1040, 610), (360, 812), (800, 812), (1240, 812)] %}<circle cx="{{ x }}" cy="{{ y }}" r="5"/>{% endfor %}
-      </g>
-      {# parcels: [cable, which box, seconds to cross, start offset, backwards?] #}
-      {% for cable, box, dur, start, back in [
-          ('a', 'parcel', 46, 0, false), ('a', 'parcel-blue', 46, 15, false), ('a', 'parcel', 46, 31, false),
-          ('b', 'parcel-blue', 58, 4, true), ('b', 'parcel', 58, 24, true), ('b', 'parcel-blue', 58, 43, true),
-          ('c', 'parcel', 70, 10, false), ('c', 'parcel-blue', 70, 45, false)] %}
-      <use href="#{{ box }}" opacity="{{ '.85' if cable != 'c' else '.6' }}">
-        <animateMotion dur="{{ dur }}s" begin="{{ -start }}s" repeatCount="indefinite" calcMode="linear"{% if back %} keyPoints="1;0" keyTimes="0;1"{% endif %}>
-          <mpath href="#cable-{{ cable }}"/>
-        </animateMotion>
-      </use>
-      {% endfor %}
+      <g id="cables" fill="none" stroke="#8FB0D8" stroke-width="1.6" stroke-linecap="round" opacity=".8"></g>
+      <g id="posts" fill="#fff" stroke="#8FB0D8" stroke-width="1.5"></g>
+      <g id="parcels"></g>
     </svg>
   </div>
+  <p id="rope-tip" class="absolute bottom-5 left-1/2 -translate-x-1/2 text-[12.5px] text-[#5B7FAE] bg-white/70 rounded-full px-3 py-1 opacity-0 transition-opacity duration-700">Psst… grab a cable and pull it</p>
 </div>
 <script>
+  /* The ropeway: cables sag between posts and parcels ride them. Grab a cable, pull, let go:
+     it springs back past its rest line, the bounce runs into the next spans, and the parcels swing. */
   (() => {
     const sky = document.getElementById('sky');
     if (!sky) return;
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches) { sky.querySelector('svg').pauseAnimations(); return; }
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = sky.querySelector('svg'), gCables = svg.querySelector('#cables'), gPosts = svg.querySelector('#posts'), gParcels = svg.querySelector('#parcels');
+    const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const K = 85, DAMP = calm ? 16 : 2.6, COUPLE = 30, MAXPULL = 380, G = 900, ARM = 26;
+
+    const CABLES = [
+      { y: 132, sag: 26, posts: [-80, 400, 880, 1360, 1840], secs: 46, dir: 1,  op: .9, parcels: [[0, 'parcel'], [.33, 'parcel-blue'], [.67, 'parcel']] },
+      { y: 610, sag: 32, posts: [-80, 480, 1040, 1600],       secs: 58, dir: -1, op: .9, parcels: [[.07, 'parcel-blue'], [.41, 'parcel'], [.74, 'parcel-blue']] },
+      { y: 812, sag: 22, posts: [-80, 360, 800, 1240, 1680],  secs: 70, dir: 1,  op: .6, parcels: [[.14, 'parcel'], [.64, 'parcel-blue']] },
+    ];
+    for (const c of CABLES) {
+      c.spans = c.posts.slice(1).map((x2, i) => ({ x0: c.posts[i], x2, ox: 0, oy: 0, vx: 0, vy: 0 }));
+      c.path = document.createElementNS(NS, 'path');
+      c.path.setAttribute('opacity', c.op);
+      gCables.appendChild(c.path);
+      c.posts.slice(1, -1).forEach(x => {
+        const p = document.createElementNS(NS, 'circle');
+        p.setAttribute('cx', x); p.setAttribute('cy', c.y); p.setAttribute('r', 5);
+        gPosts.appendChild(p);
+      });
+      c.items = c.parcels.map(([u, kind]) => {
+        const el = document.createElementNS(NS, 'use');
+        el.setAttribute('href', '#' + kind); el.setAttribute('opacity', c.op);
+        gParcels.appendChild(el);
+        return { u, el, th: 0, w: 0, px: null, pvx: 0 };
+      });
+    }
+    // the control point of a span: at rest the curve dips by `sag` in the middle
+    const ctrl = (c, s) => [(s.x0 + s.x2) / 2 + s.ox, c.y + 2 * c.sag + s.oy];
+    const draw = c => {
+      c.path.setAttribute('d', `M${c.posts[0]} ${c.y}` + c.spans.map(s => { const [cx, cy] = ctrl(c, s); return ` Q${cx.toFixed(1)} ${cy.toFixed(1)} ${s.x2} ${c.y}`; }).join(''));
+    };
+    const toSvg = (x, y) => { const m = svg.getScreenCTM(); if (!m) return null; const p = new DOMPoint(x, y).matrixTransform(m.inverse()); return [p.x, p.y]; };
+    // nearest span to a point (sampled along each curve)
+    const nearest = (px, py) => {
+      let best = null;
+      for (const c of CABLES) for (const s of c.spans) {
+        if (px < s.x0 - 10 || px > s.x2 + 10) continue;
+        const [cx, cy] = ctrl(c, s);
+        for (let i = 0; i <= 32; i++) {
+          const t = i / 32, a = (1 - t) * (1 - t), b = 2 * t * (1 - t), d = t * t;
+          const x = a * s.x0 + b * cx + d * s.x2, y = a * c.y + b * cy + d * c.y, dist = Math.hypot(x - px, y - py);
+          if (!best || dist < best.dist) best = { c, s, dist, t };
+        }
+      }
+      return best;
+    };
+    const busy = t => t.closest && t.closest('a,button,input,select,textarea,label,form,section,header,nav,details,[role=dialog]');
+
+    let drag = null, pulled = false;
+    addEventListener('pointerdown', e => {
+      if (e.pointerType === 'touch' || e.button !== 0 || busy(e.target)) return;
+      const p = toSvg(e.clientX, e.clientY); if (!p) return;
+      const hit = nearest(p[0], p[1]);
+      if (!hit || hit.dist > 24) return;
+      e.preventDefault();
+      drag = { c: hit.c, s: hit.s, p, t: Math.max(.2, Math.min(.8, hit.t)) };
+      document.documentElement.style.cursor = 'grabbing';
+      if (!pulled) { pulled = true; tip.style.opacity = 0; }
+    });
+    addEventListener('pointermove', e => {
+      if (drag) { const p = toSvg(e.clientX, e.clientY); if (p) drag.p = p; return; }
+      if (e.pointerType === 'touch') return;
+      const p = busy(e.target) ? null : toSvg(e.clientX, e.clientY), hit = p && nearest(p[0], p[1]);
+      document.documentElement.style.cursor = hit && hit.dist <= 24 ? 'grab' : '';
+    }, { passive: true });
+    const letGo = () => { if (!drag) return; drag = null; document.documentElement.style.cursor = ''; };
+    addEventListener('pointerup', letGo); addEventListener('pointercancel', letGo); addEventListener('blur', letGo);
+
+    const tip = document.getElementById('rope-tip');
+    setTimeout(() => { if (!pulled) tip.style.opacity = 1; }, 3500);
+    setTimeout(() => { tip.style.opacity = 0; }, 14000);
+
+    let last = performance.now();
+    const frame = now => {
+      const dt = Math.min(.033, (now - last) / 1000); last = now;
+      for (const c of CABLES) {
+        // springs: each span pulls back to rest and toward its neighbours, so a bounce travels along the cable
+        c.spans.forEach((s, i) => {
+          if (drag && drag.s === s) {
+            // the point you grabbed follows the pointer: P(t) = a*P0 + b*C + d*P2, solved for C
+            const t = drag.t, a = (1 - t) * (1 - t), b = 2 * t * (1 - t), d = t * t;
+            let ox = (drag.p[0] - a * s.x0 - d * s.x2) / b - (s.x0 + s.x2) / 2, oy = (drag.p[1] - (a + d) * c.y) / b - (c.y + 2 * c.sag);
+            const len = Math.hypot(ox, oy); if (len > MAXPULL) { ox *= MAXPULL / len; oy *= MAXPULL / len; }
+            s.vx = (ox - s.ox) / Math.max(dt, .001); s.vy = (oy - s.oy) / Math.max(dt, .001);
+            s.vx = Math.max(-2500, Math.min(2500, s.vx)); s.vy = Math.max(-2500, Math.min(2500, s.vy));
+            s.ox = ox; s.oy = oy; return;
+          }
+          const L = c.spans[i - 1], R = c.spans[i + 1];
+          const nx = (L ? L.ox : 0) + (R ? R.ox : 0) - 2 * s.ox, ny = (L ? L.oy : 0) + (R ? R.oy : 0) - 2 * s.oy;
+          s.vx += (-K * s.ox - DAMP * s.vx + COUPLE * nx * .5) * dt;
+          s.vy += (-K * s.oy - DAMP * s.vy + COUPLE * ny) * dt;
+          s.ox += s.vx * dt; s.oy += s.vy * dt;
+        });
+        draw(c);
+        // parcels ride the cable and hang like pendulums from their trolleys
+        const total = c.path.getTotalLength();
+        for (const it of c.items) {
+          if (!calm) it.u = (it.u + c.dir * dt / c.secs + 1) % 1;
+          const pt = c.path.getPointAtLength(it.u * total);
+          if (it.px) {
+            const vx = (pt.x - it.px[0]) / dt, vy = (pt.y - it.px[1]) / dt;
+            const ax = Math.max(-6000, Math.min(6000, (vx - it.pvx) / dt));
+            it.pvx = vx;
+            it.w += (-(G / ARM) * Math.sin(it.th) - (ax / ARM) * Math.cos(it.th) * .35 - 2.2 * it.w) * dt;
+            it.th = Math.max(-1.1, Math.min(1.1, it.th + it.w * dt));
+            if (Math.abs(pt.x - it.px[0]) > 200) { it.th = 0; it.w = 0; }   // wrapped round to the start
+          }
+          it.px = [pt.x, pt.y];
+          it.el.setAttribute('transform', `translate(${pt.x.toFixed(1)} ${pt.y.toFixed(1)}) rotate(${(it.th * 57.3).toFixed(1)})`);
+        }
+      }
+      requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+
+    // clouds and cables lean a little toward the cursor; a soft glow follows it
+    if (calm) return;
     let raf = 0, ev = null;
     addEventListener('pointermove', e => {
       ev = e;
       if (raf) return;
       raf = requestAnimationFrame(() => {
         raf = 0;
-        const mx = ev.clientX / innerWidth * 2 - 1, my = ev.clientY / innerHeight * 2 - 1;
-        sky.style.setProperty('--mx', mx.toFixed(3));
-        sky.style.setProperty('--my', my.toFixed(3));
+        sky.style.setProperty('--mx', (ev.clientX / innerWidth * 2 - 1).toFixed(3));
+        sky.style.setProperty('--my', (ev.clientY / innerHeight * 2 - 1).toFixed(3));
         sky.style.setProperty('--cx', ev.clientX + 'px');
         sky.style.setProperty('--cy', ev.clientY + 'px');
       });
@@ -102,14 +204,34 @@
         <span class="h-11 w-11 rounded-full bg-slate-900 text-white grid place-items-center">{{ icon('shield', 'h-5 w-5') }}</span>
         <h2 class="text-[26px] leading-tight">I work at {{ BUYER.short_name }}</h2>
       </div>
-      <div class="flex-1"></div>
       {% if staff %}
+        <div class="flex-1"></div>
         <a href="/console" class="mt-7 inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 text-white font-medium px-5 py-3 hover:bg-slate-800 shadow-sm">{{ 'Open the console' | t }} {{ icon('arrow') }}</a>
         <p class="mt-2 text-xs text-slate-500 text-center truncate">Logged in as {{ staff.name }} · {{ ROLE_LABEL[staff.role] }}</p>
       {% else %}
-        <a href="/company/login" class="mt-7 inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 text-white font-medium px-5 py-3 hover:bg-slate-800 shadow-sm">{{ 'Employee log in' | t }} {{ icon('arrow') }}</a>
+        <form id="home-login" method="post" action="/company/login" class="mt-5 space-y-3 text-[14px] flex-1 flex flex-col">
+          <input type="hidden" name="next" value="/console">
+          <label class="block text-slate-700">User ID <span class="text-slate-400">(work email)</span>
+            <input name="email" type="email" required autocomplete="username" placeholder="name@mamoni.in" class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2.5 focus:border-slate-500 outline-none"></label>
+          <label class="block text-slate-700">Password
+            <input name="password" type="password" required autocomplete="current-password" class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2.5 focus:border-slate-500 outline-none"></label>
+          {% include "_botcheck.html" %}
+          <div class="flex-1"></div>
+          <button class="mt-2 inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 text-white font-medium px-5 py-3 hover:bg-slate-800 shadow-sm">{{ 'Employee log in' | t }} {{ icon('arrow') }}</button>
+        </form>
+        {% if team %}
+        <div class="mt-3 flex flex-wrap items-center gap-1.5 text-[12px] text-slate-500">
+          <span>Demo, password <span class="mono">{{ demo.password }}</span>:</span>
+          {% for e in team %}<button type="button" data-email="{{ e.email }}" class="home-fill rounded-full border border-slate-300 bg-white px-2.5 py-0.5 hover:border-slate-500" title="{{ e.email }}">{{ e.name.split(' ')[0] }} · {{ ROLE_LABEL[e.role] }}</button>{% endfor %}
+        </div>
+        <script>
+          document.querySelectorAll('.home-fill').forEach(b => b.addEventListener('click', () => {
+            const f = document.getElementById('home-login');
+            f.email.value = b.dataset.email; f.password.value = {{ demo.password | tojson }}; f.querySelector('button').focus();
+          }));
+        </script>
+        {% endif %}
       {% endif %}
-      <p class="mt-3 text-xs text-slate-500">Employees log in with their work email.</p>
     </section>
 
     <section class="relative bg-white rounded-xl border p-6 sm:p-8 flex flex-col ring-1 ring-indigo-100 hover-lift">

@@ -542,7 +542,7 @@ async def _vendor_link(s, token: str) -> tuple[Invite | None, Bill | None, Appli
 
 
 async def _resolve_employee(s, text: str) -> Employee | None:
-    """Match 'Priya Nair', 'priya', 'priya.nair@nareenterprises.com' to one employee (None if unknown or ambiguous)."""
+    """Match 'Priya Nair', 'priya', 'priya.nair@mamoni.in' to one employee (None if unknown or ambiguous)."""
     t = " ".join((text or "").lower().replace(".", " ").split())
     if not t:
         return None

@@ -1,6 +1,6 @@
 """The two front doors and everything behind the vendor one.
 
-  /                     choose: "I work at Nare Enterprises" (console) or "I'm a vendor" (portal)
+  /                     choose: "I work at Mamoni" (console) or "I'm a vendor" (portal)
   /vendor/register      create a vendor account        /vendor/login, /vendor/logout
   /vendor               the vendor's home: registration status, messages, next step, bills
   /vendor/bills/new     an ACTIVE vendor submits another bill
@@ -29,7 +29,7 @@ from onboarding import bills as B
 from onboarding.demo_data import KESARI, SCENARIOS
 from onboarding.models import (Application, Bill, Document, Employee, Fact, Invite, Message, Run, StaffLogin, StoredFile, VendorAccount, VendorBill,
                                VendorLink, VendorMaster, now)
-from onboarding.seeding import DEMO_COMPANY_EMAIL, DEMO_PASSWORD, DEMO_VENDOR
+from onboarding.seeding import DEMO_COMPANY_EMAIL, DEMO_PASSWORD, DEMO_VENDOR, EMPLOYEES
 from onboarding.pipeline import read_sessions, sessions
 from onboarding.rules import money
 from onboarding.web import (MAX_BYTES, ROLE_LABEL, _actor, _all, _employees, _reads, _resolve_employee, _rows, render, safe_next,
@@ -104,7 +104,8 @@ async def company_logout():
 @router.get("/", response_class=HTMLResponse)
 async def landing(request: Request):
     async with sessions()() as s:
-        return await render(request, s, "landing.html")
+        demo = _demo()
+        return await render(request, s, "landing.html", demo=demo, team=EMPLOYEES if demo else [])
 
 
 @router.get("/tour", response_class=HTMLResponse)

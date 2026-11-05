@@ -70,7 +70,7 @@ def test_public_pages_have_the_top_bar(pub):
 
 def test_the_thank_you_page(pub):
     page = pub["/thanks?for=bill&ref=VOB-0004"].text
-    assert "Thank you for submitting your bill." in page and "VOB-0004" in page and "suppliers@nareenterprises.com" in page
+    assert "Thank you for submitting your bill." in page and "VOB-0004" in page and "suppliers@mamoni.in" in page
     assert "<script>x" not in pub["/thanks?ref=<script>x"].text                 # the reference is cleaned
 
 
@@ -91,3 +91,10 @@ def test_bot_check_on_sign_up_and_log_in(pub):
     assert "not a robot" in pub["reg_no_token"]
     assert "Something went wrong" in pub["reg_honeypot"]
     assert pub["login_no_token"] == 200                                          # back on the log-in page, not logged in
+
+
+def test_home_has_the_employee_log_in_and_the_ropeway(pub):
+    page = pub["/"].text
+    assert 'id="home-login"' in page and 'action="/company/login"' in page and 'name="password"' in page
+    assert "I work at Mamoni" in page and "Nare" not in page
+    assert 'id="cables"' in page and "rope-tip" in page
