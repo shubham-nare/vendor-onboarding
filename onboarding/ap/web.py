@@ -261,9 +261,15 @@ async def po_receipt(request: Request, po_id: int):
     return RedirectResponse(f"/purchase-orders/{po_id}", status_code=303)
 
 
-@router.get("/audit", response_class=HTMLResponse)
-async def audit_log(request: Request, entity: str = ""):
-    """Decisions and audit history: every material action, newest first."""
+@router.get("/audit")
+async def audit_page():
+    """Drawn by the browser app from GET /api/v1/history."""
+    from onboarding.appshell import app_shell
+    return app_shell()
+
+
+async def audit_log(request: Request, entity: str = "") -> list[dict]:
+    """Decisions and audit history: every material action, newest first (reviewers and Finance only)."""
     from onboarding.models import HumanAction, Run, Application
     async with read_sessions()() as s:
         actor = await _actor(request, s)
@@ -282,7 +288,7 @@ async def audit_log(request: Request, entity: str = ""):
             rows.append(dict(at=a.at, who=f"{emp.name} ({ROLE_LABEL.get(emp.role, emp.role)})", entity="application", label=app.ref, action=a.action,
                              reason=a.comment, override=a.action in ("override_reject", "review_approve"), vendor=None, href=f"/runs/{a.run_id}"))
         rows.sort(key=lambda x: x["at"].replace(tzinfo=None) if x["at"] else x["at"], reverse=True)
-        return await render(request, s, "ap_audit.html", rows=rows, entity=entity, labels=B.BILL_ACTION_LABEL)
+        return rows
 
 
 @router.post("/change-requests/{cr_id}/decide")
