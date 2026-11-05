@@ -6,17 +6,22 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import logging
 import mimetypes
-from datetime import datetime, timezone
+import secrets
+import time
+import weakref
+from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from onboarding import decision as D
 from onboarding import address as A
 from onboarding import sources as S
-from onboarding.ai.read import DocRead, read_with_cache
-from onboarding.authenticity.assess import assess
+from onboarding.ai.read import DEADLINE, DocRead, read_with_cache
+from onboarding.authenticity.assess import assess_async
+from onboarding.config import get_settings
 from onboarding.db import engine
 from onboarding.models import (Application, Bill, Blocklist, Document, Employee, Fact, Invite, Message, Run, RunEvent, RuleResult,
                                StoredFile, VendorMaster, now)
@@ -57,22 +62,77 @@ def read_sessions() -> async_sessionmaker:
 
 
 # --- creating a run -----------------------------------------------------------------------------
+log = logging.getLogger("onboarding.pipeline")
+_create_locks: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Lock]" = weakref.WeakKeyDictionary()
+_recent_tokens: dict[str, tuple[float, int]] = {}   # submit_token -> (monotonic time, run id)
+TOKEN_TTL = 600.0
+
+
+def _create_lock() -> asyncio.Lock:
+    loop = asyncio.get_running_loop()
+    if loop not in _create_locks:
+        _create_locks[loop] = asyncio.Lock()
+    return _create_locks[loop]
+
+
+async def _latest_run_id(s: AsyncSession, app_id: int) -> int | None:
+    return (await s.execute(select(Run.id).where(Run.application_id == app_id).order_by(Run.id.desc()))).scalars().first()
+
+
+async def _free_ref(s: AsyncSession, app_id: int) -> str:
+    """The reference comes from the primary key (unique by construction); a legacy ref with the same number gets a suffix."""
+    ref, k = f"VOB-{app_id:04d}", 1
+    while (await s.execute(select(Application.id).where(Application.ref == ref, Application.id != app_id))).first():
+        k += 1
+        ref = f"VOB-{app_id:04d}-{k}"
+    return ref
+
+
 async def create_run(s: AsyncSession, form: dict, files: dict[str, tuple[str, bytes]], *, invite_token: str | None,
-                     parent_run_id: int | None = None) -> Run:
-    """files: slot -> (filename, bytes). Re-uses the application on resubmission."""
-    invite = (await s.execute(select(Invite).where(Invite.token == invite_token))).scalar_one_or_none() if invite_token else None
-    app = None
-    if parent_run_id:
-        app = await s.get(Application, (await s.get(Run, parent_run_id)).application_id)
-    elif invite:
-        app = (await s.execute(select(Application).where(Application.invite_id == invite.id))).scalars().first()
-    if app is None:
-        n = (await s.execute(select(func.count(Application.id)))).scalar() or 0
-        app = Application(ref=f"VOB-{n + 1:04d}", invite_id=invite.id if invite else None, legal_name=form.get("legal_name", ""))
-        s.add(app)
-        await s.flush()
-    if parent_run_id is None:
-        parent_run_id = (await s.execute(select(Run.id).where(Run.application_id == app.id).order_by(Run.id.desc()))).scalars().first()
+                     parent_run_id: int | None = None, submit_token: str | None = None) -> Run:
+    """files: slot -> (filename, bytes). Re-uses the application on resubmission.
+
+    Double submits never make two runs: run creation takes turns in this process, the invite / application row is
+    locked (SELECT ... FOR UPDATE on Postgres) until the commit, and a submission whose application already has a newer
+    run than the caller saw, or whose submit_token was used in the last 10 minutes, gets the existing run back
+    (run.duplicate = True; runner.start on it is a no-op)."""
+    async with _create_lock():
+        if submit_token and (hit := _recent_tokens.get(submit_token)) and time.monotonic() - hit[0] < TOKEN_TTL:
+            if (old := await s.get(Run, hit[1])) is not None:
+                old.duplicate = True
+                return old
+        invite = (await s.execute(select(Invite).where(Invite.token == invite_token).with_for_update()
+                                  .execution_options(populate_existing=True))).scalar_one_or_none() if invite_token else None
+        app = None
+        if parent_run_id:
+            app_id = (await s.get(Run, parent_run_id)).application_id
+            app = (await s.execute(select(Application).where(Application.id == app_id).with_for_update()
+                                   .execution_options(populate_existing=True))).scalar_one()
+        elif invite:
+            app = (await s.execute(select(Application).where(Application.invite_id == invite.id))).scalars().first()
+        if app is not None and (latest := await _latest_run_id(s, app.id)) is not None and latest != parent_run_id:
+            old = await s.get(Run, latest)   # another submission got there first
+            old.duplicate = True
+            return old
+        if app is None:
+            app = Application(ref=f"TMP-{secrets.token_hex(6)}", invite_id=invite.id if invite else None, legal_name=form.get("legal_name", ""))
+            s.add(app)
+            await s.flush()
+            app.ref = await _free_ref(s, app.id)
+        app.current_status = "IN_PROGRESS"
+        run = await _new_run(s, app, form, files, parent_run_id)
+        if invite and invite.status == "open":
+            invite.status = "used"
+        await s.commit()
+        if submit_token:
+            t = time.monotonic()
+            for k in [k for k, (at, _) in _recent_tokens.items() if t - at > TOKEN_TTL]:
+                _recent_tokens.pop(k, None)
+            _recent_tokens[submit_token] = (t, run.id)
+        return run
+
+
+async def _new_run(s: AsyncSession, app: Application, form: dict, files: dict[str, tuple[str, bytes]], parent_run_id: int | None) -> Run:
     run = Run(application_id=app.id, parent_run_id=parent_run_id, form=form)
     s.add(run)
     await s.flush()
@@ -85,10 +145,23 @@ async def create_run(s: AsyncSession, form: dict, files: dict[str, tuple[str, by
             await s.flush()
     for slot, (filename, _data) in files.items():
         s.add(Document(run_id=run.id, slot=slot, filename=filename, sha256=shas[slot]))
-    if invite and invite.status == "open":
-        invite.status = "used"
-    await s.commit()
+    await s.flush()
     return run
+
+
+async def stored_files(s: AsyncSession, run_id: int) -> dict[str, tuple[str, bytes]]:
+    """A run's documents as create_run takes them (slot -> (filename, bytes))."""
+    out = {}
+    for d in (await s.execute(select(Document).where(Document.run_id == run_id))).scalars():
+        out[d.slot] = (d.filename, (await s.get(StoredFile, d.sha256)).data)
+    return out
+
+
+async def rerun(s: AsyncSession, run: Run) -> Run:
+    """A new run of the same application from `run`'s stored form and documents, linked by parent_run_id. Never resumes
+    a run mid-way. Commits; start it with runner.start(new.id)."""
+    form = {k: v for k, v in (run.form or {}).items() if k != "bill_read_from_document"}
+    return await create_run(s, form, await stored_files(s, run.id), invite_token=None, parent_run_id=run.id)
 
 
 # --- running it ------------------------------------------------------------------------------------
@@ -104,12 +177,20 @@ class Events:
             await self.s.commit()
 
 
-async def run_pipeline(run_id: int, *, prefer_cache: bool = False, pace: float = 0.0) -> D.Decision:
-    """pace: seconds between the (instant) rule-stage updates, so a viewer can follow them."""
+async def run_pipeline(run_id: int, *, prefer_cache: bool | None = None, pace: float = 0.0) -> D.Decision | None:
+    """pace: seconds between the (instant) rule-stage updates, so a viewer can follow them. prefer_cache: saved
+    readings first (default: settings.read_cache_first). Returns None, doing nothing, if the run isn't queued (a
+    duplicate start, or a run already taken by another worker)."""
+    st = get_settings()
+    if prefer_cache is None:
+        prefer_cache = st.read_cache_first
     async with sessions()() as s:
+        claimed = await s.execute(update(Run).where(Run.id == run_id, Run.state == "queued").values(state="running"))
+        await s.commit()
+        if claimed.rowcount != 1:
+            return None
         run = await s.get(Run, run_id)
         app = await s.get(Application, run.application_id)
-        run.state = "running"
         ev = Events(s, run_id)
         form = run.form
 
@@ -129,11 +210,13 @@ async def run_pipeline(run_id: int, *, prefer_cache: bool = False, pace: float =
 
         # S3 read (parallel; Gemini, cache fallback)
         await ev.emit("read", "running", f"Reading {len(files)} documents")
+        deadline = asyncio.get_running_loop().time() + st.read_deadline_seconds   # one reading budget for the whole run
+
         async def read_one(slot: str, sf: StoredFile):
-            res, origin = await read_with_cache(sf.data, sf.mime, prefer="cache" if prefer_cache else "live")
-            what = (res.read.doc_type.replace("_", " ").lower() if res.ok and res.read else "could not be read")
-            how = {"live": f"live, {res.model}, {res.seconds}s", "cache": "saved reading", "cache-fallback": "AI unavailable: saved reading",
-                   "failed": "AI unavailable"}.get(origin, origin)
+            res, origin = await read_with_cache(sf.data, sf.mime, prefer="cache" if prefer_cache else "live", deadline=deadline)
+            what = (res.read.doc_type.replace("_", " ").lower() if res.ok and res.read else "could not be read, a person will look at it")
+            how = {"live": f"AI, live, {res.model}, {res.seconds}s", "cache": "saved reading", "cache-fallback": "AI unavailable: saved reading",
+                   "failed": "AI unavailable" if res.error != DEADLINE else "AI too slow"}.get(origin, origin)
             await ev.emit("read", "running", f"{SLOT_TITLE.get(slot, slot)}: {what} ({how})",
                           {"slot": slot, "origin": origin, "form": res.read.document_form if res.ok and res.read else None})
             return res, origin
@@ -152,8 +235,8 @@ async def run_pipeline(run_id: int, *, prefer_cache: bool = False, pace: float =
             run.form = form
 
         # S4 authenticity (code)
-        for slot, (doc, sf) in files.items():
-            a = assess(sf.data, sf.mime, infos[slot].read)
+        auths = await asyncio.gather(*(assess_async(sf.data, sf.mime, infos[slot].read) for slot, (_, sf) in files.items()))
+        for (slot, (doc, _sf)), a in zip(files.items(), auths):
             infos[slot].auth = a
             doc.authenticity = a.as_dict()
         await s.commit()
@@ -287,16 +370,31 @@ async def gather_context(s: AsyncSession, app: Application, form: dict, docs_row
                    bill=bill_ctx, as_of=as_of)
 
 
-async def mark_failed(run_id: int, error: str) -> None:
-    """A crash mid-run is shown as a failed run with the error type, never lost."""
+RERUN_HINT = "Nothing was decided. A reviewer can re-run the checks, or the vendor can resubmit from the same link."
+
+
+async def _stop(s: AsyncSession, run: Run, state: str, summary: str, evidence: dict | None = None) -> None:
+    """End an unfinished run: its state, a final event, and its application out of IN_PROGRESS (to review) unless
+    a newer run is on its way."""
+    run.state, run.finished_at = state, now()
+    last = (await s.execute(select(func.max(RunEvent.seq)).where(RunEvent.run_id == run.id))).scalar() or 0
+    s.add(RunEvent(run_id=run.id, seq=last + 1, stage="decision", state="failed", summary=summary, evidence=evidence or {}))
+    app = await s.get(Application, run.application_id)
+    if app and app.current_status == "IN_PROGRESS" and await _latest_run_id(s, app.id) == run.id:
+        app.current_status = "PENDING_REVIEW"
+
+
+async def mark_failed(run_id: int, error: str) -> bool:
+    """A crash mid-run is shown as a failed run with the error type, never lost. Never touches a finished run."""
     async with sessions()() as s:
         run = await s.get(Run, run_id)
-        if run is None:
-            return
-        run.state, run.finished_at = "failed", now()
-        last = (await s.execute(select(func.max(RunEvent.seq)).where(RunEvent.run_id == run_id))).scalar() or 0
-        s.add(RunEvent(run_id=run_id, seq=last + 1, stage="decision", state="failed", summary=f"Run stopped by an internal error ({error}). Nothing was decided; retry or review manually."))
+        if run is None or run.state == "done":
+            if run is not None:
+                log.error("run %s already finished; not marking it failed (%s)", run_id, error)
+            return False
+        await _stop(s, run, "failed", f"Run stopped by an internal error ({error}). {RERUN_HINT}")
         await s.commit()
+        return True
 
 
 async def _diff(s: AsyncSession, run: Run, rules) -> dict:
@@ -308,11 +406,53 @@ async def _diff(s: AsyncSession, run: Run, rules) -> dict:
     return {"resolved": sorted(prev - now_fail), "still_open": sorted(prev & now_fail), "new": sorted(now_fail - prev)}
 
 
-async def sweep_interrupted() -> int:
-    """On startup: runs left 'running' by a restart are marked interrupted (never silently lost)."""
+def _utc(t: datetime | None) -> datetime | None:
+    return t if t is None or t.tzinfo else t.replace(tzinfo=timezone.utc)
+
+
+async def _was_requeued(s: AsyncSession, run_id: int | None) -> bool:
+    """Did recovery already re-run this run once (recorded in its final event, so it survives restarts)?"""
+    if not run_id:
+        return False
+    evs = (await s.execute(select(RunEvent.evidence).where(RunEvent.run_id == run_id, RunEvent.stage == "decision"))).scalars()
+    return any((e or {}).get("requeued") for e in evs)
+
+
+async def recover_interrupted(*, requeue: bool = True) -> dict:
+    """On startup: runs left queued/running belonged to a process that is gone. Each is marked interrupted (never
+    resumed mid-way). If it was cut off less than settings.requeue_window_minutes ago, is its application's latest run,
+    and is not itself a recovery re-run, it is re-run ONCE: a new run (parent_run_id = the old one) from the stored form
+    and documents. Otherwise its application goes to PENDING_REVIEW with an "interrupted, re-run available" event."""
+    window = timedelta(minutes=get_settings().requeue_window_minutes)
+    out: dict[str, list[int]] = {"requeued": [], "parked": []}
     async with sessions()() as s:
-        stuck = (await s.execute(select(Run).where(Run.state.in_(["queued", "running"])))).scalars().all()
+        stuck = (await s.execute(select(Run).where(Run.state.in_(["queued", "running"])).order_by(Run.id))).scalars().all()
         for r in stuck:
-            r.state = "interrupted"
+            seen = (await s.execute(select(func.max(RunEvent.at)).where(RunEvent.run_id == r.id))).scalar()
+            alive = max(t for t in (_utc(r.started_at), _utc(seen)) if t is not None)
+            once_already = r.parent_run_id is not None and await _was_requeued(s, r.parent_run_id)
+            if (requeue and now() - alive < window and not once_already
+                    and await _latest_run_id(s, r.application_id) == r.id):
+                await _stop(s, r, "interrupted", "Interrupted by a server restart. The checks were started again from the same form and "
+                                                 "documents (a new run).", {"requeued": True})
+                new = await rerun(s, r)   # commits the old run's end and the new run together
+                out["requeued"].append(new.id)
+            else:
+                why = ("it had already been re-run once" if once_already else
+                       "more than an hour ago" if now() - alive >= window else "")
+                await _stop(s, r, "interrupted", f"Interrupted by a server restart{' (' + why + ')' if why else ''}; re-run available. {RERUN_HINT}")
+                out["parked"].append(r.id)
         await s.commit()
-        return len(stuck)
+    if out["requeued"]:
+        from onboarding import runner
+        for rid in out["requeued"]:
+            runner.start(rid)
+    if stuck:
+        log.warning("unfinished runs after restart: re-queued %s, sent to review %s", out["requeued"], out["parked"])
+    return out
+
+
+async def sweep_interrupted() -> int:
+    """Startup without re-queueing: unfinished runs are marked interrupted and their applications go to review."""
+    out = await recover_interrupted(requeue=False)
+    return len(out["parked"])

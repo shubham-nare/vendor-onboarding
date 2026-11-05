@@ -208,7 +208,7 @@ def golden(tmp_path_factory):
     with pytest.MonkeyPatch.context() as mp:
         # The app's background runner, made awaitable: same _run (pipeline, intelligence, mail, reliability), saved readings first.
         mp.setattr(runner, "PACE", 0)
-        mp.setattr(runner, "start", lambda run_id, prefer_cache=False: pending.append(asyncio.create_task(runner._run(run_id, True))))
+        mp.setattr(runner, "start", lambda run_id, prefer_cache=False: pending.append(asyncio.create_task(runner._run(run_id))))
         mp.setattr(mailer, "start", lambda run_id: pending.append(asyncio.create_task(mailer.deliver_for_run(run_id))))
         asyncio.run(go())
     os.environ.pop("DATABASE_URL", None)
