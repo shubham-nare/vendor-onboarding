@@ -31,3 +31,18 @@ def test_direct_url_keeps_defaults():
 
     _, kwargs = engine_args("postgresql://u:p@ep-x.c-2.aws.neon.tech/neondb?sslmode=require")
     assert "connect_args" not in kwargs
+
+
+def test_tests_can_never_reach_a_remote_database():
+    import pytest as _pytest
+
+    from onboarding.db import is_local_url, refuse_remote_database_under_tests
+    assert is_local_url("sqlite+aiosqlite:///x.db") and is_local_url("postgresql://u:p@127.0.0.1/db")
+    assert not is_local_url("postgresql://u:p@ep-x.ap-southeast-1.aws.neon.tech/neondb")
+    with _pytest.raises(RuntimeError, match="non-local database"):
+        refuse_remote_database_under_tests("postgresql://u:p@ep-x.ap-southeast-1.aws.neon.tech/neondb")
+
+
+def test_the_session_runs_on_sqlite():
+    import onboarding.config as cfg
+    assert cfg.get_settings().database_url.startswith("sqlite")

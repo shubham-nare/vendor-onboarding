@@ -79,10 +79,27 @@ def install_idle_ping(eng: AsyncEngine, idle_seconds: float = IDLE_PING_SECONDS)
                 raise DisconnectionError() from e
 
 
+def is_local_url(url: str) -> bool:
+    """SQLite, or a database server on this machine."""
+    if url.startswith("sqlite"):
+        return True
+    host = (urlsplit(url).hostname or "").lower()
+    return host in ("localhost", "127.0.0.1", "::1")
+
+
+def refuse_remote_database_under_tests(url: str) -> None:
+    """Tests must never reach a real database (the local .env may hold production's URL). Fail loudly instead."""
+    import sys
+    if "pytest" in sys.modules and not is_local_url(url):
+        raise RuntimeError("Refusing to connect to a non-local database while tests are running. "
+                           "Tests must use SQLite (tests/conftest.py sets one for the session).")
+
+
 def engine() -> AsyncEngine:
     global _engine
     if _engine is None:
         settings = get_settings()
+        refuse_remote_database_under_tests(settings.database_url)
         url, kwargs = engine_args(settings.database_url, direct=settings.db_direct)
         _engine = create_async_engine(url, **kwargs)
         if url.startswith("postgresql+asyncpg"):
