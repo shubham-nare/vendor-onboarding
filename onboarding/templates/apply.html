@@ -1,15 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ 'Register and submit your bill' if (bill_mode or bill or values.get('bill_mode')) else 'Register as a vendor' }}{% endblock %}
 {% block content %}
-{% if bill_mode or bill or values.get('bill_mode') %}
-<style>
-  /* trial: cloudy edges. No hard border; layered white haze around each white box fades it into the sky */
-  main section.bg-white.rounded-xl {
-    border: 0 !important; --tw-ring-color: transparent; --tw-ring-shadow: 0 0 #0000; border-radius: 22px !important;
-    box-shadow: 0 0 6px 3px rgba(255,255,255,.95), 0 0 22px 10px rgba(255,255,255,.7), 0 0 52px 24px rgba(255,255,255,.35) !important;
-  }
-</style>
-{% endif %}
 {% set REQ %}<span class="text-rose-600 ml-0.5" aria-hidden="true">*</span>{% endset %}
 <style>
   /* filled from a document: blue; hard to read or changed by the vendor: orange */

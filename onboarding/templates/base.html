@@ -243,6 +243,19 @@
   </script>
   {% set landing = path == '/' or path.startswith('/company/') or path in ('/tour', '/contact', '/thanks') %}
   {% set vendor_page = path.startswith('/apply') or path.startswith('/status') or path == '/bill' or path.startswith('/bill?') or (path.startswith('/vendor') and not path.startswith('/vendors')) %}
+  {% if landing or vendor_page %}
+  <style>
+    /* cloudy edges on the public and supplier pages: an outer white box has no grey outline; layers of white haze fade it
+       into the sky. Boxes inside a white box keep their borders. The console keeps crisp borders. */
+    main :is(section, article, form, details, div, a, li).bg-white:not(.bg-white *):is(.rounded-xl, .rounded-2xl, [class*="rounded-["]),
+    main ol.rounded-xl.border {
+      border: 0 !important; border-radius: 22px !important; --tw-ring-shadow: 0 0 #0000;
+      box-shadow: 0 0 6px 3px rgba(255,255,255,.95), 0 0 22px 10px rgba(255,255,255,.7), 0 0 52px 24px rgba(255,255,255,.35) !important;
+    }
+    main ol.rounded-xl.border { background: #fff !important; }
+    @media (min-width: 640px) { main ol.rounded-xl.border > li + li { box-shadow: -1px 0 0 #EDF0F4; } }
+  </style>
+  {% endif %}
   {% macro seal(size=32, light=false) -%}
     <svg width="{{ size }}" height="{{ size }}" viewBox="0 0 32 32" aria-hidden="true" class="shrink-0">
       <rect width="32" height="32" rx="8" fill="#0071E3"/>
