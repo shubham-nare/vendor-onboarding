@@ -183,6 +183,20 @@ class Message(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
+class ReliabilityCheck(Base):
+    """How reliable a vendor looks, from our own history and outside sources (onboarding/reliability.py).
+    One row per check; the newest for an application is the one shown. Advisory only: a person decides."""
+    __tablename__ = "reliability_checks"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    application_id: Mapped[int] = mapped_column(ForeignKey("applications.id"), index=True)
+    run_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    score: Mapped[int] = mapped_column(Integer, default=0)            # 0-100, higher = more concern
+    level: Mapped[str] = mapped_column(String(10), default="low")    # low | medium | high
+    signals: Mapped[list] = mapped_column(JSON, default=list)        # [{source, weight, title, detail, link}]
+    sources: Mapped[dict] = mapped_column(JSON, default=dict)        # source -> checked | not connected | unavailable | off
+
+
 class FollowUp(Base):
     """One step of chasing a vendor who hasn't answered: a reminder to the vendor, or an escalation to the
     employee who asked for them. Keyed by the check (run) that is waiting, so a resubmission that is again

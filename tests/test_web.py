@@ -124,6 +124,7 @@ def flows(tmp_path_factory):
             # unsolicited
             rid, _ = await submit("unsolicited_nilgiri", token="")
             out["unsolicited_page"] = (await c.get(f"/runs/{rid}")).text
+            out["unsolicited_rid"] = rid
 
             # invites: maker can't, sponsor can
             inv = dict(company_name="Acme Fasteners LLP", contact_email="a@acme.example.com", business_reason="Bolts for the new press line", spend_category="MRO", spend_band="50 lakh - 1 crore")
@@ -195,6 +196,49 @@ def flows(tmp_path_factory):
                 await as_(who)
                 page = (await c.get("/console")).text
                 out[f"todo_{who}"] = page.split("Waiting for you", 1)[1].split("<!-- /waiting -->", 1)[0]
+
+            # registered for future work -> pre-qualified (not payable) -> a requester needs them -> every check again
+            rid = out["unsolicited_rid"]
+            await as_("checker")
+            out["pq_page_before"] = (await c.get(f"/runs/{rid}")).text
+            out["pq_approve"] = await c.post(f"/runs/{rid}/action", data={"action": "review_approve", "comment": "Good packaging supplier for later"})
+            out["pq_run"] = (await c.get(f"/runs/{rid}")).text
+            from onboarding.models import Application, Message, ReliabilityCheck, Run, VendorMaster
+            async with sessions()() as s:
+                run = await s.get(Run, rid)
+                app_ = await s.get(Application, run.application_id)
+                out["pq_status"] = app_.current_status
+                out["pq_master"] = (await s.execute(select(VendorMaster).where(VendorMaster.source_run_id == rid))).scalars().first()
+                out["pq_msg"] = (await s.execute(select(Message).where(Message.run_id == rid, Message.audience == "vendor"))).scalars().all()[-1].subject
+                out["pq_checks"] = (await s.execute(select(ReliabilityCheck).where(ReliabilityCheck.run_id == rid))).scalars().all()
+            out["pq_list_checker"] = (await c.get("/prequalified")).text
+            await as_("Rahul Desai")
+            out["pq_list_requester"] = (await c.get("/prequalified")).text
+            app_id = int(re.search(r"/prequalified/(\d+)/request", out["pq_list_requester"]).group(1))
+            out["pq_short_reason"] = (await c.post(f"/prequalified/{app_id}/request", data={"business_reason": "boxes", "spend_band": web.SPEND_BANDS[0]})).status_code
+            r = await c.post(f"/prequalified/{app_id}/request", data={"business_reason": "Export cartons for the new line from January",
+                                                                      "spend_category": "Packaging", "spend_band": web.SPEND_BANDS[0]})
+            out["pq_request"] = (r.status_code, r.headers.get("location", ""))
+            await asyncio.gather(*pending)
+            pending.clear()
+            new_rid = int(re.search(r"/runs/(\d+)", r.headers["location"]).group(1))
+            await as_("checker")
+            out["pq_new_page"] = (await c.get(f"/runs/{new_rid}")).text
+            async with sessions()() as s:
+                nr = await s.get(Run, new_rid)
+                a2 = await s.get(Application, nr.application_id)
+                out["pq_new"] = dict(parent=nr.parent_run_id, invite=a2.invite_id, status=a2.current_status, app=a2.id == app_id)
+                # a serious reliability finding: approving needs the warning read first
+                s.add(ReliabilityCheck(application_id=a2.id, run_id=new_rid, score=75, level="high",
+                                       signals=[dict(source="history", weight=40, title="Fraud signal in this check", detail="test", link="")],
+                                       sources={"history": "checked", "news": "off", "sanctions": "not connected", "reviews": "not connected"}))
+                a2.current_status = "PENDING_REVIEW"
+                await s.commit()
+            out["rel_page"] = (await c.get(f"/runs/{new_rid}")).text
+            out["rel_no_ack"] = (await c.post(f"/runs/{new_rid}/action", data={"action": "review_approve", "comment": "Checked by phone"})).status_code
+            out["rel_ack"] = (await c.post(f"/runs/{new_rid}/action", data={"action": "review_approve", "comment": "Checked by phone", "reliability_ack": "1"})).status_code
+            async with sessions()() as s:
+                out["rel_after"] = (await s.get(Application, app_id)).current_status
         await dbm.engine().dispose()
 
     asyncio.run(go())
@@ -340,3 +384,35 @@ def test_vendors_who_go_quiet_are_chased(flows):
     home = flows["console_chasing"]
     assert "Waiting on vendors" in home and "sent to" in home and "border-l-rose-600 bg-rose-50" in home
     assert "Vendor follow-ups" in flows["/system"].text
+
+
+def test_registering_for_future_work_puts_a_vendor_on_the_prequalified_list(flows):
+    import html
+    assert "Add to pre-qualified suppliers" in flows["pq_page_before"]
+    assert flows["pq_approve"].status_code == 303 and flows["pq_status"] == "PREQUALIFIED"
+    assert flows["pq_master"] is None                                  # not payable: no vendor ID, no bank account in the master
+    assert "pre-qualified supplier list" in flows["pq_msg"]
+    assert "pre-qualified supplier list" in html.unescape(flows["pq_run"])
+    assert "Corrugated boxes" in flows["pq_list_checker"] and "I need this supplier" not in flows["pq_list_checker"]   # reviewers don't request
+    assert "I need this supplier" in flows["pq_list_requester"]
+
+
+def test_a_requester_needing_a_prequalified_supplier_runs_every_check_again(flows):
+    assert flows["pq_short_reason"] == 400
+    assert flows["pq_request"][0] == 303 and "/runs/" in flows["pq_request"][1]
+    n = flows["pq_new"]
+    assert n["app"] and n["invite"] and n["parent"] == flows["unsolicited_rid"]
+    assert "No business need yet" not in flows["pq_new_page"]              # it came through an employee's request this time
+
+
+def test_every_finished_check_gets_a_reliability_check(flows):
+    assert flows["pq_checks"] and flows["pq_checks"][0].sources["history"] == "checked"
+    assert flows["pq_checks"][0].sources["sanctions"] == "not connected" and flows["pq_checks"][0].sources["news"] == "off"
+    assert 'id="reliability"' in flows["pq_page_before"]
+
+
+def test_a_serious_reliability_finding_must_be_read_before_approving(flows):
+    page = flows["rel_page"]
+    assert "Possible fraud: check before approving" in page and 'id="rel-modal"' in page and 'class="rel-ack" value=""' in page
+    assert flows["rel_no_ack"] == 400
+    assert flows["rel_ack"] == 303 and flows["rel_after"] == "ACTIVE"

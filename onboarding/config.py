@@ -26,7 +26,12 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     mail_from: str = ""
     mail_redirect_to: str = ""
-    demo_tools: bool = False   # development only: person switcher, demo scenarios, demo logins and sample files in the UI     # Vendor Intelligence: keys for identifier HMACs and encryption; if empty, derived like session_secret
+    # vendor reliability (onboarding/reliability.py): free news search on by default; the two keyed sources stay
+    # "not connected" until their keys are set here
+    news_search: bool = True
+    opensanctions_api_key: str = ""
+    google_maps_api_key: str = ""
+    demo_tools: bool = False  # development only: person switcher, demo scenarios, demo logins and sample files in the UI     # Vendor Intelligence: keys for identifier HMACs and encryption; if empty, derived like session_secret
 
 
 @lru_cache

@@ -31,7 +31,7 @@
 
   {% if not regs and not pending_invites %}
   <h2 class="mt-8 text-2xl">Start your registration</h2>
-  <div class="mt-3 grid md:grid-cols-2 gap-4">
+  <div class="mt-3 grid md:grid-cols-3 gap-4">
     <form method="post" action="/vendor/invite" class="bg-white rounded-xl border p-5 flex flex-col">
       <div class="font-medium text-[15px]">I have an invitation link</div>
       <p class="text-[13px] text-slate-500 mt-1">Someone at {{ BUYER.short_name }} sent you a link by email.</p>
@@ -44,8 +44,12 @@
       <a href="/bill" class="mt-3 text-center rounded-md border border-slate-300 bg-white text-sm font-medium px-4 py-2.5 hover:border-slate-500">Register and submit your bill</a>
       {% if demo_bill and DEMO_TOOLS %}<a href="/bill?demo={{ demo_bill }}" class="mt-2 text-center text-xs text-indigo-700 underline underline-offset-4">Demo: fill in {{ acct.company_name.split()[0] }}'s details, bill and documents</a>{% endif %}
     </div>
+    <div class="bg-white rounded-xl border p-5 flex flex-col">
+      <div class="font-medium text-[15px]">I'd like to supply {{ BUYER.short_name }} in future</div>
+      <p class="text-[13px] text-slate-500 mt-1 flex-1">Register for future work. We check your details and add you to our pre-qualified suppliers; our teams contact you when they need what you supply.</p>
+      <a href="/apply" class="mt-3 text-center rounded-md border border-slate-300 bg-white text-sm font-medium px-4 py-2.5 hover:border-slate-500">Register for future work</a>
+    </div>
   </div>
-  <p class="mt-3 text-xs text-slate-500">Neither? You can still <a class="underline" href="/apply">apply without an invitation</a>; it's reviewed by hand.</p>
   {% endif %}
 
   {% for r in regs %}

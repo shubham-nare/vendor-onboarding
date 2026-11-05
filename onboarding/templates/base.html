@@ -209,6 +209,7 @@
     '/console': '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
     '/bills': '<path d="M5 3h14v18l-2.3-1.5L14.3 21 12 19.5 9.7 21l-2.4-1.5L5 21z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
     '/vendors': '<path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16"/><path d="M16 9h2a2 2 0 0 1 2 2v10"/><path d="M3 21h18M8 7h4M8 11h4M8 15h4"/>',
+    '/prequalified': '<circle cx="12" cy="8" r="5"/><path d="M8.5 12.5 7 22l5-3 5 3-1.5-9.5"/>',
     '/invites': '<path d="M21.5 2.5 11 13"/><path d="M21.5 2.5 15 21l-4-8-8-4z"/>',
     '/outbox': '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 6.5 8.5 6 8.5-6"/>',
     '/check': '<path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><circle cx="11.5" cy="11.5" r="3.5"/><path d="m14 14 3 3"/>',
@@ -288,7 +289,7 @@
 
   {% else %}
   {% set NAV = [('Approvals', [('/console', 'Home'), ('/review', 'Review'), ('/invoices', 'Invoices')]),
-                ('In depth', [('/vendors', 'Vendors'), ('/applications', 'Applications'), ('/purchase-orders', 'Orders'), ('/audit', 'History'), ('/documents', 'Documents')]),
+                ('In depth', [('/vendors', 'Vendors'), ('/prequalified', 'Pre-qualified'), ('/applications', 'Applications'), ('/purchase-orders', 'Orders'), ('/audit', 'History'), ('/documents', 'Documents')]),
                 ('Settings', [('/supplier-accounts', 'Accounts'), ('/outbox', 'Outbox'), ('/check', 'Checker'), ('/system', 'System')])] %}
   {% set REVIEWER_ONLY = ['/relationships', '/purchase-orders', '/audit', '/documents', '/supplier-accounts', '/outbox', '/check', '/system'] %}
   {% set reviewer = actor and actor.role in ('maker', 'checker') %}

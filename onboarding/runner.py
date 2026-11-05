@@ -23,6 +23,8 @@ async def _run(run_id: int, prefer_cache: bool) -> None:
             await on_run_completed(run_id)   # Vendor Intelligence; never raises
             from onboarding import mailer
             await mailer.deliver_for_run(run_id)   # email any message sent to the vendor; never raises
+            from onboarding import reliability
+            await reliability.check_run(run_id)    # our history + news + watch lists + rating; never raises
         except Exception as e:  # never lose a run silently
             log.exception("run %s failed", run_id)
             await mark_failed(run_id, type(e).__name__)

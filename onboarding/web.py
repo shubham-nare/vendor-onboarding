@@ -42,7 +42,7 @@ MAX_BYTES = 10 * 1024 * 1024
 SLOTS = ["gst_certificate", "pan_card", "bank_proof", "udyam_certificate", "invoice"]
 BILL_FIELDS = ("bill_invoice_number", "bill_invoice_date", "bill_amount", "bill_description", "bill_engaged_by", "bill_po")
 STATUS_LABEL = {"APPROVED": "Approved", "PENDING_VENDOR": "Pending: vendor to fix", "PENDING_REVIEW": "Pending: internal review",
-                "REJECTED": "Rejected", "ACTIVE": "Active vendor", "IN_PROGRESS": "In progress", "": "Running"}
+                "REJECTED": "Rejected", "ACTIVE": "Active vendor", "IN_PROGRESS": "In progress", "PREQUALIFIED": "Pre-qualified", "": "Running"}
 LEVEL_NAMES = {"A0": "Declared", "A1": "Evidenced", "A2": "Genuine", "A3": "Cryptographically proven", "A4": "Confirmed at source"}
 SPEND_BANDS = ["Under 1 lakh", "1-5 lakh", "5-10 lakh", "10-25 lakh", "25-50 lakh", "50 lakh - 1 crore", "Over 1 crore"]
 HIGH_SPEND = {"50 lakh - 1 crore", "Over 1 crore"}
@@ -207,7 +207,8 @@ def demo_catalog() -> dict[str, dict]:
         paths = {slot: PRIVATE / fn for slot, fn in swap.items()}
         if all(p.exists() for p in paths.values()):  # private inputs exist only on Shubham's laptop
             out[key] = dict(base, title=title, expected=expected, files={**base["files"], **paths}, private=True)
-    out["unsolicited_nilgiri"] = dict(base, title="Application with no invite (unsolicited)", expected="PENDING_REVIEW", invite_scenario=None, bill=False)
+    out["unsolicited_nilgiri"] = dict(base, title="Registers for future work (no invite)", expected="PENDING_REVIEW", invite_scenario=None, bill=False,
+                                      form={**base["form"], "supply_note": "Corrugated boxes and export packaging, about 20 tonnes a month from our Bengaluru plant"})
     from onboarding.demo_data import PUBLISHED_SCENARIOS
     for key, sc in PUBLISHED_SCENARIOS.items():   # real, self-published documents: only where the files are on this machine
         paths = {slot: PRIVATE / "published" / fn for slot, fn in sc["files"].items()}
@@ -611,7 +612,7 @@ async def _collect_form(request: Request) -> tuple[dict, dict[str, tuple[str, by
     f = {k: (str(data.get(k) or "")).strip() for k in ("business_type", "legal_name", "proprietor_name", "gstin", "pan", "cin", "llpin", "address",
                                                        "city", "state", "pin", "contact_name", "contact_email", "contact_phone", "alt_contact_name", "alt_contact_email", "alt_contact_phone", "bank_holder",
                                                        "bank_account", "ifsc", "udyam_no", "country",
-                                                       "tax_id", "swift", "postal_code")}
+                                                       "tax_id", "swift", "postal_code", "supply_note")}
     for k in ("gstin", "pan", "cin", "llpin", "ifsc", "udyam_no", "tax_id", "swift"):
         f[k] = f[k].upper().replace(" ", "")
     f["bank_account"] = f["bank_account"].replace(" ", "").replace("-", "")
@@ -659,6 +660,69 @@ def _fill_files(files: dict, demo: str, prev_files: dict[str, tuple[str, bytes]]
         elif slot in prev_files:
             files[slot] = prev_files[slot]
     return files
+
+
+@router.get("/prequalified", response_class=HTMLResponse)
+async def prequalified(request: Request, q: str = ""):
+    """Suppliers who registered for future work and passed the checks. Not payable until an employee asks for one."""
+    from onboarding.models import ReliabilityCheck
+    async with read_sessions()() as s:
+        actor = await _actor(request, s)
+        if not actor:
+            raise access.forbid("Pre-qualified suppliers")
+        apps = (await s.execute(select(Application).where(Application.current_status == "PREQUALIFIED").order_by(Application.id.desc()))).scalars().all()
+        runs = {a.id: await _latest_run(s, a.id) for a in apps}
+        checks = {}
+        for c in (await s.execute(select(ReliabilityCheck).where(ReliabilityCheck.application_id.in_([a.id for a in apps] or [-1]))
+                                  .order_by(ReliabilityCheck.id))).scalars():
+            checks[c.application_id] = c
+        rows = [dict(app=a, run=runs[a.id], form=(runs[a.id].form or {}) if runs[a.id] else {}, check=checks.get(a.id)) for a in apps]
+        if q:
+            rows = [x for x in rows if q.lower() in f"{x['app'].legal_name} {x['form'].get('supply_note', '')} {x['form'].get('city', '')} {x['form'].get('state', '')}".lower()]
+        return await render(request, s, "prequalified.html", rows=rows, q=q, bands=SPEND_BANDS)
+
+
+@router.post("/prequalified/{app_id}/request")
+async def prequalified_request(request: Request, app_id: int, business_reason: str = Form(""), spend_category: str = Form(""), spend_band: str = Form("")):
+    """A requester needs a pre-qualified supplier: that's the business need. The supplier is invited on the spot and
+    every check runs again on what they sent (bank, registries, documents), so nothing stale becomes payable."""
+    async with sessions()() as s:
+        actor = await _actor(request, s)
+        if not actor or actor.role != "sponsor":
+            raise HTTPException(403, "Only a requester (the employee who needs the supplier) can ask for one.")
+        app = await s.get(Application, app_id)
+        if not app or app.current_status != "PREQUALIFIED":
+            raise HTTPException(409, "This supplier isn't on the pre-qualified list any more.")
+        if len(business_reason.strip()) < 10:
+            raise HTTPException(400, "Please give a business reason (at least a sentence): it's shown to the approver.")
+        if spend_band not in SPEND_BANDS:
+            raise HTTPException(400, "Choose the expected spend.")
+        prev = await _latest_run(s, app.id)
+        f = dict(prev.form or {})
+        inv = Invite(token=secrets.token_urlsafe(18), sponsor_id=actor.id, company_name=app.legal_name, contact_email=f.get("contact_email", ""),
+                     business_reason=business_reason.strip(), spend_category=spend_category.strip() or (f.get("supply_note") or "")[:100],
+                     spend_band=spend_band, high_spend=spend_band in HIGH_SPEND, expires_at=now() + timedelta(days=14))
+        s.add(inv)
+        await s.flush()
+        app.invite_id, app.current_status = inv.id, "IN_PROGRESS"
+        files = {}
+        for d in (await s.execute(select(Document).where(Document.run_id == prev.id))).scalars():
+            files[d.slot] = (d.filename, (await s.get(StoredFile, d.sha256)).data)
+        f.pop("prefill", None)
+        run = await create_run(s, f, files, invite_token=inv.token, parent_run_id=prev.id)
+        await s.commit()
+    runner.start(run.id)
+    return RedirectResponse(f"/runs/{run.id}", status_code=303)
+
+
+@router.post("/runs/{run_id}/reliability")
+async def reliability_again(request: Request, run_id: int):
+    """Run the reliability check again (news and watch lists change)."""
+    from onboarding import reliability
+    async with read_sessions()() as s:
+        access.require_full(await _actor(request, s), "The reliability check")
+    await reliability.check_run(run_id)
+    return RedirectResponse(f"/runs/{run_id}#reliability", status_code=303)
 
 
 _READS: dict[str, list[float]] = {}
@@ -843,7 +907,13 @@ async def run_view(request: Request, run_id: int):
                             rules=r["rules"], facts=r["facts"], vendor_msg=msgs.get("vendor"),
                             all_vendor_msgs=[m for m in r["msgs"] if m.audience == "vendor"], internal=msgs.get("internal"),
                             actions=r["actions"], history=history, latest=latest, vendor=(r["vendor"] or [None])[0],
-                            allowed=_allowed_actions(run, app, inv, actor, bill, bill_emp), from_vendor=request.query_params.get("from") == "vendor")
+                            allowed=_allowed_actions(run, app, inv, actor, bill, bill_emp), from_vendor=request.query_params.get("from") == "vendor",
+                            reliab=await _reliability(s, app.id) if full else None)
+
+
+async def _reliability(s, application_id: int):
+    from onboarding import reliability
+    return await reliability.latest(s, application_id)
 
 
 def _fact_of(rule: RuleResult) -> str | None:
@@ -1014,7 +1084,8 @@ def _allowed_actions(run: Run, app: Application, inv: Invite | None, actor: Empl
             why = "Only the Finance controller can reject after review."
         elif a in ("activate", "review_approve") and high and actor.role != "checker":
             why = "High-risk or fraud-flagged: needs the Finance controller."
-        out[a] = dict(label=ACTIONS[a], blocked=why, needs_comment=a in ("override_reject", "review_approve", "ask_vendor", "review_reject"))
+        label = "Add to pre-qualified suppliers" if a in ("activate", "review_approve") and not inv and not bill else ACTIONS[a]
+        out[a] = dict(label=label, blocked=why, needs_comment=a in ("override_reject", "review_approve", "ask_vendor", "review_reject"))
     return out
 
 
@@ -1035,7 +1106,7 @@ async def _activate(s, run: Run, app: Application) -> VendorMaster:
 
 
 @router.post("/runs/{run_id}/action")
-async def run_action(request: Request, run_id: int, action: str = Form(...), comment: str = Form("")):
+async def run_action(request: Request, run_id: int, action: str = Form(...), comment: str = Form(""), reliability_ack: str = Form("")):
     async with sessions()() as s:
         run = await s.get(Run, run_id)
         if not run:
@@ -1058,6 +1129,11 @@ async def run_action(request: Request, run_id: int, action: str = Form(...), com
             raise HTTPException(403, allowed[action]["blocked"])
         if allowed[action]["needs_comment"] and len(comment.strip()) < 5:
             raise HTTPException(400, "Please write a short reason: it goes on the audit trail.")
+        if action in ("activate", "review_approve") and reliability_ack != "1":
+            rc = await _reliability(s, app.id)
+            if rc and rc.level == "high":
+                raise HTTPException(400, "This vendor's reliability check found serious concerns. Read the warning on the page before approving.")
+        prequalify = action in ("activate", "review_approve") and not inv and not bill
         held = (await s.execute(select(Message).where(Message.run_id == run.id, Message.audience == "vendor", Message.state == "held"))).scalars().first()
         hi = f"Hi {run.form.get('contact_name') or 'there'},"
         if action == "confirm_engagement":
@@ -1066,6 +1142,12 @@ async def run_action(request: Request, run_id: int, action: str = Form(...), com
             bill.confirmation, bill.decided_at = "denied", now()
             if app.current_status in ("APPROVED", "PENDING_VENDOR"):
                 app.current_status = "PENDING_REVIEW"  # a person who never engaged them: the Finance controller decides
+        elif prequalify:   # no business need yet: checked and listed, not payable (no vendor ID, no bank account in the vendor master)
+            app.current_status = "PREQUALIFIED"
+            s.add(Message(run_id=run.id, audience="vendor", subject=f"You're on our pre-qualified supplier list (Ref {app.ref})", state="sent",
+                          body=f"{hi}\n\nThank you for registering. We've checked your details and added {run.form.get('legal_name')} to our pre-qualified "
+                               "suppliers. When one of our teams needs what you supply, they'll contact you; we'll confirm your details again then and "
+                               "give you a vendor ID.\n\nVendor Onboarding Team"))
         elif action == "activate":
             if held:
                 held.state = "sent"

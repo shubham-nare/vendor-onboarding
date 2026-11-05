@@ -219,8 +219,9 @@ def evaluate(ctx: Context) -> list[R]:
               {"engaged_by": f.get("bill_engaged_by", "")},
               internal="Bill-first registration. Nobody vouched for this vendor in advance; the employee the vendor named must confirm."))
     elif not inv:
-        add(R("R-INV-01", "invite", FAIL, "Application did not come through an employee's invite", "REVIEW",
-              internal="Unsolicited application: no valid invite token. Never auto-approved.", fraud=True))
+        add(R("R-INV-01", "invite", FAIL, "No business need yet: the vendor registered for future work, without an invite", "REVIEW",
+              internal="Unsolicited registration. If the checks pass it can join the pre-qualified suppliers; it becomes an active, "
+                       "payable vendor only when an employee asks for it and the checks run again."))
     else:
         expired = inv.get("expires_at") and inv["expires_at"] < _now(ctx)
         other_app = inv.get("application_id") and ctx.application_id and inv["application_id"] != ctx.application_id

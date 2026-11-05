@@ -36,9 +36,9 @@
       {% endfor %}
     </ol>
   {% else %}
-    <div class="kicker">No invitation</div>
-    <h1 class="text-[30px] sm:text-[38px] leading-tight mt-1">Register as a vendor</h1>
-    <p class="text-sm mt-2 rounded-md bg-amber-50 border border-amber-200 p-3 text-amber-900">You're applying without an invitation link. We'll review your application manually; it can't be approved automatically.</p>
+    <div class="kicker">Future work</div>
+    <h1 class="text-[30px] sm:text-[38px] leading-tight mt-1">Register for future work</h1>
+    <p class="text-[15px] text-slate-600 mt-2">We check your details and, if everything is in order, add you to our <b>pre-qualified suppliers</b>. When one of our teams needs what you supply, they contact you; we confirm your details again then and give you a vendor ID.</p>
   {% endif %}
 
   {% if demo and DEMO_TOOLS %}
@@ -111,6 +111,10 @@
         <label class="block" data-in data-show="LLP">LLPIN{{ REQ }}<input name="llpin" data-req value="{{ v.get('llpin', '') }}" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase placeholder:text-slate-400" placeholder="AAB-1234"></label>
       </div>
       <label data-in class="mt-4 flex items-center gap-2 text-sm"><input type="checkbox" name="gst_registered" id="gst" onchange="toggleType()" {{ 'checked' if v.get('gst_registered', True) }}> We are registered for GST in India</label>
+      {% if not invite and not is_bill %}
+      <label class="block mt-4 text-sm">What do you supply?{{ REQ }}<textarea name="supply_note" required rows="2" class="mt-1 w-full rounded-md border px-3 py-2" placeholder="e.g. Corrugated boxes and packaging; 20 tonnes a month from our Bengaluru plant">{{ v.get('supply_note', '') }}</textarea>
+        <span class="mt-1 block text-xs text-slate-500">Our teams search the pre-qualified list by this.</span></label>
+      {% endif %}
     </section>
 
     <section class="bg-white rounded-xl border p-4 sm:p-5">
