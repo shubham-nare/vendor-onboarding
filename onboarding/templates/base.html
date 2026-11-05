@@ -216,6 +216,10 @@
     '/system': '<path d="M22 12h-4l-3 8L9 4l-3 8H2"/>',
     '/supplier-accounts': '<circle cx="9" cy="8" r="4"/><path d="M2 21v-1a6 6 0 0 1 12 0v1"/><path d="M16 11h6M19 8v6"/>',
   } %}
+  {% macro review_badge() -%}
+    {%- if todo is defined and todo -%}<span class="review-count" aria-label="{{ todo | length }} waiting">{{ '99+' if todo | length > 99 else todo | length }}</span>
+    {%- else -%}<span class="review-count" hidden></span>{%- endif -%}
+  {%- endmacro %}
   {% macro nav_icon(href) -%}<svg class="h-[18px] w-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{{ NAV_ICONS.get(href, '') | safe }}</svg>{%- endmacro %}
   {% set ROLE_TONE = {'sponsor': ('bg-amber-100 text-amber-800', 'text-amber-700'), 'maker': ('bg-indigo-100 text-indigo-700', 'text-indigo-600'), 'checker': ('bg-emerald-100 text-emerald-700', 'text-emerald-700')} %}
   {% macro avatar(e, size='h-8 w-8 text-[11.5px]') -%}
@@ -305,7 +309,7 @@
       {% endif %}
         {% for href, label in shown %}
         {% set on = path == href or (href != '/console' and path.startswith(href ~ '/')) or (href == '/console' and (path.startswith('/runs/') or path.startswith('/invites'))) %}
-        <a href="{{ href }}" class="side-link {{ '!font-semibold' if group == 'Approvals' else '' }}" {{ 'aria-current=page' if on }}>{{ nav_icon(href) }}{{ label }}{% if href == '/review' %}<span class="review-count" hidden></span>{% endif %}</a>
+        <a href="{{ href }}" class="side-link {{ '!font-semibold' if group == 'Approvals' else '' }}" {{ 'aria-current=page' if on }}>{{ nav_icon(href) }}{{ label }}{% if href == '/review' %}{{ review_badge() }}{% endif %}</a>
         {% endfor %}
       {% if group == 'Settings' %}</details>{% else %}</div>{% endif %}
       {% endif %}
@@ -338,7 +342,7 @@
     <nav id="mainnav" class="px-2 sm:px-4 flex flex-nowrap overflow-x-auto no-scrollbar fade-r text-[13.5px]" aria-label="Main">
       {% for group, items in NAV %}{% for href, label in items if actor and (reviewer or href not in REVIEWER_ONLY) %}
         {% set on = path == href or (href != '/console' and path.startswith(href ~ '/')) or (href == '/console' and (path.startswith('/runs/') or path.startswith('/invites'))) %}
-        <a href="{{ href }}" class="shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-2.5 border-b-2 font-medium {{ 'border-indigo-600 text-indigo-700' if on else 'border-transparent text-slate-500 hover:text-slate-900' }}" {{ 'aria-current=page' if on }}>{{ label }}{% if href == '/review' %}<span class="review-count" hidden></span>{% endif %}</a>
+        <a href="{{ href }}" class="shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-2.5 border-b-2 font-medium {{ 'border-indigo-600 text-indigo-700' if on else 'border-transparent text-slate-500 hover:text-slate-900' }}" {{ 'aria-current=page' if on }}>{{ label }}{% if href == '/review' %}{{ review_badge() }}{% endif %}</a>
       {% endfor %}{% endfor %}
     </nav>
   </header>
@@ -350,9 +354,9 @@
 
   </div>
   {% endif %}
-  {% if actor and path != '/console' %}
+  {% if actor %}
   {# bottom-right reminder: decisions still waiting (amber); nothing shows when the queue is empty #}
-  <aside id="pending-note" hidden role="status" aria-live="polite" class="bg-white border border-amber-300 border-l-4 border-l-amber-500 text-[13px]">
+  {% if path != '/console' %}<aside id="pending-note" hidden role="status" aria-live="polite" class="bg-white border border-amber-300 border-l-4 border-l-amber-500 text-[13px]">
     <div class="flex items-start gap-3 px-4 py-3">
       <div class="flex-1 min-w-0">
         <div class="font-bold text-amber-800"><span id="pending-n" class="tabular-nums"></span> still waiting for you</div>
@@ -361,16 +365,20 @@
       </div>
       <button type="button" id="pending-x" class="text-slate-400 hover:text-slate-700 px-1" aria-label="Hide for this session">✕</button>
     </div>
-  </aside>
+  </aside>{% endif %}
   <script>
-    (async () => {
-      try {
-        const r = await fetch('/console/pending', { credentials: 'same-origin' });
-        const d = await r.json();
-        document.querySelectorAll('.review-count').forEach(b => { b.textContent = d.count > 99 ? '99+' : d.count; b.hidden = !d.count;
-          b.setAttribute('aria-label', `${d.count} waiting`); });
-        if (!d.count) return;
+    /* Review's red count. It shows at once from the last known number (kept for this tab), then the server's
+       answer replaces it. Retries once if the request fails, refreshes every minute and when the tab comes back. */
+    (() => {
+      const KEY = 'pending-count-{{ actor.id }}';
+      const paint = n => document.querySelectorAll('.review-count').forEach(b => {
+        b.textContent = n > 99 ? '99+' : n; b.hidden = !n; b.setAttribute('aria-label', `${n} waiting`); });
+      try { const c = sessionStorage.getItem(KEY); if (c !== null) paint(+c); } catch (e) {}
+      let shown = false;
+      const remind = d => {
+        if (shown || !d.count || !document.getElementById('pending-note')) return;
         try { if (sessionStorage.getItem('pending-hidden')) return; } catch (e) {}
+        shown = true;
         const box = document.getElementById('pending-note');
         document.getElementById('pending-n').textContent = d.count;
         const ul = document.getElementById('pending-list');
@@ -379,7 +387,20 @@
         if (d.count > d.items.length) { const li = document.createElement('li'); li.className = 'text-slate-500'; li.textContent = `and ${d.count - d.items.length} more`; ul.appendChild(li); }
         box.hidden = false;
         document.getElementById('pending-x').onclick = () => { box.hidden = true; try { sessionStorage.setItem('pending-hidden', '1'); } catch (e) {} };
-      } catch (e) {}
+      };
+      const load = async (tries) => {
+        try {
+          const r = await fetch('/console/pending', { credentials: 'same-origin', cache: 'no-store' });
+          if (!r.ok) throw new Error(r.status);
+          const d = await r.json();
+          paint(d.count);
+          try { sessionStorage.setItem(KEY, d.count); } catch (e) {}
+          remind(d);
+        } catch (e) { if (tries > 0) setTimeout(() => load(tries - 1), 1500); }
+      };
+      load(1);
+      setInterval(() => { if (!document.hidden) load(0); }, 60000);
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) load(0); });
     })();
   </script>
   {% endif %}
