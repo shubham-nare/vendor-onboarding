@@ -11,7 +11,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import HTTPException
 from urllib.parse import quote
 
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from onboarding import auth, db
@@ -146,6 +146,12 @@ async def database_unreachable(request: Request, exc: Exception):
 <p class="mt-2 text-sm text-slate-600">Usually a brief internet or DNS hiccup. This page tries again every 5 seconds; nothing you entered was lost.</p>
 <div class="mt-6 text-sm"><a class="text-indigo-700 underline" href="">Try now</a></div></div></body></html>"""
     return HTMLResponse(body, status_code=503, headers={"Retry-After": "5"})
+
+
+@app.get("/.well-known/appspecific/com.chrome.devtools.json", include_in_schema=False)
+async def chrome_devtools_probe():
+    """Chrome's developer tools ask every site for this file. Nothing to offer: answer quietly instead of a 404 in the log."""
+    return Response(status_code=204)
 
 
 @app.get("/healthz")

@@ -123,3 +123,10 @@ def test_every_language_covers_the_same_phrases():
 def test_signing_up_twice_logs_in(pub):
     assert pub["reg1"] == 303 and pub["reg2"] == 303
     assert "already exists" in pub["reg3"]
+
+
+def test_chrome_devtools_probe_is_quiet():
+    from fastapi.testclient import TestClient
+
+    from onboarding.main import app
+    assert TestClient(app).get("/.well-known/appspecific/com.chrome.devtools.json").status_code == 204
