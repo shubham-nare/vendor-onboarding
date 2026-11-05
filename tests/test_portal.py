@@ -86,7 +86,7 @@ def flows(tmp_path_factory):
             out["console_page"] = (await staff.get("/api/v1/console/home")).text
             out["pending"] = (await staff.get("/api/v1/console/pending")).json()
             out["pending_anon"] = (await other.get("/api/v1/console/pending")).status_code
-            out["applications_page"] = (await staff.get("/bills")).text   # a staff page still drawn by the server
+            out["shell_page"] = (await staff.get("/bills")).text   # an app screen
             r = await other.post("/vendor/login", data={"email": DEMO_VENDOR["email"], "password": DEMO_PASSWORD})
             out["demo_vendor"] = (r.status_code, (await other.get("/vendor")).text)
             out["vendor_cookie_on_console"] = (await other.get("/console")).headers.get("location", "")
@@ -222,7 +222,7 @@ def flows(tmp_path_factory):
             seen = {}
             for who in (1, 2, 3, 4):
                 staff.cookies.set("actor", str(who))
-                seen[who] = dict(bills=(await staff.get("/bills")).text, bill=await staff.get(f"/bills/{bid2}"), run=await staff.get(f"/runs/{run_id}"),
+                seen[who] = dict(bills=(await staff.get("/api/v1/bills")).text, bill=await staff.get(f"/bills/{bid2}"), run=await staff.get(f"/runs/{run_id}"),
                                  events=(await staff.get(f"/runs/{run_id}/events")).status_code, file=(await staff.get(f"/files/{sha}")).status_code,
                                  outbox=(await staff.get("/api/v1/outbox")).status_code, console=(await staff.get("/api/v1/console/home")).text,
                                  vendors=(await staff.get("/api/v1/supplier-accounts")).text,
@@ -250,7 +250,7 @@ def flows(tmp_path_factory):
 
             await other.post("/vendor/register", data={"company_name": "Someone Else", "contact_name": "A B", "email": "a@else.example.com", "password": PW})
             out["other_bill"] = (await other.get(f"/vendor/bills/{bid}")).status_code
-            out["bills_list"] = (await staff.get("/bills")).text
+            out["bills_list"] = (await staff.get("/api/v1/bills")).text
             out["vendors_list"] = (await staff.get("/api/v1/supplier-accounts")).text
             v.cookies.set("vendor_session", "1.1.forged")
             out["forged"] = (await v.get("/vendor")).headers.get("location", "")
@@ -511,7 +511,7 @@ def test_documents_page_lists_every_upload(flows):
 def test_pending_reminder_feed_and_house_style(flows):
     assert flows["pending_anon"] == 401                                          # signed out: the API says so
     assert isinstance(flows["pending"]["count"], int) and len(flows["pending"]["items"]) <= 4
-    page = flows["applications_page"]
+    page = flows["kesari_360"]                                                    # a page still drawn by the server
     assert 'id="pending-note"' in page and "/api/v1/console/pending" in page     # reminder on other pages
     assert "path === '/console'" in APP_JS                                        # ... not on Home, which already lists them
     assert "/static/app.css" in page and "-apple-system" in APP_CSS and "Verdana" not in APP_CSS and "#F5F5F7" in APP_CSS

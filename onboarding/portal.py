@@ -553,8 +553,15 @@ async def vendor_bill_resubmit(request: Request, bill_id: int):
 
 
 # --- company side: bills and vendors --------------------------------------------------------------
-@router.get("/bills", response_class=HTMLResponse)
-async def bills_list(request: Request):
+@router.get("/bills")
+async def bills_list_page():
+    """Drawn by the browser app from GET /api/v1/bills."""
+    from onboarding.appshell import app_shell
+    return app_shell()
+
+
+async def bills_list(request: Request) -> dict:
+    """Bills from active vendors and bills sent with a registration (requesters: the ones that name them)."""
     async with read_sessions()() as s:
         emps = {e.id: e for e in await _employees(s)}
         actor = await _actor(request, s)
@@ -573,7 +580,7 @@ async def bills_list(request: Request):
             regs.append(dict(bill=bill, app=app, run=latest_run.get(app.id), emp=emps.get(bill.engaged_employee_id)))
         if not full:  # a requester sees the bills that name them
             rows = [(b, vm) for b, vm in rows if access.can_open_bill(actor, b)]
-        return await render(request, s, "bills.html", rows=rows, emps=emps, regs=regs, B=B, full=full)
+        return dict(rows=rows, emps=emps, regs=regs, full=full)
 
 
 @router.get("/bills/{bill_id}", response_class=HTMLResponse)

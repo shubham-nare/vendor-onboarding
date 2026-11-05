@@ -145,3 +145,28 @@ async def record_delivery(request: Request, po_id: int, body: Delivery):
     form = {"kind": body.kind, "received_on": body.received_on, "note": body.note} | {f"qty_{k}": str(v) for k, v in body.quantities.items()}
     await po_receipt_core(request, po_id, form)
     return {"ok": True}
+
+
+
+# --- bills (vendor-side status) ---------------------------------------------------------------------------------------
+@router.get("/bills")
+async def bills(request: Request):
+    """Bills from active vendors (with the checks' status) and bills sent with a registration."""
+    from onboarding import bills as B
+    from onboarding.portal import bills_list
+    async with read_sessions()() as s:
+        await staff_or_401(request, s)
+    d = await bills_list(request)
+    emps, full = d["emps"], d["full"]
+    confirmation = {"confirmed": "confirmed", "denied": "denies", "awaiting": "not confirmed yet"}
+    return {"full": full,
+            "bills": [{"id": b.id, "ref": b.ref, "vendor": {"name": vm.legal_name, "id": vm.vendor_id}, "invoice_number": b.invoice_number,
+                       "amount": float(money(b.amount) or 0), "status": b.status, "status_label": B.STATUS_TEXT.get(b.status, b.status),
+                       "risk": b.risk_tier, "fraud": bool(b.fraud) and full,
+                       "asked_for_by": emps[b.engaged_employee_id].name if b.engaged_employee_id in emps else b.engaged_by_text,
+                       "confirmation": b.confirmation} for b, vm in d["rows"]],
+            "with_registration": [{"ref": r["app"].ref, "name": r["app"].legal_name, "run_id": r["run"].id if r["run"] else None,
+                                   "invoice_number": (r["run"].form or {}).get("bill_invoice_number") if r["run"] else None,
+                                   "amount": float(money((r["run"].form or {}).get("bill_amount")) or 0) if r["run"] else 0,
+                                   "asked_for_by": r["emp"].name if r["emp"] else r["bill"].engaged_by_text,
+                                   "confirmation": confirmation.get(r["bill"].confirmation, r["bill"].confirmation)} for r in d["regs"]]}
