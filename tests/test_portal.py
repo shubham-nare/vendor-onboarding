@@ -52,7 +52,7 @@ def flows(tmp_path_factory):
     dbm._engine = None
     import httpx
 
-    from onboarding import bills, runner, web
+    from onboarding import bills, runner
     from onboarding.demo_data import SCENARIOS
     from onboarding.main import app
     from onboarding.seeding import seed
@@ -167,7 +167,7 @@ def flows(tmp_path_factory):
                 out["filter " + path] = (await staff.get("/api/v1" + path)).json()
             po3 = re.search(r'href="/purchase-orders/(\d+)"', out["over_page"]).group(1)
             staff.cookies.set("actor", "1")                      # Priya, the requester on the order, records the third shift
-            out["receipt"] = (await staff.post(f"/purchase-orders/{po3}/receipts", data={"kind": "service", f"qty_x": ""} |
+            out["receipt"] = (await staff.post(f"/purchase-orders/{po3}/receipts", data={"kind": "service", "qty_x": ""} |
                                                {k: "1" for k in re.findall(r'name="(qty_\d+)"', (await staff.get(f"/purchase-orders/{po3}")).text)})).status_code
             staff.cookies.set("actor", "3")
             out["po3_page"] = (await staff.get(f"/purchase-orders/{po3}")).text
@@ -340,11 +340,10 @@ def test_requester_sees_only_their_own_and_no_evidence(flows):
     # Rahul has nothing to do with Kesari: he can't open it at all
     assert rahul["bill"].status_code == 403 and rahul["run"].status_code == 403 and rahul["events"] == 403
     assert "BILL-0002" not in rahul["bills"] and "Kesari" not in rahul["console"] and flows["rahul_action"] == 403
-    assert "accounts@kesarifacility" not in rahul["vendors"] and f'/bills/' not in rahul["vendors"]
+    assert "accounts@kesarifacility" not in rahul["vendors"] and '/bills/' not in rahul["vendors"]
 
 
 def test_reviewers_see_everything_and_only_finance_sees_the_full_account(flows):
-    from onboarding.demo_data import KESARI
     arjun, kavita = flows["seen"][3], flows["seen"][4]
     acct = "50200099887766"   # Kesari's account after the approved bank change earlier in the flow
     for who in (arjun, kavita):
@@ -548,7 +547,6 @@ def test_tag_a_teammate_on_an_invoice(flows):
 
 
 def test_review_badge_home_and_review_count_the_same_things(flows):
-    import html
     fin, mk = flows["pending_finance_cr"], flows["pending_maker_cr"]
     assert any(i["href"] == "/review#changes" for i in fin["items"])           # a bank change waits for Finance ...
     assert not any(i["href"] == "/review#changes" for i in mk["items"])        # ... not for the reviewer

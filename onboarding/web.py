@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, or_, select
 
@@ -31,8 +31,8 @@ from onboarding.db import WARM_CONNECTIONS, is_dropped_connection
 from onboarding.demo_data import BUYER, SCENARIOS
 from onboarding.models import (Application, Bill, Document, Employee, Fact, HumanAction, Invite, Message, Run, RunEvent, RuleResult, StoredFile,
                                VendorAccount, VendorBill, VendorLink, VendorMaster, now)
-from onboarding.pipeline import STAGES, create_run, read_sessions, sessions, stages_for
-from onboarding.rules import BILL_HIGH_RISK, SLOT_LABEL, SLOT_TITLE, inr, money
+from onboarding.pipeline import create_run, read_sessions, sessions, stages_for
+from onboarding.rules import SLOT_LABEL, SLOT_TITLE, inr, money
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "fixtures" / "documents"
@@ -770,9 +770,9 @@ async def apply_read(request: Request, slot: str = Form(...), file: UploadFile =
     if mime not in security.ALLOWED_MIME:
         return JSONResponse({"ok": False, "message": "Please upload a PDF, JPG or PNG."}, status_code=400)
     try:
-        res, origin = await asyncio.wait_for(read_with_cache(raw, mime, prefer="cache"), timeout=45)
+        res, _ = await asyncio.wait_for(read_with_cache(raw, mime, prefer="cache"), timeout=45)
     except asyncio.TimeoutError:
-        res, origin = None, "failed"
+        res = None
     if not res or not res.ok or not res.read:
         return JSONResponse({"ok": False, "message": "We couldn't read this file just now. Please type the details below; we'll still check the file after you submit."})
     return JSONResponse({"ok": True, **suggestions(slot, res.read)})
@@ -1324,7 +1324,6 @@ async def reset(request: Request, passcode: str = Form(...)):
 
 
 # --- Vendor Intelligence: vendor directory and Vendor 360 ------------------------------------------------------------
-from sqlalchemy import or_  # noqa: E402
 from sqlalchemy.orm import aliased  # noqa: E402
 
 from onboarding.intel import vendor360 as V360  # noqa: E402

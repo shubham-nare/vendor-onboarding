@@ -81,7 +81,6 @@ def test_the_read_endpoint_suggests_values_and_is_limited(monkeypatch):
     from fastapi.testclient import TestClient
 
     import onboarding.ai.read as reader
-    import onboarding.web as web
     from onboarding.main import app
 
     async def fake(data, mime, prefer="live"):

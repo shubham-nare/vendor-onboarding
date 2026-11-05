@@ -19,7 +19,7 @@ sys.path.insert(0, str(ROOT))
 from sqlalchemy import select  # noqa: E402
 
 from onboarding.demo_data import SCENARIOS  # noqa: E402
-from onboarding.models import Invite, Message, Run  # noqa: E402
+from onboarding.models import Invite  # noqa: E402
 from onboarding.pipeline import create_run, run_pipeline, sessions  # noqa: E402
 
 DOCS = ROOT / "fixtures" / "documents"

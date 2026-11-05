@@ -289,7 +289,7 @@ def next_action(b, case=None) -> tuple[str, str]:
     fails = [r for r in (b.rules or []) if r.get("result") in ("FAIL", "ERROR")]
     first = lambda pref: next((r for r in fails if r.get("rule_id", "").startswith(pref)), None)  # noqa: E731
     if st == "Blocked for investigation":
-        return f"Investigate before anything is paid", (case.blocked_reason if case and case.blocked_reason else "Blocked by a reviewer.")
+        return "Investigate before anything is paid", (case.blocked_reason if case and case.blocked_reason else "Blocked by a reviewer.")
     if st == "Needs vendor information":
         return "Waiting for the vendor", "; ".join(b.vendor_items or []) or "The vendor was asked to correct the bill."
     if st == "Needs internal review":

@@ -5,7 +5,6 @@ Run: uv run python scripts/assess_all.py
 
 from __future__ import annotations
 
-import json
 import mimetypes
 import sys
 from pathlib import Path

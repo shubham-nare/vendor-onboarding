@@ -46,7 +46,7 @@ def flow(tmp_path_factory):
 
                 r, state = await begin()
                 out["start"] = r.headers["location"]
-                out["wrong_state"] = (await c.get(f"/vendor/google/callback?code=new&state=nope")).text
+                out["wrong_state"] = (await c.get("/vendor/google/callback?code=new&state=nope")).text
                 r, state = await begin()
                 out["cancel"] = (await c.get("/vendor/google/callback?error=access_denied")).text
                 r, state = await begin()
