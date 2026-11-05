@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     captcha: bool = True
     turnstile_site_key: str = ""
     turnstile_secret_key: str = ""
+    # "Continue with Google" for suppliers (onboarding/google_auth.py): an OAuth client from Google Cloud; hidden when blank
+    google_client_id: str = ""
+    google_client_secret: str = ""
     opensanctions_api_key: str = ""
     google_maps_api_key: str = ""
     demo_tools: bool = False  # development only: person switcher, demo scenarios, demo logins and sample files in the UI     # Vendor Intelligence: keys for identifier HMACs and encryption; if empty, derived like session_secret

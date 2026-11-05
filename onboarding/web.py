@@ -140,10 +140,10 @@ async def _actor(request: Request, s) -> Employee | None:
 
 
 async def render(request: Request, s, name: str, **ctx) -> HTMLResponse:
-    from onboarding import captcha, i18n
+    from onboarding import captcha, google_auth, i18n
     ctx.update(request=request, actor=await _actor(request, s), employees=await _employees(s), path=request.url.path,
                staff=await staff_member(request, s), DEMO_TOOLS=get_settings().demo_tools,
-               lang=i18n.lang_of(request), LANGS=i18n.LANGS, captcha_key=captcha.site_key())
+               lang=i18n.lang_of(request), LANGS=i18n.LANGS, captcha_key=captcha.site_key(), google_on=google_auth.configured())
     if "vendor_account" not in ctx:
         ctx["vendor_account"] = await vendor_account(request, s)
     return templates.TemplateResponse(request, name, ctx)

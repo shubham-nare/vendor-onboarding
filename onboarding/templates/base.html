@@ -293,7 +293,7 @@
         {% if staff %}<a href="/console" class="pub-link">{{ 'Open the console' | t }}</a>{% else %}<a href="/company/login" class="pub-link">{{ 'Employee log in' | t }}</a>{% endif %}
       </nav>
       <div class="ml-auto flex items-center gap-2">
-        {% if vendor_account %}
+        {% if vendor_account and path != '/' %}
         <a href="/vendor" class="hidden md:inline-flex items-center gap-2 rounded-full px-2 py-1 hover:bg-slate-100 min-w-0" title="{{ vendor_account.email }}">
           <span class="h-7 w-7 shrink-0 rounded-full bg-indigo-100 text-indigo-700 text-[11px] font-semibold inline-flex items-center justify-center">{% set w = vendor_account.company_name.split() or ['?'] %}{{ w[0][0] }}{{ w[1][0] if w | length > 1 else '' }}</span>
           <span class="text-[13px] font-medium truncate max-w-[10rem]">{{ 'My account' | t }}</span></a>
@@ -320,7 +320,7 @@
             {% if staff %}<a href="/console">{{ 'Open the console' | t }}</a>{% else %}<a href="/company/login">{{ 'Employee log in' | t }}</a>{% endif %}
             <a href="/tour#try" class="sm:hidden">{{ 'View demo' | t }}</a>
             <a href="/contact" class="sm:hidden">{{ 'Contact us' | t }}</a>
-            {% if vendor_account %}<a href="/vendor" class="md:hidden">{{ 'My account' | t }}</a>
+            {% if vendor_account and path != '/' %}<a href="/vendor" class="md:hidden">{{ 'My account' | t }}</a>
             <form method="post" action="/vendor/logout" class="md:hidden"><button>{{ 'Log out' | t }}</button></form>{% endif %}
           </div>
         </details>

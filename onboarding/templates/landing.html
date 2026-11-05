@@ -191,13 +191,49 @@
   })();
 </script>
 <div class="reveal max-w-7xl mx-auto">
-  <div class="text-center max-w-2xl mx-auto pt-2 sm:pt-6">
-    <span class="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-white px-3 py-1 text-[12.5px] font-medium text-indigo-700 shadow-sm"><span class="h-1.5 w-1.5 rounded-full bg-indigo-600"></span>Vendor onboarding &amp; bills</span>
-    <h1 class="hero text-[36px] sm:text-[56px] leading-[1.05] tracking-tight mt-4">{{ 'Who are' | t }} <em class="text-indigo-600">{{ 'you?' | t }}</em></h1>
-    <p class="text-slate-600 text-[15px] mt-3">{{ 'Suppliers register, prove who they are and send their bills. The company checks every document, every number and every bill before anyone is paid.' | t }}</p>
+  {# the name, written by hand like Apple's "hello", in green glass #}
+  <h1 class="sr-only">Mamoni</h1>
+  <div class="hello-wrap mx-auto" aria-hidden="true">
+    <svg class="hello" viewBox="0 0 640 230">
+      <defs>
+        <linearGradient id="glass-fill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#A6F0BD"/><stop offset=".45" stop-color="#34C759"/><stop offset="1" stop-color="#1A8F43"/>
+        </linearGradient>
+        <linearGradient id="sheen" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".85"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+        </linearGradient>
+        <linearGradient id="wipe" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stop-color="#fff"/><stop offset=".9" stop-color="#fff"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+        </linearGradient>
+        <mask id="write"><rect class="hello-pen" x="-1400" y="0" width="1400" height="230" fill="url(#wipe)"/></mask>
+        <mask id="word"><text x="320" y="168" text-anchor="middle" class="hello-text" fill="#fff" stroke="#fff">mamoni</text></mask>
+        <filter id="glass-shadow" x="-10%" y="-20%" width="120%" height="150%">
+          <feDropShadow dx="0" dy="8" stdDeviation="9" flood-color="#1E9E4A" flood-opacity=".28"/>
+        </filter>
+      </defs>
+      <g mask="url(#write)">
+        <text x="320" y="168" text-anchor="middle" class="hello-text" fill="url(#glass-fill)" stroke="url(#glass-fill)" filter="url(#glass-shadow)" opacity=".92">mamoni</text>
+        {# a rim of light along the top edge of each stroke #}
+        <text x="318.8" y="166.2" text-anchor="middle" class="hello-text hello-rim" fill="none" stroke="#fff">mamoni</text>
+        <g mask="url(#word)"><rect class="hello-sheen" x="-200" y="0" width="160" height="230" fill="url(#sheen)"/></g>
+      </g>
+    </svg>
   </div>
+  <style>
+    .hello-wrap { max-width: 560px; margin-top: -8px; }
+    .hello { width: 100%; height: auto; overflow: visible; }
+    .hello-text { font-family: 'Sacramento', cursive; font-size: 190px; stroke-width: 5.5; stroke-linejoin: round; stroke-linecap: round; paint-order: stroke; }
+    .hello-rim { stroke-width: 1.4; opacity: .75; }
+    .hello-pen { animation: hello-write 2.6s cubic-bezier(.45,.05,.35,1) .3s forwards; }
+    .hello-sheen { animation: hello-sheen 6s ease-in-out 3s infinite; }
+    @keyframes hello-write { to { transform: translateX(780px); } }
+    @keyframes hello-sheen { 0% { transform: translateX(0); } 35%, 100% { transform: translateX(1040px); } }
+    @media (prefers-reduced-motion: reduce) { .hello-pen { animation: none; transform: translateX(780px); } .hello-sheen { animation: none; } }
+  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sacramento&display=block" rel="stylesheet">
 
-  <div class="mt-8 sm:mt-14 grid md:grid-cols-2 gap-6 md:gap-16 lg:gap-28">
+  <div class="mt-2 sm:mt-6 grid md:grid-cols-2 gap-6 md:gap-16 lg:gap-28">
     <section class="relative bg-white rounded-xl border p-6 sm:p-8 flex flex-col hover-lift">
       <span class="absolute -top-3 left-6 rounded-t-md border border-b-0 border-slate-200 bg-white px-3 pt-1 pb-0.5 kicker !text-[10px] !text-slate-700">Company</span>
       <div class="flex items-center gap-3">
@@ -207,7 +243,8 @@
       {% if staff %}
         <div class="flex-1"></div>
         <a href="/console" class="mt-7 inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 text-white font-medium px-5 py-3 hover:bg-slate-800 shadow-sm">{{ 'Open the console' | t }} {{ icon('arrow') }}</a>
-        <p class="mt-2 text-xs text-slate-500 text-center truncate">Logged in as {{ staff.name }} · {{ ROLE_LABEL[staff.role] }}</p>
+        <form method="post" action="/company/logout" class="mt-2 text-xs text-slate-500 text-center truncate">Logged in as {{ staff.name }} · {{ ROLE_LABEL[staff.role] }} ·
+          <button class="underline decoration-dotted underline-offset-2 hover:text-slate-800">{{ 'Log out' | t }}</button></form>
       {% else %}
         <form id="home-login" method="post" action="/company/login" class="mt-5 space-y-3 text-[14px] flex-1 flex flex-col">
           <input type="hidden" name="next" value="/console">
@@ -247,7 +284,8 @@
       </ul>
       {% if vendor_account %}
         <a href="/vendor" class="mt-7 inline-flex items-center justify-center gap-2 rounded-md bg-indigo-600 text-white font-medium px-5 py-3 hover:bg-indigo-700 shadow-sm">{{ 'Go to my account' | t }} {{ icon('arrow') }}</a>
-        <p class="mt-2 text-xs text-slate-500 text-center truncate">Signed in as {{ vendor_account.company_name }}</p>
+        <form method="post" action="/vendor/logout" class="mt-2 text-xs text-slate-500 text-center truncate">Signed in as {{ vendor_account.company_name }} ·
+          <button class="underline decoration-dotted underline-offset-2 hover:text-slate-800">{{ 'Log out' | t }}</button></form>
       {% else %}
         <div class="mt-7 grid sm:grid-cols-2 gap-3">
           <a href="/vendor/register" class="inline-flex items-center justify-center gap-2 rounded-md bg-indigo-600 text-white font-medium px-5 py-3 hover:bg-indigo-700 shadow-sm">{{ 'Create an account' | t }}</a>

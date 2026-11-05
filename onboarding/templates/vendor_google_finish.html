@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}One more step{% endblock %}
+{% block content %}
+<div class="reveal max-w-md mx-auto">
+  <div class="kicker">Supplier portal</div>
+  <h1 class="text-[30px] sm:text-[36px] leading-tight mt-1">One more step</h1>
+  <p class="text-slate-600 text-sm mt-2">You signed in with Google as <b>{{ email }}</b>. Tell us which business you're with, and your account is ready.</p>
+  {% if error %}<div class="mt-4 rounded-md bg-rose-50 border border-rose-200 p-3 text-sm text-rose-800" role="alert">{{ error }}</div>{% endif %}
+  <form method="post" action="/vendor/google/finish" class="mt-5 bg-white rounded-xl border p-5 space-y-4 text-sm">
+    <input type="hidden" name="next" value="{{ next }}">
+    <label class="block">Company name<input name="company_name" required value="{{ values.get('company_name', '') }}" autocomplete="organization" class="mt-1 w-full rounded-md border px-3 py-2.5"></label>
+    <label class="block">Your name<input name="contact_name" required value="{{ values.get('contact_name', '') }}" autocomplete="name" class="mt-1 w-full rounded-md border px-3 py-2.5"></label>
+    <button class="w-full rounded-md bg-indigo-600 text-white font-medium py-3 hover:bg-indigo-700 shadow-sm">Create my account</button>
+  </form>
+  <p class="mt-4 text-xs text-slate-500 text-center">You'll sign in with Google next time. No password is stored for this account.</p>
+</div>
+{% endblock %}

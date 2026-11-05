@@ -16,6 +16,7 @@ import asyncio
 
 import re
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -53,7 +54,7 @@ DEMO_BILLS = {
 def _cookie(resp: RedirectResponse, request: Request, account_id: int, purpose: str = "vendor") -> RedirectResponse:
     secure = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
     name = auth.COMPANY_COOKIE if purpose == "company" else auth.COOKIE
-    resp.set_cookie(name, auth.make_session(account_id, purpose), max_age=auth.MAX_AGE, httponly=True, samesite="lax", secure=secure)
+    resp.set_cookie(name, auth.make_session(account_id, purpose), httponly=True, samesite="lax", secure=secure)
     return resp
 
 
@@ -234,6 +235,91 @@ async def login(request: Request, email: str = Form(""), password: str = Form(""
         acct.last_login_at = now()
         await s.commit()
         return _cookie(RedirectResponse(nxt, status_code=303), request, acct.id)
+
+
+@router.get("/vendor/google")
+async def google_start(request: Request, next: str = ""):
+    from onboarding import google_auth
+    if not google_auth.configured():
+        return RedirectResponse("/vendor/login", status_code=303)
+    url, cookie = google_auth.start(request, safe_next(next))
+    resp = RedirectResponse(url, status_code=303)
+    resp.set_cookie(google_auth.STATE_COOKIE, cookie, max_age=google_auth.TTL, httponly=True, samesite="lax")
+    return resp
+
+
+@router.get("/vendor/google/callback", response_class=HTMLResponse)
+async def google_callback(request: Request, code: str = "", state: str = "", error: str = ""):
+    from onboarding import google_auth
+    saved = google_auth.unseal(request.cookies.get(google_auth.STATE_COOKIE), 2)
+    async with sessions()() as s:
+        async def fail(msg: str):
+            r = await render(request, s, "vendor_auth.html", mode="login", next=safe_next(saved[1] if saved else ""), values={}, invite=None,
+                             error=msg, demo=_demo())
+            r.delete_cookie(google_auth.STATE_COOKIE)
+            return r
+        if error:
+            return await fail("Google sign-in was cancelled. You can try again or log in with your email.")
+        if not saved or not code or not secrets_eq(state, saved[0]):
+            return await fail("That Google sign-in link has expired. Please try again.")
+        try:
+            who = await google_auth.exchange(request, code)
+        except Exception:
+            return await fail("We couldn't reach Google just now. Please try again, or log in with your email.")
+        email = str(who.get("email", "")).strip().lower()
+        if not email or not who.get("email_verified"):
+            return await fail("Your Google account's email isn't verified, so we can't use it to sign you in.")
+        nxt = safe_next(saved[1])
+        acct = (await s.execute(select(VendorAccount).where(VendorAccount.email == email))).scalar_one_or_none()
+        if acct:
+            acct.last_login_at = now()
+            await s.commit()
+            resp = _cookie(RedirectResponse(nxt, status_code=303), request, acct.id)
+        else:   # first time: ask for the company name once
+            resp = RedirectResponse(f"/vendor/google/finish?next={quote(nxt)}", status_code=303)
+            resp.set_cookie(google_auth.NEW_COOKIE, google_auth.seal(email, str(who.get("name", ""))[:120]),
+                            max_age=google_auth.TTL, httponly=True, samesite="lax")
+        resp.delete_cookie(google_auth.STATE_COOKIE)
+        return resp
+
+
+@router.get("/vendor/google/finish", response_class=HTMLResponse)
+async def google_finish_form(request: Request, next: str = ""):
+    from onboarding import google_auth
+    who = google_auth.unseal(request.cookies.get(google_auth.NEW_COOKIE), 2)
+    if not who:
+        return RedirectResponse("/vendor/register", status_code=303)
+    async with sessions()() as s:
+        inv = await _invite_from_next(s, safe_next(next))
+        return await render(request, s, "vendor_google_finish.html", next=safe_next(next), email=who[0], error="",
+                            values={"contact_name": who[1], "company_name": inv.company_name if inv else ""})
+
+
+@router.post("/vendor/google/finish", response_class=HTMLResponse)
+async def google_finish(request: Request, company_name: str = Form(""), contact_name: str = Form(""), next: str = Form("")):
+    from onboarding import google_auth
+    who = google_auth.unseal(request.cookies.get(google_auth.NEW_COOKIE), 2)
+    if not who:
+        return RedirectResponse("/vendor/register", status_code=303)
+    nxt, values = safe_next(next), {"company_name": company_name.strip(), "contact_name": contact_name.strip()}
+    async with sessions()() as s:
+        if not values["company_name"] or not values["contact_name"]:
+            return await render(request, s, "vendor_google_finish.html", next=nxt, email=who[0], values=values,
+                                error="Please fill in your company and your name.")
+        acct = (await s.execute(select(VendorAccount).where(VendorAccount.email == who[0]))).scalar_one_or_none()
+        if not acct:
+            acct = VendorAccount(email=who[0], password_hash=google_auth.NO_PASSWORD, company_name=values["company_name"],
+                                 contact_name=values["contact_name"], last_login_at=now())
+            s.add(acct)
+            await s.commit()
+        resp = _cookie(RedirectResponse(nxt, status_code=303), request, acct.id)
+        resp.delete_cookie(google_auth.NEW_COOKIE)
+        return resp
+
+
+def secrets_eq(a: str, b: str) -> bool:
+    import hmac
+    return hmac.compare_digest(a.encode(), b.encode())
 
 
 @router.post("/vendor/logout")
