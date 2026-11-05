@@ -217,7 +217,7 @@
     <section class="relative bg-white rounded-xl border p-6 sm:p-8 flex flex-col hover-lift">
       <span class="absolute -top-3 left-6 rounded-t-md border border-b-0 border-slate-200 bg-white px-3 pt-1 pb-0.5 kicker !text-[10px] !text-slate-700">Company</span>
       <div class="flex items-center gap-3">
-        <span class="h-11 w-11 rounded-full bg-slate-900 text-white grid place-items-center">{{ icon('shield', 'h-5 w-5') }}</span>
+        <span class="text-slate-900 shrink-0" aria-hidden="true">{{ icon('building', 'h-7 w-7') }}</span>
         <h2 class="text-[26px] leading-tight">I work at {{ BUYER.short_name }}</h2>
       </div>
         <form id="home-login" method="post" action="/company/login" class="mt-5 text-[14px] flex-1 flex flex-col">
@@ -254,7 +254,7 @@
     <section class="relative bg-white rounded-xl border p-6 sm:p-8 flex flex-col ring-1 ring-indigo-100 hover-lift">
       <span class="absolute -top-3 left-6 rounded-t-md border border-b-0 border-slate-200 bg-white px-3 pt-1 pb-0.5 kicker !text-[10px] !text-indigo-700">Supplier portal</span>
       <div class="flex items-center gap-3">
-        <span class="h-11 w-11 rounded-full bg-indigo-600 text-white grid place-items-center">{{ icon('doc', 'h-5 w-5') }}</span>
+        <span class="text-slate-900 shrink-0" aria-hidden="true">{{ icon('truck', 'h-7 w-7') }}</span>
         <h2 class="text-[26px] leading-tight">{{ "I'm a vendor or supplier" | t }}</h2>
       </div>
       <ul class="mt-5 space-y-2.5 text-[14.5px] text-slate-700 flex-1">
