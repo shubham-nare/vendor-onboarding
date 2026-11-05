@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import aliased
 
@@ -11,7 +10,7 @@ from onboarding import access
 from onboarding.intel.models import GraphEdge, GraphNode, RiskEvent, Vendor, VendorApplication
 from onboarding.models import Application, Bill, Document, Invite, Run
 from onboarding.pipeline import read_sessions
-from onboarding.web import _actor, _all, _reads, _rows, render
+from onboarding.web import _actor, _all, _reads, _rows
 
 router = APIRouter()
 
