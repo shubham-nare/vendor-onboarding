@@ -23,7 +23,7 @@ from sqlalchemy import func, or_, select
 
 from urllib.parse import quote
 
-from onboarding import access, auth, runner, staff_cache
+from onboarding import access, auth, runner, security, staff_cache
 from onboarding import validators as V
 from onboarding.authenticity.assess import assess
 from onboarding.config import get_settings
@@ -620,6 +620,7 @@ def _form_context(demo: str, values: dict) -> dict:
 
 
 async def _collect_form(request: Request) -> tuple[dict, dict[str, tuple[str, bytes]], str]:
+    security.SUBMIT_PER_IP.check(security.client_ip(request))   # each submission sends documents to Gemini
     data = await request.form()
     f = {k: (str(data.get(k) or "")).strip() for k in ("business_type", "legal_name", "proprietor_name", "gstin", "pan", "cin", "llpin", "address",
                                                        "city", "state", "pin", "contact_name", "contact_email", "contact_phone", "alt_contact_name", "alt_contact_email", "alt_contact_phone", "bank_holder",
@@ -655,6 +656,7 @@ async def _collect_form(request: Request) -> tuple[dict, dict[str, tuple[str, by
             if len(raw) > MAX_BYTES:
                 raise HTTPException(413, f"{SLOT_TITLE[slot]} is larger than 10 MB. Please upload a smaller file.")
             if raw:
+                security.require_document(raw, f"The {SLOT_TITLE[slot].lower()}")
                 files[slot] = (up.filename, raw)
     return f, files, str(data.get("demo") or "")
 
@@ -749,8 +751,6 @@ async def reliability_again(request: Request, run_id: int):
     return RedirectResponse(f"/runs/{run_id}#reliability", status_code=303)
 
 
-_READS: dict[str, list[float]] = {}
-READS_PER_10_MIN = 20
 
 
 @router.post("/apply/read")
@@ -761,17 +761,13 @@ async def apply_read(request: Request, slot: str = Form(...), file: UploadFile =
     from onboarding.prefill import suggestions
     if slot not in ("gst_certificate", "pan_card", "bank_proof", "udyam_certificate"):
         raise HTTPException(400, "Unknown document")
-    who = request.client.host if request.client else "?"
-    t = time.time()
-    recent = [x for x in _READS.get(who, []) if t - x < 600]
-    if len(recent) >= READS_PER_10_MIN:
-        return JSONResponse({"ok": False, "message": "Too many files read in a short time. Please type the details below."}, status_code=429)
-    _READS[who] = recent + [t]
+    if get_settings().rate_limits and not security.READ_PER_IP.allow(security.client_ip(request)):
+        return JSONResponse({"ok": False, "message": security.READ_PER_IP.message}, status_code=429)
     raw = await file.read()
     if not raw or len(raw) > MAX_BYTES:
         return JSONResponse({"ok": False, "message": "Please upload a PDF, JPG or PNG under 10 MB."}, status_code=400)
-    mime = file.content_type or mimetypes.guess_type(file.filename or "")[0] or ""
-    if mime not in ("application/pdf", "image/jpeg", "image/png"):
+    mime = security.sniff(raw) or ""                      # what the file really is, not what its name says
+    if mime not in security.ALLOWED_MIME:
         return JSONResponse({"ok": False, "message": "Please upload a PDF, JPG or PNG."}, status_code=400)
     try:
         res, origin = await asyncio.wait_for(read_with_cache(raw, mime, prefer="cache"), timeout=45)
@@ -1062,7 +1058,7 @@ async def file_view(request: Request, sha: str):
         sf = await s.get(StoredFile, sha)
         if not sf:
             raise HTTPException(404, "No such file")
-        return Response(sf.data, media_type=sf.mime, headers={"Content-Disposition": "inline", "Cache-Control": "private, max-age=3600"})
+        return security.file_response(sf.data, sf.mime)
 
 
 # --- human actions ---------------------------------------------------------------------------------
@@ -1259,6 +1255,7 @@ async def doc_check_post(request: Request, file_a: UploadFile = File(None), file
             raw = await up.read()
             if len(raw) > MAX_BYTES:
                 raise HTTPException(413, "File larger than 10 MB")
+            security.require_document(raw)
             results.append(_check_one(up.filename, raw))
     async with sessions()() as s:
         return await render(request, s, "check.html", results=results)
@@ -1314,7 +1311,10 @@ async def followups_now(request: Request):
 async def reset(request: Request, passcode: str = Form(...)):
     async with sessions()() as s:
         access.require_full(await _actor(request, s), "Resetting the demo")
-    if not secrets.compare_digest(passcode, get_settings().admin_passcode):
+    code = get_settings().admin_passcode
+    if code in ("", "change-me"):   # the default would let any reviewer wipe the data
+        raise HTTPException(403, "Reset is switched off: set ADMIN_PASSCODE on the server first.")
+    if not secrets.compare_digest(passcode, code):
         raise HTTPException(403, "Wrong passcode")
     if runner.busy():
         raise HTTPException(409, "A run is in progress; try again in a minute.")

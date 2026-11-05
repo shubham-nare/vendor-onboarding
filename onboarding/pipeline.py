@@ -80,7 +80,8 @@ async def create_run(s: AsyncSession, form: dict, files: dict[str, tuple[str, by
     for slot, (filename, data) in files.items():  # files first (documents reference them)
         sha = shas[slot] = hashlib.sha256(data).hexdigest()
         if not await s.get(StoredFile, sha):
-            s.add(StoredFile(sha256=sha, mime=mimetypes.guess_type(filename)[0] or "application/octet-stream", size=len(data), data=data))
+            from onboarding.security import sniff
+            s.add(StoredFile(sha256=sha, mime=sniff(data) or mimetypes.guess_type(filename)[0] or "application/octet-stream", size=len(data), data=data))
             await s.flush()
     for slot, (filename, _data) in files.items():
         s.add(Document(run_id=run.id, slot=slot, filename=filename, sha256=shas[slot]))

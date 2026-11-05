@@ -202,9 +202,17 @@ async def bad_input(request: Request, exc: RequestValidationError):
 
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
+    from onboarding.security import cross_site
+    if cross_site(request):   # a form or API call sent from another site (CSRF): refuse before it does anything
+        return JSONResponse({"error": "This request came from another site, so it was refused."}, status_code=403)
     resp = await call_next(request)
-    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
-    resp.headers.setdefault("X-Frame-Options", "DENY")
+    h = resp.headers
+    h.setdefault("X-Content-Type-Options", "nosniff")
+    h.setdefault("X-Frame-Options", "DENY")
+    h.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    h.setdefault("Permissions-Policy", "camera=(), microphone=(), payment=(), geolocation=(self)")
+    if request.headers.get("x-forwarded-proto") == "https" or request.url.scheme == "https":
+        h.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
     if request.url.path.startswith("/api/"):
-        resp.headers.setdefault("Cache-Control", "no-store")
+        h.setdefault("Cache-Control", "no-store")
     return resp

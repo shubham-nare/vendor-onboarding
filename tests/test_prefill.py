@@ -88,16 +88,22 @@ def test_the_read_endpoint_suggests_values_and_is_limited(monkeypatch):
         return ReadResult(ok=True, read=doc("CANCELLED_CHEQUE", account_number="50200088412375", ifsc="HDFC0000007",
                                            account_holder_name="KESARI FACILITY SERVICES PVT LTD")), "cache"
     monkeypatch.setattr(reader, "read_with_cache", fake)
-    monkeypatch.setattr(web, "_READS", {})
+    from onboarding import security
+    import onboarding.config as cfg
+    monkeypatch.setenv("RATE_LIMITS", "true")
+    cfg.get_settings.cache_clear()
+    security.READ_PER_IP.reset()
     c = TestClient(app, raise_server_exceptions=False)  # no lifespan: no database needed
     files = {"file": ("cheque.pdf", b"%PDF-1.4 cheque", "application/pdf")}
     r = c.post("/apply/read", data={"slot": "bank_proof"}, files=files).json()
     assert r["ok"] and r["fields"]["ifsc"]["value"] == "HDFC0000007" and r["source"] == "cheque"
     assert c.post("/apply/read", data={"slot": "bank_proof"}, files={"file": ("x.exe", b"MZ", "application/x-msdownload")}).status_code == 400
     assert c.post("/apply/read", data={"slot": "secrets"}, files=files).status_code == 400
-    for _ in range(web.READS_PER_10_MIN):
+    for _ in range(security.READ_PER_IP.limit):
         c.post("/apply/read", data={"slot": "bank_proof"}, files=files)
     assert c.post("/apply/read", data={"slot": "bank_proof"}, files=files).status_code == 429
+    monkeypatch.setenv("RATE_LIMITS", "false")
+    cfg.get_settings.cache_clear()
 
 
 def test_the_form_starts_with_the_documents(monkeypatch):

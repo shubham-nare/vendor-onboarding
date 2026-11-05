@@ -24,7 +24,8 @@ from sqlalchemy import select, func
 
 from onboarding.demo_data import BUYER
 from onboarding.ap.replies import suggested_replies
-from onboarding import captcha
+from onboarding import captcha, security
+from onboarding.config import get_settings
 from onboarding import access, auth
 from onboarding import bills as B
 from onboarding.demo_data import KESARI, SCENARIOS
@@ -79,6 +80,10 @@ async def company_login_form(request: Request, next: str = ""):
 async def company_login(request: Request, email: str = Form(""), password: str = Form(""), next: str = Form("")):
     email, nxt = email.strip().lower(), safe_next(next, "/console")
     async with sessions()() as s:
+        try:
+            security.check_login(request, email)
+        except HTTPException as e:
+            return await render(request, s, "company_login.html", next=nxt, email=email, demo=_demo(), error=e.detail)
         if bot := await captcha.check(request):
             return await render(request, s, "company_login.html", next=nxt, email=email, demo=_demo(), error=bot)
         emp = (await s.execute(select(Employee).where(Employee.email == email))).scalars().first()
@@ -131,6 +136,8 @@ async def contact_send(request: Request, name: str = Form(""), company: str = Fo
     values = dict(name=name.strip()[:120], company=company.strip()[:200], email=email.strip().lower()[:200], topic=topic, body=body.strip()[:4000])
     async with sessions()() as s:
         error = await captcha.check(request)
+        if not error and not security.CONTACT_PER_IP.allow(security.client_ip(request)) and get_settings().rate_limits:
+            error = security.CONTACT_PER_IP.message
         if not error and (not values["name"] or len(values["body"]) < 10):
             error = "Please give your name and a short message."
         elif not error and not EMAIL_RE.match(values["email"]):
@@ -195,6 +202,11 @@ async def register(request: Request, company_name: str = Form(""), contact_name:
     values = {"company_name": company_name.strip(), "contact_name": contact_name.strip(), "email": email}
     async with sessions()() as s:
         error = await captcha.check(request)
+        try:
+            security.check_login(request, email)
+            security.SIGNUP_PER_IP.check(security.client_ip(request))
+        except HTTPException as e:
+            error = error or e.detail
         if error:
             pass
         elif not values["company_name"] or not values["contact_name"]:
@@ -229,6 +241,10 @@ async def login_form(request: Request, next: str = ""):
 async def login(request: Request, email: str = Form(""), password: str = Form(""), next: str = Form("")):
     email, nxt = email.strip().lower(), safe_next(next)
     async with sessions()() as s:
+        try:
+            security.check_login(request, email)
+        except HTTPException as e:
+            return await render(request, s, "vendor_auth.html", mode="login", next=nxt, values={"email": email}, invite=None, error=e.detail, demo=_demo())
         if bot := await captcha.check(request):
             return await render(request, s, "vendor_auth.html", mode="login", next=nxt, values={"email": email}, invite=None, error=bot, demo=_demo())
         acct = (await s.execute(select(VendorAccount).where(VendorAccount.email == email))).scalar_one_or_none()
@@ -416,6 +432,7 @@ async def vendor_bill_form(request: Request, demo: str = ""):
 
 
 async def _bill_fields(request: Request) -> tuple[dict, tuple[str, bytes] | None, str]:
+    security.SUBMIT_PER_IP.check(security.client_ip(request))   # each bill is read by Gemini
     data = await request.form()
     f = {"engaged_by": str(data.get("engaged_by") or "").strip()}   # number, date, amount, work and PO are read from the bill
     up, file = data.get("invoice"), None
@@ -424,6 +441,7 @@ async def _bill_fields(request: Request) -> tuple[dict, tuple[str, bytes] | None
         if len(raw) > MAX_BYTES:
             raise HTTPException(413, "The bill is larger than 10 MB. Please upload a smaller file.")
         if raw:
+            security.require_document(raw, "The bill")
             file = (up.filename, raw)
     demo = str(data.get("demo") or "")
     if file is None and demo in DEMO_BILLS and (EXTRA / DEMO_BILLS[demo]["file"]).exists():
@@ -438,7 +456,7 @@ async def _store(s, filename: str, raw: bytes) -> str:
     import hashlib
     sha = hashlib.sha256(raw).hexdigest()
     if not await s.get(StoredFile, sha):
-        s.add(StoredFile(sha256=sha, mime=B.file_mime(filename), size=len(raw), data=raw))
+        s.add(StoredFile(sha256=sha, mime=security.sniff(raw) or B.file_mime(filename), size=len(raw), data=raw))
         await s.flush()
     return sha
 
@@ -761,6 +779,7 @@ async def vendor_change_request(request: Request):
             raw = await up.read()
             if len(raw) > MAX_BYTES:
                 raise HTTPException(413, "The file is larger than 10 MB.")
+            security.require_document(raw, "The bank proof")
             cr.document_sha256, cr.document_name = await _store(s, up.filename, raw), up.filename
             cr.requested = {"account": mask("BANK_ACCOUNT", account), "ifsc": ifsc, "holder": holder}
             cr.requested_enc = encrypt(_json.dumps({"account": account, "ifsc": ifsc, "holder": holder}))

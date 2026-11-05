@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     news_search: bool = True
     # bot check on public forms (onboarding/captcha.py): Cloudflare Turnstile keys; demo mode uses Cloudflare's test keys
     captcha: bool = True
+    rate_limits: bool = True   # onboarding/security.py; tests switch them off and test them on their own
     turnstile_site_key: str = ""
     turnstile_secret_key: str = ""
     # "Continue with Google" for suppliers (onboarding/google_auth.py): an OAuth client from Google Cloud; hidden when blank
