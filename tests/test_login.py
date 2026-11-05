@@ -46,10 +46,12 @@ def test_employee_login_redirects_to_the_dashboard(app_client):
         async with await _client(app_client) as c:
             r = await c.post("/company/login", data={"email": DEMO_COMPANY_EMAIL.upper(), "password": DEMO_PASSWORD})
             page = await c.get("/console")
-            return r, page
-    r, page = _run(go())
+            me = await c.get("/api/v1/session")
+            return r, page, me
+    r, page, me = _run(go())
     assert r.status_code == 303 and r.headers["location"] == "/console"
-    assert page.status_code == 200 and "Arjun" in page.text
+    assert page.status_code == 200 and "/static/app.js" in page.text           # the app shell ...
+    assert me.headers["content-type"].startswith("application/json") and me.json()["actor"]["first_name"] == "Arjun"   # ... and its data
 
 
 def test_login_returns_to_the_page_that_asked_for_it(app_client):
@@ -132,7 +134,7 @@ def test_without_demo_tools_the_console_is_the_logged_in_person(app_client, monk
             public = [(await c.get(p)).text for p in ("/", "/vendor/login", "/vendor/register", "/bill")]
             await c.post("/company/login", data={"email": DEMO_COMPANY_EMAIL, "password": DEMO_PASSWORD})
             c.cookies.set("actor", "4")                       # trying to act as the Finance controller
-            console = (await c.get("/console")).text
+            console = (await c.get("/api/v1/console/home")).text
             act = await c.post("/act-as", data={"employee_id": "4"})
             demo = await c.get("/demo/happy_nilgiri")
             return login_page, public, console, act, demo

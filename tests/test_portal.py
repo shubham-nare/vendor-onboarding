@@ -16,6 +16,11 @@ CACHE = ROOT / ".read_cache"
 pytestmark = pytest.mark.skipif(not CACHE.exists() or not any(CACHE.iterdir()), reason="no cached AI readings")
 PW = "Ks@9" + secrets.token_urlsafe(10)   # meets the policy: upper, lower, number, symbol, 8+
 
+from pathlib import Path  # noqa: E402
+
+APP_JS = (Path(__file__).resolve().parent.parent / "onboarding" / "static" / "app.js").read_text(encoding="utf-8")
+APP_CSS = (Path(__file__).resolve().parent.parent / "onboarding" / "static" / "app.css").read_text(encoding="utf-8")
+
 
 def test_password_hashing_and_cookie_signing():
     from onboarding import auth
@@ -77,9 +82,9 @@ def flows(tmp_path_factory):
             out["staff_bad"] = (await staff.post("/company/login", data={"email": DEMO_COMPANY_EMAIL, "password": "not-it"})).text
             out["staff_login"] = (await staff.post("/company/login", data={"email": DEMO_COMPANY_EMAIL, "password": DEMO_PASSWORD, "next": "/bills"})).headers.get("location", "")
             out["console"] = (await staff.get("/console")).status_code
-            out["console_page"] = (await staff.get("/console")).text
-            out["pending"] = (await staff.get("/console/pending")).json()
-            out["pending_anon"] = (await other.get("/console/pending")).status_code
+            out["console_page"] = (await staff.get("/api/v1/console/home")).text
+            out["pending"] = (await staff.get("/api/v1/console/pending")).json()
+            out["pending_anon"] = (await other.get("/api/v1/console/pending")).status_code
             out["applications_page"] = (await staff.get("/applications")).text
             r = await other.post("/vendor/login", data={"email": DEMO_VENDOR["email"], "password": DEMO_PASSWORD})
             out["demo_vendor"] = (r.status_code, (await other.get("/vendor")).text)
@@ -179,10 +184,10 @@ def flows(tmp_path_factory):
             out["profile_after"] = (await v.get("/vendor/profile")).text
             staff.cookies.set("actor", "3")
             out["review_maker"] = (await staff.get("/review")).text
-            out["pending_maker_cr"] = (await staff.get("/console/pending")).json()
+            out["pending_maker_cr"] = (await staff.get("/api/v1/console/pending")).json()
             staff.cookies.set("actor", "4")
             out["review_finance"] = (await staff.get("/review")).text
-            out["pending_finance_cr"] = (await staff.get("/console/pending")).json()
+            out["pending_finance_cr"] = (await staff.get("/api/v1/console/pending")).json()
             out["applications_finance"] = (await staff.get("/applications")).text
             cr_id = re.search(r'/change-requests/(\d+)/decide', out["review_finance"]).group(1)
             staff.cookies.set("actor", "3")
@@ -204,7 +209,7 @@ def flows(tmp_path_factory):
                 staff.cookies.set("actor", str(who))
                 seen[who] = dict(bills=(await staff.get("/bills")).text, bill=await staff.get(f"/bills/{bid2}"), run=await staff.get(f"/runs/{run_id}"),
                                  events=(await staff.get(f"/runs/{run_id}/events")).status_code, file=(await staff.get(f"/files/{sha}")).status_code,
-                                 outbox=(await staff.get("/outbox")).status_code, console=(await staff.get("/console")).text,
+                                 outbox=(await staff.get("/outbox")).status_code, console=(await staff.get("/api/v1/console/home")).text,
                                  vendors=(await staff.get("/supplier-accounts")).text)
             out["seen"] = seen
             staff.cookies.set("actor", "2")
@@ -215,7 +220,7 @@ def flows(tmp_path_factory):
             out["tag"] = (await staff.post(f"/bills/{bid2}/tag", data={"to_employee_id": "2", "note": "Did the team ask Kesari for this extra cleaning?"})).status_code
             out["tag_self"] = (await staff.post(f"/bills/{bid2}/tag", data={"to_employee_id": "3", "note": "me"})).status_code
             staff.cookies.set("actor", "2")
-            out["rahul_console_tagged"] = (await staff.get("/console")).text
+            out["rahul_console_tagged"] = (await staff.get("/api/v1/console/home")).text
             page = await staff.get(f"/bills/{bid2}")
             out["rahul_bill_tagged"] = page
             tag_id = re.search(r'/bills/\d+/tag/(\d+)/done', page.text).group(1)
@@ -223,7 +228,7 @@ def flows(tmp_path_factory):
             out["tag_wrong_person"] = (await staff.post(f"/bills/{bid2}/tag/{tag_id}/done", data={"reply": "x"})).status_code
             staff.cookies.set("actor", "2")
             out["tag_done"] = (await staff.post(f"/bills/{bid2}/tag/{tag_id}/done", data={"reply": "Yes, I asked them on 2 Nov."})).status_code
-            out["rahul_console_after"] = (await staff.get("/console")).text
+            out["rahul_console_after"] = (await staff.get("/api/v1/console/home")).text
             staff.cookies.set("actor", "3")
             out["bill_after_tag"] = (await staff.get(f"/bills/{bid2}")).text
 
@@ -259,7 +264,7 @@ def test_company_pages_need_an_employee_login(flows):
     assert flows["action_anon"] == 401
     assert "match an employee login" in flows["staff_bad"]
     assert flows["staff_login"] == "/bills"
-    assert "Arjun Mehta" in flows["console_page"] and "Log out" in flows["console_page"]
+    assert "Arjun Mehta" in flows["console_page"] and "Log out" in APP_JS
 
 
 def test_demo_vendor_account_and_cookies_dont_cross_over(flows):
@@ -465,18 +470,18 @@ def test_invoices_filter_by_amount_vendor_and_sort(flows):
 
 
 def test_navigation_uses_short_names_and_help_replaces_sources(flows):
-    page = flows["console_page"]
-    for label in (">Review<", ">Invoices<", ">Orders<", ">History<", ">Help<"):
-        assert label in page.replace("</svg>", ">"), label
+    page = APP_JS                                                     # the menu is drawn by the app
+    for label in ("'Review'", "'Invoices'", "'Orders'", "'History'", "}Help<"):
+        assert label in page, label
     assert "Verification sources" not in page and "Decisions and audit" not in page and "Invoice verification" not in page
 
 
 def test_home_is_only_what_needs_approving(flows):
-    page = flows["console_page"]
-    assert "Waiting for you" in page and "Vendors to approve" in page and "Invoices to approve" in page
+    page = flows["console_page"]                                      # GET /api/v1/console/home
+    assert '"todo"' in page and "Vendors to approve" in page and "Invoices to approve" in page
     for gone in ("Where applications stand", "Recent decisions", "Recent checks", "Relationship alerts"):
-        assert gone not in page, gone
-    assert ">Approvals<" in page and ">In depth<" in page and ">Documents<" in page.replace("</svg>", ">")
+        assert gone not in page and gone not in APP_JS, gone
+    assert "Waiting for you" in APP_JS and "'Approvals'" in APP_JS and "'In depth'" in APP_JS and "'Documents'" in APP_JS
 
 
 def test_documents_page_lists_every_upload(flows):
@@ -487,13 +492,13 @@ def test_documents_page_lists_every_upload(flows):
 
 
 def test_pending_reminder_feed_and_house_style(flows):
-    assert flows["pending_anon"] in (302, 303)                                   # signed out: sent to sign in
+    assert flows["pending_anon"] == 401                                          # signed out: the API says so
     assert isinstance(flows["pending"]["count"], int) and len(flows["pending"]["items"]) <= 4
     page = flows["applications_page"]
-    assert 'id="pending-note"' in page and "/console/pending" in page            # reminder on other pages
-    assert 'id="pending-note"' not in flows["console_page"]                       # Home already lists them
-    assert "-apple-system" in page and "Verdana" not in page and "#F5F5F7" in page          # Apple type and greys
-    assert "html.js .sr" in page and "IntersectionObserver" in page                # blocks rise in as they scroll into view
+    assert 'id="pending-note"' in page and "/api/v1/console/pending" in page     # reminder on other pages
+    assert "path === '/console'" in APP_JS                                        # ... not on Home, which already lists them
+    assert "/static/app.css" in page and "-apple-system" in APP_CSS and "Verdana" not in APP_CSS and "#F5F5F7" in APP_CSS
+    assert "html.js .sr" in APP_CSS and "IntersectionObserver" in page            # blocks rise in as they scroll into view
 
 
 def test_order_rows_turn_red_on_a_mismatch():
@@ -546,8 +551,8 @@ def test_review_badge_home_and_review_count_the_same_things(flows):
     assert any(i["href"] == "/review#changes" for i in fin["items"])           # a bank change waits for Finance ...
     assert not any(i["href"] == "/review#changes" for i in mk["items"])        # ... not for the reviewer
     assert f'aria-label="{fin["count"]} waiting"' in flows["review_finance"]          # the Review badge on the Review page
-    page = flows["console_page"]
-    assert 'id="invite-box"' in page and 'class="review-count"' in page
+    page = APP_JS
+    assert 'id="invite-box"' in page and 'review-count' in page
     fin_review = html.unescape(flows["review_finance"])                       # drawn into the page, no wait for the count request
     assert f'class="review-count" aria-label="{fin["count"]} waiting">{fin["count"]}<' in fin_review
     assert 'href="/invites" class="side-link' not in page                     # Invites lives on Home now

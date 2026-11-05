@@ -105,7 +105,7 @@ def intel(tmp_path_factory):
             out["dir"] = (await c.get("/vendors")).text
             out["rangoli_page"] = (await c.get(f"/vendors/{rangoli}")).text
             out["deccan_page"] = (await c.get(f"/vendors/{deccan}")).text
-            out["dash"] = (await c.get("/console")).text
+            out["dash"] = (await c.get("/api/v1/console/home")).text
             out["run_page"] = (await c.get(f"/runs/{parents['shared_bank_rangoli']}")).text
             out["missing"] = (await c.get("/vendors/VND-9999")).status_code
             out["accounts"] = (await c.get("/supplier-accounts")).status_code
@@ -233,7 +233,7 @@ def test_registry_sources_are_labelled(intel):
 
 def test_pages_and_navigation(intel):
     assert "Rangoli Print House" in intel["dir"] and "Deccan Office Supplies" in intel["dir"]
-    assert "Waiting for you" in intel["dash"] and "Open vendor profile" in intel["run_page"]
+    assert '"todo"' in intel["dash"] and "Open vendor profile" in intel["run_page"]
     assert intel["missing"] == 404 and intel["accounts"] == 200
     assert "What to do next" in intel["rangoli_page"] and "Who:" in intel["rangoli_page"]
     assert "On record (vendor master)" in intel["deccan_page"] and "Rangoli Print House" in intel["deccan_page"]   # seen from the other side too

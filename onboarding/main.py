@@ -115,6 +115,8 @@ app.add_middleware(RetryPageOnce)
 
 @app.exception_handler(HTTPException)
 async def friendly_errors(request: Request, exc: HTTPException):
+    if request.url.path.startswith("/api/"):                     # the API always answers in JSON
+        return JSONResponse({"error": str(exc.detail)}, status_code=exc.status_code)
     if request.url.path.startswith(("/runs/", "/healthz", "/readyz")) and "text/html" not in request.headers.get("accept", ""):
         return JSONResponse({"error": exc.detail}, status_code=exc.status_code)
     area = request.url.path.strip("/").split("/", 1)[0]
@@ -179,3 +181,30 @@ app.include_router(router)
 app.include_router(ap_router)
 app.include_router(ws_router)
 app.include_router(portal_router)
+
+# --- the JSON API and the browser app ------------------------------------------------------------------------
+from onboarding.api import ApiError, error_response, router as api_router  # noqa: E402
+
+app.include_router(api_router)
+app.add_exception_handler(ApiError, error_response)
+
+
+from fastapi.exceptions import RequestValidationError  # noqa: E402
+
+
+@app.exception_handler(RequestValidationError)
+async def bad_input(request: Request, exc: RequestValidationError):
+    """Malformed input: one plain sentence in the API's error shape."""
+    first = exc.errors()[0] if exc.errors() else {}
+    where = ".".join(str(x) for x in first.get("loc", ())[1:]) or "input"
+    return JSONResponse({"error": f"{where}: {first.get('msg', 'is not valid')}"}, status_code=422)
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    resp = await call_next(request)
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("X-Frame-Options", "DENY")
+    if request.url.path.startswith("/api/"):
+        resp.headers.setdefault("Cache-Control", "no-store")
+    return resp

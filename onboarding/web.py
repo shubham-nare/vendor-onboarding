@@ -270,21 +270,11 @@ def _rows(stmt):
 
 
 # --- dashboard ----------------------------------------------------------------------------------
-@router.get("/console", response_class=HTMLResponse)
-async def dashboard(request: Request):
-    async with read_sessions()() as s:
-        return await render(request, s, "dashboard.html", **await _dashboard_ctx(request, s))
-
-
-@router.get("/console/pending")
-async def pending(request: Request):
-    """What the bottom-right reminder shows on every staff page: how many decisions are still waiting."""
-    async with read_sessions()() as s:
-        if not await _actor(request, s):
-            return JSONResponse({"count": 0, "apps": 0, "items": []})
-        todo = (await _dashboard_ctx(request, s))["todo"]
-        return JSONResponse({"count": len(todo), "apps": sum(t["status"] not in ("BILL", "CHANGE") for t in todo),
-                             "items": [dict(name=t["name"], ref=t["ref"], verb=t["verb"], href=t["href"]) for t in todo[:4]]})
+@router.get("/console")
+async def dashboard():
+    """Home is drawn by the browser app from GET /api/v1/console/home."""
+    from onboarding.appshell import app_shell
+    return app_shell()
 
 
 async def _dashboard_ctx(request: Request, s) -> dict:

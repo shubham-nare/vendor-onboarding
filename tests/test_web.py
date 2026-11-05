@@ -188,14 +188,13 @@ def flows(tmp_path_factory):
             out["rangoli_status_chased"] = (await c.get(f"/status/{rangoli_tok}")).text
             await as_("checker")
             out["fu_button"] = await c.post("/system/followups")
-            out["console_chasing"] = (await c.get("/console")).text
+            out["console_chasing"] = (await c.get("/api/v1/console/home")).text
 
             for p in ("/", "/outbox", "/assumptions", "/system", "/check?sample=genuine", "/invites"):
                 out[p] = await c.get(p)
             for who in ("maker", "checker", "Rahul Desai"):  # each person's "Needs your action" queue
                 await as_(who)
-                page = (await c.get("/console")).text
-                out[f"todo_{who}"] = page.split("Waiting for you", 1)[1].split("<!-- /waiting -->", 1)[0]
+                out[f"todo_{who}"] = json.dumps((await c.get("/api/v1/console/home")).json()["todo"])   # the Waiting for you list
 
             # registered for future work -> pre-qualified (not payable) -> a requester needs them -> every check again
             rid = out["unsolicited_rid"]
@@ -381,8 +380,8 @@ def test_vendors_who_go_quiet_are_chased(flows):
     assert flows["fu_button"].status_code == 303 and "done=followups" in flows["fu_button"].headers["location"]
     outbox = flows["/outbox"].text
     assert "reminder" in outbox and "hasn&#39;t replied" in outbox or "hasn't replied" in outbox
-    home = flows["console_chasing"]
-    assert "Waiting on vendors" in home and "sent to" in home and "border-l-rose-600 bg-rose-50" in home
+    home = json.loads(flows["console_chasing"])                      # Home's Waiting on vendors, from the API
+    assert home["chasing"] and any(w["tone"] == "red" and w["escalated"] for w in home["chasing"])
     assert "Vendor follow-ups" in flows["/system"].text
 
 

@@ -1,0 +1,161 @@
+/* Console Home, from GET /api/v1/console/home: the invite box, the stars, what is waiting for you, vendors we are
+   chasing, and (demo) the scenarios. The stars turn slowly; grab one to spin it, throw it and it flies off,
+   twinkles and comes back. A plain click still opens the list. */
+
+const STAR_PATH = 'M100.0 6.0 L103.3 6.3 L106.5 7.4 L109.6 9.0 L112.5 11.2 L115.2 13.8 L117.7 16.8 L119.9 20.1 L122.0 23.4 L123.8 26.8 L125.5 30.0 L127.1 33.0 L128.7 35.6 L130.3 37.9 L132.1 39.7 L134.0 41.1 L136.2 42.1 L138.7 42.7 L141.4 43.0 L144.5 43.0 L147.9 42.9 L151.5 42.8 L155.3 42.7 L159.2 42.8 L163.2 43.1 L167.0 43.8 L170.7 44.8 L174.0 46.2 L177.0 48.1 L179.5 50.3 L181.4 53.0 L182.7 56.0 L183.5 59.3 L183.6 62.8 L183.2 66.4 L182.2 70.1 L180.9 73.7 L179.2 77.3 L177.3 80.7 L175.3 84.0 L173.4 87.1 L171.6 89.9 L170.1 92.6 L169.0 95.2 L168.2 97.6 L168.0 100.0 L168.2 102.4 L169.0 104.8 L170.1 107.4 L171.6 110.1 L173.4 112.9 L175.3 116.0 L177.3 119.3 L179.2 122.7 L180.9 126.3 L182.2 129.9 L183.2 133.6 L183.6 137.2 L183.5 140.7 L182.7 144.0 L181.4 147.0 L179.5 149.7 L177.0 151.9 L174.0 153.8 L170.7 155.2 L167.0 156.2 L163.2 156.9 L159.2 157.2 L155.3 157.3 L151.5 157.2 L147.9 157.1 L144.5 157.0 L141.4 157.0 L138.7 157.3 L136.2 157.9 L134.0 158.9 L132.1 160.3 L130.3 162.1 L128.7 164.4 L127.1 167.0 L125.5 170.0 L123.8 173.2 L122.0 176.6 L119.9 179.9 L117.7 183.2 L115.2 186.2 L112.5 188.8 L109.6 191.0 L106.5 192.6 L103.3 193.7 L100.0 194.0 L96.7 193.7 L93.5 192.6 L90.4 191.0 L87.5 188.8 L84.8 186.2 L82.3 183.2 L80.1 179.9 L78.0 176.6 L76.2 173.2 L74.5 170.0 L72.9 167.0 L71.3 164.4 L69.7 162.1 L67.9 160.3 L66.0 158.9 L63.8 157.9 L61.3 157.3 L58.6 157.0 L55.5 157.0 L52.1 157.1 L48.5 157.2 L44.7 157.3 L40.8 157.2 L36.8 156.9 L33.0 156.2 L29.3 155.2 L26.0 153.8 L23.0 151.9 L20.5 149.7 L18.6 147.0 L17.3 144.0 L16.5 140.7 L16.4 137.2 L16.8 133.6 L17.8 129.9 L19.1 126.3 L20.8 122.7 L22.7 119.3 L24.7 116.0 L26.6 112.9 L28.4 110.1 L29.9 107.4 L31.0 104.8 L31.8 102.4 L32.0 100.0 L31.8 97.6 L31.0 95.2 L29.9 92.6 L28.4 89.9 L26.6 87.1 L24.7 84.0 L22.7 80.7 L20.8 77.3 L19.1 73.7 L17.8 70.1 L16.8 66.4 L16.4 62.8 L16.5 59.3 L17.3 56.0 L18.6 53.0 L20.5 50.3 L23.0 48.1 L26.0 46.2 L29.3 44.8 L33.0 43.8 L36.8 43.1 L40.8 42.8 L44.7 42.7 L48.5 42.8 L52.1 42.9 L55.5 43.0 L58.6 43.0 L61.3 42.7 L63.8 42.1 L66.0 41.1 L67.9 39.7 L69.7 37.9 L71.3 35.6 L72.9 33.0 L74.5 30.0 L76.2 26.8 L78.0 23.4 L80.1 20.1 L82.3 16.8 L84.8 13.8 L87.5 11.2 L90.4 9.0 L93.5 7.4 L96.7 6.3Z';
+
+function starTile(s, i) {
+  const n = s.count, note = s.amount !== undefined ? (n ? `${inr(s.amount)} ${s.note}` : '') : s.note;
+  return `<a href="${esc(s.href)}" class="star-tile ${n ? 'star-wait' : 'star-clear'}" draggable="false" title="Spin me, or throw me">
+    <svg viewBox="0 0 200 200" aria-hidden="true"><defs><linearGradient id="starfill${i}" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="${n ? '#E3EEFF' : '#F0F5FC'}"/><stop offset="1" stop-color="${n ? '#C9DFFF' : '#E1EBF8'}"/></linearGradient></defs>
+      <path d="${STAR_PATH}" fill="url(#starfill${i})"/></svg>
+    <span class="star-body">
+      <span class="block text-[13px] font-semibold text-slate-700 leading-tight">${esc(s.label)}</span>
+      <span class="block mt-1 text-[42px] font-semibold tracking-tight leading-none tabular-nums ${n ? 'text-[#0071E3]' : 'text-[#6E8DB8]'}">${n}</span>
+      <span class="block mt-1 text-[11.5px] leading-snug text-slate-600">${n ? esc(note) : 'All clear'}</span>
+    </span></a>`;
+}
+
+function todoRow(t) {
+  const tag = ['BILL', 'CHANGE'].includes(t.status)
+    ? `<span class="tag ${t.status === 'CHANGE' ? 'text-rose-700' : 'text-amber-700'}">${esc(t.detail)}${t.amount ? ' · ' + inr(t.amount) : ''}</span>`
+    : statusBadge(t.status);
+  return `<li><a href="${esc(t.href)}" class="group flex items-center gap-3 px-4 sm:px-5 py-3 hover:bg-slate-50">
+    ${monogram(t.name)}
+    <span class="flex-1 min-w-0"><span class="block text-[14px] font-medium truncate">${esc(t.name)}</span>
+      <span class="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[12px] text-slate-500">
+        <span class="mono">${esc(t.ref)}</span>${tag}${t.fraud ? '<span class="tag text-rose-700">fraud class</span>' : ''}${tierChip(t.risk)}
+        ${t.waiting ? `<span class="text-slate-400">${esc(t.waiting)}</span>` : ''}</span></span>
+    <span class="hidden sm:inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 py-1.5 text-[12.5px] font-semibold text-white group-hover:bg-indigo-700">${esc(t.verb)} ${icon('chev', 'h-3.5 w-3.5')}</span>
+    <span class="sm:hidden text-slate-400">${icon('chev')}</span></a></li>`;
+}
+
+function chasingRow(w) {
+  const red = w.tone === 'red';
+  const so_far = `Asked ${esc(w.asked)}${w.reminded ? ` · reminded ${esc(w.reminded)}` : ''}${w.escalated ? ` · <b class="text-rose-700">sent to ${esc(w.requester || 'the requester')} ${esc(w.escalated)}</b>` : ''}`;
+  return `<tr class="border-l-4 ${red ? 'border-l-rose-600 bg-rose-50' : 'border-l-amber-500'}">
+    <td class="px-4 sm:px-5 py-2.5"><a href="/runs/${w.run_id}" class="font-medium hover:underline">${esc(w.name)}</a>
+      <div class="text-[11.5px] text-slate-500"><span class="mono">${esc(w.ref)}</span>${w.requester ? ` · asked for by ${esc(w.requester)}` : ''}</div></td>
+    <td class="px-3 py-2.5 text-center tabular-nums font-bold text-[15px] ${red ? 'text-rose-700' : 'text-amber-700'}">${w.days}</td>
+    <td class="px-3 py-2.5 hidden md:table-cell text-[12px] text-slate-600">${so_far}</td>
+    <td class="px-3 py-2.5 hidden sm:table-cell text-[12px] text-slate-600">${w.next ? `${esc(w.next.what)} on ${esc(w.next.on)}` : 'Waiting for the vendor to resubmit'}</td></tr>`;
+}
+
+App.views['/console'] = {
+  title: 'Home',
+  async render(view) {
+    const d = await api('/console/home');
+    paintCounts(d.counts);
+    const req = d.requester, todo = d.todo;
+    view.innerHTML = `<div class="space-y-6">
+      <h1>Welcome back, ${esc(d.actor.first_name)}</h1>
+      <a href="/invites" id="invite-box" class="group block rounded-[18px] bg-[#0071E3] text-white px-6 sm:px-8 py-7 sm:py-8 hover:bg-[#0077ED] transition">
+        <div class="flex flex-wrap items-center gap-5">
+          <span class="h-14 w-14 shrink-0 rounded-full bg-white/15 grid place-items-center">${icon('send', 'h-7 w-7', 1.8)}</span>
+          <span class="flex-1 min-w-[14rem]"><span class="block text-[26px] sm:text-[30px] font-semibold tracking-tight leading-tight">${req ? 'Invite a vendor' : 'Invites'}</span>
+            <span class="block mt-1 text-[15px] text-white/85">${req ? 'Send a registration link. We check everything they submit.' : 'Every registration link sent, and who has yet to register.'}
+            ${d.open_invites ? `<b class="text-white">${d.open_invites} open.</b>` : ''}</span></span>
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-white text-[#0071E3] px-5 py-2.5 text-[14px] font-semibold group-hover:bg-white/90">${req ? 'Invite' : 'Open'} ${icon('chev', 'h-4 w-4')}</span>
+        </div></a>
+      <div class="flex flex-wrap justify-evenly gap-x-10 gap-y-6 py-2" id="stars">${d.stars.map(starTile).join('')}</div>
+      <section class="bg-white border rounded-xl min-w-0">
+        <div class="px-4 sm:px-5 py-4 border-b border-slate-100"><h2 class="text-[16px]">Waiting for you ${todo.length ? `<span class="ml-1.5 inline-flex items-center justify-center rounded-full bg-amber-500 text-white text-[11.5px] font-semibold h-5 min-w-[20px] px-1.5 align-middle">${todo.length}</span>` : ''}</h2></div>
+        ${todo.length ? `<ul class="divide-y divide-slate-100">${todo.slice(0, 5).map(todoRow).join('')}</ul>
+          ${todo.length > 5 ? `<a href="/review" class="block border-t border-slate-100 px-4 sm:px-5 py-3 text-[13.5px] font-medium text-indigo-700 hover:bg-slate-50">See all ${todo.length} in Review ›</a>` : ''}`
+          : `<div class="px-5 py-12 text-center"><span class="mx-auto h-11 w-11 rounded-full bg-emerald-50 text-emerald-600 grid place-items-center">${icon('check', 'h-5 w-5')}</span><p class="mt-3 text-[14px] font-medium">You're all caught up</p></div>`}
+      </section>
+      ${d.chasing.length ? `<section class="bg-white border rounded-xl min-w-0" id="chasing">
+        <div class="px-4 sm:px-5 py-4 border-b border-slate-100"><h2 class="text-[16px]">Waiting on vendors <span class="ml-1.5 inline-flex items-center justify-center bg-amber-500 text-white text-[11.5px] font-semibold h-5 min-w-[20px] px-1.5 align-middle">${d.chasing.length}</span></h2></div>
+        <table class="w-full text-[13px]"><thead class="bg-slate-50 text-[11.5px] uppercase tracking-wide text-slate-500"><tr>
+          <th class="text-left font-semibold px-4 sm:px-5 py-2">Vendor</th><th class="font-semibold px-3 py-2 text-center">Days waiting</th>
+          <th class="text-left font-semibold px-3 py-2 hidden md:table-cell">Chased so far</th><th class="text-left font-semibold px-3 py-2 hidden sm:table-cell">Next</th></tr></thead>
+          <tbody class="divide-y divide-slate-100">${d.chasing.map(chasingRow).join('')}</tbody></table></section>` : ''}
+      ${d.scenarios.length ? `<details class="bg-white rounded-xl border overflow-hidden"><summary class="px-4 sm:px-5 py-3 cursor-pointer text-[14px] font-medium">Try a scenario</summary>
+        <ol class="grid md:grid-cols-2 xl:grid-cols-3 p-1.5 border-t border-slate-100">${d.scenarios.map(sc => `<li><a href="/demo/${esc(sc.key)}" class="group flex items-start gap-3 rounded-lg px-3 py-2.5 h-full hover:bg-slate-50">
+          <span class="flex-1 min-w-0"><span class="block text-[13.5px] font-medium leading-snug group-hover:text-indigo-700">${esc(sc.title)}</span>
+          <span class="mt-1.5 flex flex-wrap items-center gap-2">${statusBadge(sc.expected)}</span></span></a></li>`).join('')}</ol></details>` : ''}
+    </div>`;
+    return startStars(qsa('.star-tile', view));
+  },
+};
+
+// --- the stars ------------------------------------------------------------------------------------------------
+function sparkles(x, y) {
+  for (let k = 0; k < 14; k++) {
+    const el = document.createElement('span'), a = Math.random() * Math.PI * 2, d = 40 + Math.random() * 90;
+    el.className = 'sparkle'; el.style.left = x + 'px'; el.style.top = y + 'px';
+    document.body.appendChild(el);
+    el.animate([{ transform: 'translate(0,0) scale(.4)', opacity: 1 },
+                { transform: `translate(${Math.cos(a) * d}px, ${Math.sin(a) * d}px) scale(${.6 + Math.random()})`, opacity: 0 }],
+               { duration: 700 + Math.random() * 700, delay: Math.random() * 500, easing: 'cubic-bezier(.2,.7,.3,1)' }).onfinish = () => el.remove();
+  }
+}
+
+function startStars(tiles) {
+  const stars = tiles.map((tile, i) => {
+    const base = calm ? 0 : (i % 2 ? -1 : 1) * (6 + i);   // degrees a second, alternate directions
+    return { tile, svg: tile.querySelector('svg'), base, vel: base, angle: i * 25, drag: null, moved: false, flying: false };
+  });
+  const angleAt = (s, e) => { const r = s.tile.getBoundingClientRect(); return Math.atan2(e.clientY - (r.top + r.height / 2), e.clientX - (r.left + r.width / 2)) * 180 / Math.PI; };
+  const launch = (s, ux, uy) => {
+    if (s.flying || calm) return;
+    s.flying = true; s.tile.classList.add('flying');
+    s.vel = Math.sign(s.vel || 1) * 900;
+    const r = s.tile.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, M = 70;
+    const reach = [ux > 0 ? (innerWidth - M - cx) / ux : ux < 0 ? (M - cx) / ux : Infinity,
+                   uy > 0 ? (innerHeight - M - cy) / uy : uy < 0 ? (M - cy) / uy : Infinity];
+    const dist = Math.max(80, Math.min(...reach)), dx = ux * dist, dy = uy * dist;
+    const fly = s.tile.animate([
+      { transform: 'translate(0, 0) scale(1)', offset: 0, easing: 'cubic-bezier(.15,.75,.3,1)' },
+      { transform: `translate(${dx}px, ${dy}px) scale(.32)`, offset: .3 },
+      { transform: `translate(${dx * 1.03}px, ${dy * 1.03}px) scale(.36)`, offset: .62, easing: 'cubic-bezier(.55,0,.8,.3)' },
+      { transform: `translate(${-ux * 16}px, ${-uy * 16}px) scale(1.06)`, offset: .86 },
+      { transform: 'translate(0, 0) scale(1)', offset: 1 }], { duration: 2800 });
+    setTimeout(() => sparkles(cx + dx, cy + dy), 850);
+    setTimeout(() => sparkles(cx + dx, cy + dy), 1450);
+    fly.onfinish = () => { s.flying = false; s.tile.classList.remove('flying'); };
+  };
+  stars.forEach(s => {
+    s.tile.addEventListener('dragstart', e => e.preventDefault());
+    s.tile.addEventListener('pointerdown', e => {
+      if (s.flying || e.button !== 0) return;
+      s.tile.setPointerCapture(e.pointerId);
+      s.drag = { a: angleAt(s, e), t: performance.now(), x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, vx: 0, vy: 0 };
+      s.moved = false; s.tile.classList.add('held');
+    });
+    s.tile.addEventListener('pointermove', e => {
+      const d = s.drag; if (!d) return;
+      const now = performance.now(), dt = Math.max(.008, (now - d.t) / 1000), a = angleAt(s, e);
+      let da = a - d.a; if (da > 180) da -= 360; if (da < -180) da += 360;
+      s.angle += da;
+      s.vel = s.vel * .5 + (da / dt) * .5;
+      d.vx = d.vx * .5 + ((e.clientX - d.x) / dt) * .5;
+      d.vy = d.vy * .5 + ((e.clientY - d.y) / dt) * .5;
+      if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 6) s.moved = true;
+      Object.assign(d, { a, t: now, x: e.clientX, y: e.clientY });
+    });
+    const release = () => {
+      const d = s.drag; if (!d) return;
+      s.drag = null; s.tile.classList.remove('held');
+      const speed = Math.hypot(d.vx, d.vy);
+      if (s.moved && speed > 900) launch(s, d.vx / speed, d.vy / speed);                 // thrown: off the way it was thrown
+      else if (s.moved && Math.abs(s.vel) > 1100) { const a = Math.random() * Math.PI * 2; launch(s, Math.cos(a), Math.sin(a)); }
+    };
+    s.tile.addEventListener('pointerup', release);
+    s.tile.addEventListener('pointercancel', release);
+    s.tile.addEventListener('click', e => { if (s.moved || s.flying) { e.preventDefault(); e.stopPropagation(); s.moved = false; } }, true);
+  });
+  let last = performance.now(), running = true;
+  const frame = now => {
+    if (!running) return;
+    const dt = Math.min(.05, (now - last) / 1000); last = now;
+    for (const s of stars) {
+      if (!s.drag) { s.vel += (s.base - s.vel) * (1 - Math.exp(-dt * (s.flying ? .4 : 1.1))); s.angle += s.vel * dt; }
+      s.svg.style.transform = `rotate(${s.angle.toFixed(2)}deg)`;
+    }
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+  return () => { running = false; };   // called when the screen is left
+}
