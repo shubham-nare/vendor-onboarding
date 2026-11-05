@@ -576,7 +576,7 @@ async def apply_form(request: Request, token: str, demo: str = ""):
         prev, message = None, None
         if app:
             prev = await _latest_run(s, app.id)
-            if app.current_status != "PENDING_VENDOR" or (prev and prev.state != "done"):
+            if not _vendor_may_resubmit(app, prev):
                 return RedirectResponse(f"/status/{token}", status_code=303)
             message = (await s.execute(select(Message).where(Message.run_id == prev.id, Message.audience == "vendor"))).scalars().first()
         prev_docs = {d.slot: d for d in (await s.execute(select(Document).where(Document.run_id == prev.id))).scalars()} if prev else {}
@@ -794,16 +794,15 @@ async def apply_submit(request: Request, token: str):
         prev_files, parent = {}, None
         if app:
             prev = await _latest_run(s, app.id)
-            if app.current_status != "PENDING_VENDOR":
+            if not _vendor_may_resubmit(app, prev):
                 return RedirectResponse(f"/status/{token}", status_code=303)
             parent = prev.id
             for d in (await s.execute(select(Document).where(Document.run_id == prev.id))).scalars():
                 sf = await s.get(StoredFile, d.sha256)
                 prev_files[d.slot] = (d.filename, sf.data)
         files = _fill_files(files, demo, prev_files, form)
-        run = await create_run(s, form, files, invite_token=token if inv else None, parent_run_id=parent)
-        if app:
-            app.current_status = "IN_PROGRESS"
+        submit_token = str((await request.form()).get("submit_token") or "")[:100] or None   # one-time token: a double submit makes one run
+        run = await create_run(s, form, files, invite_token=token if inv else None, parent_run_id=parent, submit_token=submit_token)
         if acct:
             await claim(s, acct, invite=inv, app=await s.get(Application, run.application_id))
         ref = (await s.get(Application, run.application_id)).ref
@@ -976,7 +975,7 @@ def _fact_issues(rules: list[RuleResult]) -> dict[str, list[dict]]:
 
 _RIGHT_VERB = {"activate": "activate", "review_approve": "approve", "ask_vendor": "ask the vendor", "review_reject": "reject",
                "confirm_reject": "confirm the rejection", "override_reject": "send it to review", "confirm_engagement": "confirm the work",
-               "deny_engagement": "deny the work"}
+               "deny_engagement": "deny the work", "rerun": "re-run the checks"}
 
 
 def _decision_rights(run, app, inv, bill, bill_emp, employees) -> list[dict]:
@@ -1074,9 +1073,21 @@ ACTIONS = {
 }
 
 
+def _vendor_may_resubmit(app: Application, prev: Run | None) -> bool:
+    """The vendor may send the form again when we asked them to fix something, or when the last run failed or was
+    interrupted (nothing was decided)."""
+    if prev is not None and prev.state in ("failed", "interrupted"):
+        return app.current_status in ("IN_PROGRESS", "PENDING_REVIEW", "PENDING_VENDOR")
+    return app.current_status == "PENDING_VENDOR" and (prev is None or prev.state == "done")
+
+
 def _allowed_actions(run: Run, app: Application, inv: Invite | None, actor: Employee | None, bill: Bill | None = None,
                      bill_emp: Employee | None = None) -> dict:
     """Which actions apply now, and for each, whether the current person may take it (and why not)."""
+    if run.state in ("failed", "interrupted") and app.current_status not in ("ACTIVE", "REJECTED", "PREQUALIFIED"):
+        why = ("Sign in as an employee first." if not actor else
+               "" if actor.role in ("maker", "checker") else "Only Procurement or Finance can re-run the checks.")
+        return {"rerun": dict(label="Re-run checks", blocked=why, needs_comment=False)}
     if run.state != "done":
         return {}
     status = app.current_status
@@ -1115,7 +1126,10 @@ def _allowed_actions(run: Run, app: Application, inv: Invite | None, actor: Empl
 async def _activate(s, run: Run, app: Application) -> VendorMaster:
     n = (await s.execute(select(func.count(VendorMaster.id)).where(VendorMaster.source_run_id.is_not(None)))).scalar() or 0
     f = run.form
-    vm = VendorMaster(vendor_id=f"V-{1001 + n}", legal_name=f.get("legal_name", ""), pan=f.get("pan", "").upper(), gstin=f.get("gstin", "").upper(),
+    k = 1001 + n
+    while (await s.execute(select(VendorMaster.id).where(VendorMaster.vendor_id == f"V-{k}"))).first():   # never reuse a taken ID
+        k += 1
+    vm = VendorMaster(vendor_id=f"V-{k}", legal_name=f.get("legal_name", ""), pan=f.get("pan", "").upper(), gstin=f.get("gstin", "").upper(),
                       account=f.get("bank_account", ""), ifsc=f.get("ifsc", "").upper(), status="Active", source_run_id=run.id)
     s.add(vm)
     app.current_status = "ACTIVE"
@@ -1134,7 +1148,7 @@ async def run_action(request: Request, run_id: int, action: str = Form(...), com
         run = await s.get(Run, run_id)
         if not run:
             raise HTTPException(404, "No such run")
-        app = await s.get(Application, run.application_id)
+        app = (await s.execute(select(Application).where(Application.id == run.application_id).with_for_update())).scalar_one()  # one decision at a time
         latest = await _latest_run(s, app.id)
         if latest.id != run.id:
             raise HTTPException(409, "A newer submission exists; act on that one.")
@@ -1152,6 +1166,12 @@ async def run_action(request: Request, run_id: int, action: str = Form(...), com
             raise HTTPException(403, allowed[action]["blocked"])
         if allowed[action]["needs_comment"] and len(comment.strip()) < 5:
             raise HTTPException(400, "Please write a short reason: it goes on the audit trail.")
+        if action == "rerun":   # a new run from the stored form and documents; the failed one stays as it was
+            s.add(HumanAction(run_id=run.id, employee_id=actor.id, action=action, comment=comment))
+            from onboarding.pipeline import rerun
+            new = await rerun(s, run)
+            runner.start(new.id)
+            return RedirectResponse(f"/runs/{new.id}", status_code=303)
         if action in ("activate", "review_approve") and reliability_ack != "1":
             rc = await _reliability(s, app.id)
             if rc and rc.level == "high":

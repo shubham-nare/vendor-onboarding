@@ -68,7 +68,18 @@
       {% if run.state in ('failed', 'interrupted') %}
         <span class="stamp text-rose-600 text-lg">{{ run.state }}</span>
         <p class="mt-6 font-display text-xl">This run {{ run.state == 'failed' and 'stopped with an error' or 'was interrupted by a server restart' }}.</p>
-        <p class="text-sm text-slate-500 mt-1">Nothing was decided. The vendor can resubmit from the same link, or a reviewer can check the documents manually.</p>
+        {% if not latest %}
+        <p class="text-sm text-slate-500 mt-1">Nothing was decided. A newer run exists: <a class="underline" href="/runs/{{ history[-1].id }}">open it</a>.</p>
+        {% else %}
+        <p class="text-sm text-slate-500 mt-1">Nothing was decided. Procurement or Finance can re-run the checks on the same form and documents{% if invite or bill %}, or the vendor can send the form again from the same link{% endif %}.</p>
+        {% if allowed.rerun %}
+        <form method="post" action="/runs/{{ run.id }}/action" class="mt-5">
+          <input type="hidden" name="action" value="rerun">
+          <button class="px-5 py-2.5 text-sm font-semibold text-white bg-slate-800 hover:bg-slate-900 disabled:bg-slate-300 disabled:text-slate-600 disabled:cursor-not-allowed" {{ 'disabled' if allowed.rerun.blocked }}>{{ allowed.rerun.label }}</button>
+          {% if allowed.rerun.blocked %}<div class="mt-1.5 text-xs text-rose-600">{{ allowed.rerun.blocked }}</div>{% endif %}
+        </form>
+        {% endif %}
+        {% endif %}
       {% else %}
         <div class="mx-auto h-24 w-24 rounded-full border-2 border-dashed border-slate-300 grid place-items-center"><span class="ink-dot"></span></div>
         <p class="mt-5 font-display text-2xl">Checking the application…</p>
