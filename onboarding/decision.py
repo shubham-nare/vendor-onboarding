@@ -15,7 +15,7 @@ APPROVED, PENDING_VENDOR, PENDING_REVIEW, REJECTED = "APPROVED", "PENDING_VENDOR
 REQUIRED = {"R-INV-01", "R-INV-02", "R-COMP-01", "R-COMP-02", "R-ID-01", "R-ID-02", "R-ID-03", "R-ID-04", "R-ID-05", "R-ID-06",
             "R-BANK-01", "R-XD-01", "R-XD-02", "R-XD-04", "R-NAME-01", "R-NAME-03", "R-RISK-01", "R-RISK-02"}
 INVARIANT = "INTERNAL-INVARIANT"   # reason code when decide() would approve without every applicable required rule passing
-LEVEL_NAMES ={"A0": "Declared", "A1": "Evidenced", "A2": "Genuine", "A3": "Cryptographically proven", "A4": "Confirmed at source"}
+LEVEL_NAMES = {"A0": "Declared", "A1": "Evidenced", "A2": "Genuine", "A3": "Cryptographically proven", "A4": "Confirmed at source"}
 
 
 @dataclass

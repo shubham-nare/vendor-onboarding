@@ -236,3 +236,9 @@ At most 2 agents at a time. Golden tests green after every merge.
   Shinde is the backup. The rehearsal times all of these and must fit 5 minutes at ≈0.4 s per stage.
 - DEPLOY "submission settings" includes a cold-start note: Render free sleeps after 15 min. Either use Starter for the review window or set an external pinger on `/readyz` every 10 min. `/readyz` stays cheap but touches the database once (also wakes Neon). Documentation only; no Render changes.
 - Not decided (don't do): making R-XD-03 a high-risk fraud signal.
+- For the DEPLOY.md "submission settings" (lean phase):
+  - Set `SESSION_SECRET`, `DEMO_TOOLS=true`, `DEMO_PASSWORD` and `ADMIN_PASSCODE` (at least 12 characters) on Render BEFORE merging to main. `generateValue` in render.yaml only applies on a Blueprint sync; without the secret, production refuses to start.
+  - Do the curated reset right after the first deploy: the intel HMAC keys change once `SESSION_SECRET` exists. R-RISK-02 reads VendorMaster directly and is unaffected.
+  - Check the one-time "client address" log line to confirm `TRUSTED_PROXY_HOPS`.
+  - `RATE_LIMITS=false` is a fallback for recording day.
+  - Nilgiri's live happy path signs in on the real invite: either a vendor sign-up in an incognito window, or the seeded demo vendor login.

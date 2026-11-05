@@ -53,16 +53,9 @@ async def _purchase_orders() -> None:
 
 
 async def _sweep() -> None:
-    """Runs a restart cut short. recover_interrupted (agent E) re-queues recent ones once and parks the rest for
-    review; until it lands on this branch, the older sweep_interrupted marks them interrupted."""
+    """Runs a restart cut short: recent ones are re-queued once as a new linked run, the rest go to review."""
     from onboarding import pipeline
-    fn = getattr(pipeline, "recover_interrupted", None)
-    if fn is None:
-        n = await pipeline.sweep_interrupted()
-        if n:
-            log.warning("marked %s unfinished run(s) as interrupted", n)
-        return
-    rec = await fn()   # after create_all
+    rec = await pipeline.recover_interrupted()   # after create_all
     if rec["requeued"] or rec["parked"]:
         log.warning("unfinished runs: re-queued %s, sent to review %s", rec["requeued"], rec["parked"])
 

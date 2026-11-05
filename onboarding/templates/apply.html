@@ -57,6 +57,7 @@
   {% endif %}
 
   <form method="post" enctype="multipart/form-data" class="mt-6 space-y-6" action="{{ '/apply/' ~ token if token else ('/bill' if is_bill else '/apply') }}" onsubmit="this.querySelector('button[type=submit]').disabled=true; this.querySelector('button[type=submit]').textContent='Submitting…'">
+  <input type="hidden" name="submit_token" value="{{ submit_token }}">{# one per page load: a double submit or a resent POST makes one run #}
     <input type="hidden" name="demo" value="{{ demo }}">
     {% if is_bill %}<input type="hidden" name="bill_mode" value="1">{% endif %}
     <p class="text-[12.5px] text-slate-500">Fields marked <span class="text-rose-600 font-semibold">*</span> are required, and so are the documents.</p>

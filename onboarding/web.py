@@ -220,10 +220,21 @@ def demo_catalog() -> dict[str, dict]:
     return out
 
 
-def _new_invite_from(tpl: Invite) -> Invite:
+LAUNCHER = "demo:"   # Invite.scenario_key prefix of invites made by the scenario launcher (/demo/{key}, staff only)
+
+
+def _new_invite_from(tpl: Invite, launcher_key: str = "") -> Invite:
     return Invite(token=secrets.token_urlsafe(18), sponsor_id=tpl.sponsor_id, company_name=tpl.company_name, contact_email=tpl.contact_email,
                   business_reason=tpl.business_reason, spend_category=tpl.spend_category, spend_band=tpl.spend_band,
-                  high_spend=tpl.high_spend, scenario_key="", expires_at=now() + timedelta(days=14))
+                  high_spend=tpl.high_spend, scenario_key=f"{LAUNCHER}{launcher_key}" if launcher_key else "",
+                  expires_at=now() + timedelta(days=14))
+
+
+def _launcher_guest(inv: Invite | None, demo: str) -> bool:
+    """A scenario-launcher invite opened for its own scenario: the demo vendor may fill it in without a vendor login.
+    Needs demo mode and a known scenario (demo_key), and the invite must have been made by the launcher for that same
+    scenario. A real invite with ?demo= still needs the vendor login (S1)."""
+    return bool(demo and demo_key(demo) == demo and inv is not None and inv.scenario_key == f"{LAUNCHER}{demo}")
 
 
 async def _latest_run(s, app_id: int) -> Run | None:
@@ -524,7 +535,7 @@ async def demo_start(key: str):
         tpl = (await s.execute(select(Invite).where(Invite.scenario_key == sc["invite_scenario"]).order_by(Invite.id))).scalars().first()
         if not tpl:
             raise HTTPException(409, "Reference data not loaded. Use 'Reset data' on the System page.")
-        inv = _new_invite_from(tpl)
+        inv = _new_invite_from(tpl, launcher_key=key)
         s.add(inv)
         await s.commit()
         return RedirectResponse(f"/apply/{inv.token}?demo={key}", status_code=303)
@@ -568,7 +579,7 @@ async def apply_form(request: Request, token: str, demo: str = ""):
     async with sessions()() as s:
         inv, bill, app = await _vendor_link(s, token)
         acct = await vendor_account(request, s)
-        if not acct and await _needs_login(s, app):
+        if not acct and not _launcher_guest(inv, demo) and await _needs_login(s, app):
             return login_redirect(f"/apply/{token}", register=app is None)
         if acct:
             await claim(s, acct, invite=inv, app=app)
@@ -617,12 +628,14 @@ def _form_context(demo: str, values: dict) -> dict:
     if sc:
         values = dict(sc["form"])
     states = sorted({v for k, v in V.GST_STATE_CODES.items() if "legacy" not in v and k not in ("97", "99")})
-    return dict(values=values, demo=demo if sc else "", demo_files={k: p.name for k, p in sc["files"].items()} if sc else {},
+    return dict(values=values, submit_token=secrets.token_urlsafe(16), demo=demo if sc else "", demo_files={k: p.name for k, p in sc["files"].items()} if sc else {},
                 demo_title=sc["title"] if sc else "", states=states, catalog=cat)
 
 
-async def _collect_form(request: Request) -> tuple[dict, dict[str, tuple[str, bytes]], str]:
-    security.SUBMIT_PER_IP.check(security.client_ip(request))   # each submission sends documents to Gemini
+async def _collect_form(request: Request, rate_limit: bool = True) -> tuple[dict, dict[str, tuple[str, bytes]], str]:
+    """rate_limit False: the caller checks SUBMIT_PER_IP itself (apply_submit exempts scenario-launcher invites)."""
+    if rate_limit:
+        security.SUBMIT_PER_IP.check(security.client_ip(request))   # each submission sends documents to Gemini
     data = await request.form()
     f = {k: (str(data.get(k) or "")).strip() for k in ("business_type", "legal_name", "proprietor_name", "gstin", "pan", "cin", "llpin", "address",
                                                        "city", "state", "pin", "contact_name", "contact_email", "contact_phone", "alt_contact_name", "alt_contact_email", "alt_contact_phone", "bank_holder",
@@ -660,7 +673,13 @@ async def _collect_form(request: Request) -> tuple[dict, dict[str, tuple[str, by
             if raw:
                 security.require_document(raw, f"The {SLOT_TITLE[slot].lower()}")
                 files[slot] = (up.filename, raw)
+    f["_submit_token"] = str(data.get("submit_token") or "")[:100]   # popped by _submit_token(); never stored
     return f, files, demo_key(str(data.get("demo") or ""))
+
+
+def _submit_token(form: dict) -> str | None:
+    """The form's one-time submit token (apply.html sets a random one per page load): a double submit makes one run."""
+    return form.pop("_submit_token", "") or None
 
 
 def _fill_files(files: dict, demo: str, prev_files: dict[str, tuple[str, bytes]], form: dict) -> dict:
@@ -785,11 +804,15 @@ async def apply_read(request: Request, slot: str = Form(...), file: UploadFile =
 
 @router.post("/apply/{token}")
 async def apply_submit(request: Request, token: str):
-    form, files, demo = await _collect_form(request)
+    form, files, demo = await _collect_form(request, rate_limit=False)
+    submit_token = _submit_token(form)
     async with sessions()() as s:
         inv, bill, app = await _vendor_link(s, token)
+        guest = _launcher_guest(inv, demo)
+        if not guest:   # scenario-launcher invites are exempt in demo mode, so rehearsals and recordings don't hit the limit
+            security.SUBMIT_PER_IP.check(security.client_ip(request))
         acct = await vendor_account(request, s)
-        if not acct and await _needs_login(s, app):
+        if not acct and not guest and await _needs_login(s, app):
             return login_redirect(f"/apply/{token}")
         if acct:
             await claim(s, acct, invite=inv, app=app)
@@ -806,7 +829,6 @@ async def apply_submit(request: Request, token: str):
                 sf = await s.get(StoredFile, d.sha256)
                 prev_files[d.slot] = (d.filename, sf.data)
         files = _fill_files(files, demo, prev_files, form)
-        submit_token = str((await request.form()).get("submit_token") or "")[:100] or None   # one-time token: a double submit makes one run
         run = await create_run(s, form, files, invite_token=token if inv else None, parent_run_id=parent, submit_token=submit_token)
         if acct:
             await claim(s, acct, invite=inv, app=await s.get(Application, run.application_id))
@@ -826,6 +848,7 @@ def _after_submit(run: Run, acct: VendorAccount | None, demo: str, ref: str = ""
 @router.post("/bill")
 async def bill_submit(request: Request):
     form, files, demo = await _collect_form(request)
+    submit_token = _submit_token(form)
     form["bill_mode"] = True
     for k in BILL_FIELDS:
         form.setdefault(k, "")
@@ -834,10 +857,11 @@ async def bill_submit(request: Request):
         acct = await vendor_account(request, s)
         if not acct:
             return login_redirect("/bill")
-        run = await create_run(s, form, files, invite_token=None)
-        emp = await _resolve_employee(s, form.get("bill_engaged_by", ""))
-        s.add(Bill(application_id=run.application_id, token=secrets.token_urlsafe(18), engaged_by_text=form.get("bill_engaged_by", ""),
-                   engaged_employee_id=emp.id if emp else None))
+        run = await create_run(s, form, files, invite_token=None, submit_token=submit_token)
+        if not (await s.execute(select(Bill.id).where(Bill.application_id == run.application_id))).first():   # a double submit: one bill
+            emp = await _resolve_employee(s, form.get("bill_engaged_by", ""))
+            s.add(Bill(application_id=run.application_id, token=secrets.token_urlsafe(18), engaged_by_text=form.get("bill_engaged_by", ""),
+                       engaged_employee_id=emp.id if emp else None))
         if acct:
             await claim(s, acct, app=await s.get(Application, run.application_id))
         ref = (await s.get(Application, run.application_id)).ref
@@ -849,12 +873,13 @@ async def bill_submit(request: Request):
 @router.post("/apply")
 async def apply_unsolicited_submit(request: Request):
     form, files, demo = await _collect_form(request)
+    submit_token = _submit_token(form)
     files = _fill_files(files, demo, {}, form)
     async with sessions()() as s:
         acct = await vendor_account(request, s)
         if not acct:
             return login_redirect("/apply")
-        run = await create_run(s, form, files, invite_token=None)
+        run = await create_run(s, form, files, invite_token=None, submit_token=submit_token)
         ref = (await s.get(Application, run.application_id)).ref
         if acct:
             await claim(s, acct, app=await s.get(Application, run.application_id))
@@ -1172,7 +1197,7 @@ async def run_action(request: Request, run_id: int, action: str = Form(...), com
         if allowed[action]["needs_comment"] and len(comment.strip()) < 5:
             raise HTTPException(400, "Please write a short reason: it goes on the audit trail.")
         if action == "rerun":   # a new run from the stored form and documents; the failed one stays as it was
-            s.add(HumanAction(run_id=run.id, employee_id=actor.id, action=action, comment=comment))
+            s.add(HumanAction(run_id=run.id, employee_id=actor.id, action=action, comment=auth.audit_comment(request, comment)))
             from onboarding.pipeline import rerun
             new = await rerun(s, run)
             runner.start(new.id)
@@ -1218,7 +1243,7 @@ async def run_action(request: Request, run_id: int, action: str = Form(...), com
             app.current_status = "REJECTED"
             s.add(Message(run_id=run.id, audience="vendor", subject=f"Your vendor registration (Ref {app.ref}): unable to proceed", state="sent",
                           body=f"{hi}\n\nThank you for your interest. After review, we're unable to proceed with your registration at this time.\n\nVendor Onboarding Team"))
-        ha = HumanAction(run_id=run.id, employee_id=actor.id, action=action, comment=comment)
+        ha = HumanAction(run_id=run.id, employee_id=actor.id, action=action, comment=auth.audit_comment(request, comment))
         s.add(ha)
         await s.commit()
     from onboarding.intel.project import on_decision

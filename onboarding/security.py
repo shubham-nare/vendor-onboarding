@@ -9,6 +9,9 @@ from urllib.parse import urlparse
 from fastapi import HTTPException, Request
 
 # --- the visitor's address ------------------------------------------------------------------------------------
+_XFF_LOGGED = False
+
+
 def client_ip(request: Request) -> str:
     """The visitor's address. Each trusted proxy (TRUSTED_PROXY_HOPS, Render: 1) APPENDS the address it saw to
     X-Forwarded-For, so the right-most entries are the trustworthy ones; anything to their left was sent by the client
@@ -16,6 +19,13 @@ def client_ip(request: Request) -> str:
     from onboarding.config import get_settings
     hops = get_settings().trusted_proxy_hops
     fwd = [p.strip() for p in request.headers.get("x-forwarded-for", "").split(",") if p.strip()]
+    global _XFF_LOGGED
+    if fwd and not _XFF_LOGGED:   # once per process, so the hop count can be checked after a deploy (no addresses logged)
+        _XFF_LOGGED = True
+        import logging
+        logging.getLogger("onboarding.security").warning(   # WARNING: the only level shown without a logging config
+            "client address: X-Forwarded-For has %d entr%s; TRUSTED_PROXY_HOPS=%d, so the rate limits use entry %d from the right",
+            len(fwd), "y" if len(fwd) == 1 else "ies", hops, min(hops, len(fwd)))
     if hops > 0 and fwd:
         return fwd[-min(hops, len(fwd))][:64]
     return request.client.host if request.client else "?"

@@ -279,3 +279,112 @@ async def _steps(main):
         return await main.startup_steps()
     finally:
         await _dispose()
+
+
+# --- the scenario launcher (demo mode, staff only) --------------------------------------------------------------
+def _scenario_form(key: str, **extra) -> dict:
+    from onboarding.demo_data import SCENARIOS
+    return {**{k: str(v) for k, v in SCENARIOS[key]["form"].items() if not isinstance(v, bool)}, **extra}
+
+
+def test_scenario_launcher_needs_staff_and_its_invite_opens_without_a_vendor_login(db, monkeypatch):
+    from onboarding import runner
+    from onboarding.models import Invite
+    from onboarding.pipeline import sessions
+    from onboarding.seeding import DEMO_COMPANY_EMAIL, DEMO_PASSWORD
+    started = []
+    monkeypatch.setattr(runner, "start", lambda run_id, **kw: started.append(run_id))
+    key = "wrongdoc_tejas"
+
+    async def go():
+        out = {}
+        async with _client() as anon:
+            out["anon"] = (await anon.get(f"/demo/{key}")).headers["location"]
+        async with _client() as staff:
+            await staff.post("/company/login", data={"email": DEMO_COMPANY_EMAIL, "password": DEMO_PASSWORD})
+            loc = (await staff.get(f"/demo/{key}")).headers["location"]
+        out["launch"] = loc
+        token = loc.split("/apply/")[1].split("?")[0]
+        async with sessions()() as s:
+            out["mark"] = (await s.execute(select(Invite.scenario_key).where(Invite.token == token))).scalar_one()
+            real = (await s.execute(select(Invite.token).where(Invite.scenario_key == key))).scalars().first()
+        before = await _count_runs()
+        async with _client() as guest:   # the demo vendor in another window: no vendor account
+            out["form"] = (await guest.get(loc)).status_code
+            out["other key"] = (await guest.get(f"/apply/{token}?demo=happy_nilgiri")).headers.get("location", "")
+            out["real invite"] = (await guest.get(f"/apply/{real}?demo={key}")).headers.get("location", "")
+            out["real post"] = (await guest.post(f"/apply/{real}", data=_scenario_form(key, demo=key))).headers.get("location", "")
+            r = await guest.post(f"/apply/{token}", data=_scenario_form(key, demo=key))
+            out["submit"] = (r.status_code, r.headers.get("location", ""))
+        out["runs"] = await _count_runs() - before
+        return out
+
+    o = asyncio.run(go())
+    assert o["anon"].startswith("/company/login")                         # anyone else can't mint invites
+    assert o["launch"].startswith("/apply/") and o["mark"] == f"demo:{key}"
+    assert o["form"] == 200                                                # the launcher's own invite: no vendor login
+    assert o["other key"].startswith("/vendor/")                          # ... but only for its own scenario
+    assert o["real invite"].startswith("/vendor/") and o["real post"].startswith("/vendor/")   # real invites still need the login
+    assert o["submit"][0] == 303 and o["submit"][1].startswith("/runs/") and o["runs"] == 1 and len(started) == 1
+
+
+def test_a_double_post_with_one_submit_token_makes_one_application_and_one_bill(db, monkeypatch):
+    import re
+
+    from onboarding import runner
+    from onboarding.models import Application, Bill
+    from onboarding.pipeline import sessions
+    from onboarding.seeding import DEMO_PASSWORD, DEMO_VENDOR
+    monkeypatch.setattr(runner, "start", lambda run_id, **kw: None)
+
+    async def count(model):
+        async with sessions()() as s:
+            return (await s.execute(select(func.count(model.id)))).scalar()
+
+    async def go():
+        out = {}
+        async with _client() as v:
+            await v.post("/vendor/login", data={"email": DEMO_VENDOR["email"], "password": DEMO_PASSWORD})
+            page = (await v.get("/apply?demo=happy_nilgiri")).text
+            tok = re.search(r'name="submit_token" value="([^"]+)"', page).group(1)
+            apps = await count(Application)
+            data = _scenario_form("happy_nilgiri", demo="happy_nilgiri", submit_token=tok)
+            codes = [(await v.post("/apply", data=data)).status_code for _ in range(2)]
+            out["apply"] = (codes, await count(Application) - apps)
+            page = (await v.get("/bill?demo=bill_kesari")).text
+            tok = re.search(r'name="submit_token" value="([^"]+)"', page).group(1)
+            bills = await count(Bill)
+            data = _scenario_form("bill_kesari", demo="bill_kesari", submit_token=tok, bill_mode="1")
+            codes = [(await v.post("/bill", data=data)).status_code for _ in range(2)]
+            out["bill"] = (codes, await count(Bill) - bills)
+        return out
+
+    o = asyncio.run(go())
+    assert o["apply"] == ([303, 303], 1)
+    assert o["bill"] == ([303, 303], 1)
+
+
+def test_an_action_taken_through_the_person_switcher_records_both_people(db, monkeypatch):
+    from onboarding import runner
+    from onboarding.models import Employee, HumanAction, Run
+    from onboarding.pipeline import mark_failed, sessions
+    from onboarding.seeding import DEMO_COMPANY_EMAIL, DEMO_PASSWORD
+    monkeypatch.setattr(runner, "start", lambda run_id, **kw: None)
+
+    async def go():
+        async with _client() as staff:
+            await staff.post("/company/login", data={"email": DEMO_COMPANY_EMAIL, "password": DEMO_PASSWORD})   # Arjun, id 3
+            loc = (await staff.get("/demo/happy_nilgiri")).headers["location"]
+            await staff.post(loc.split("?")[0], data=_scenario_form("happy_nilgiri", demo="happy_nilgiri"))
+            async with sessions()() as s:
+                run_id = (await s.execute(select(Run.id).order_by(Run.id.desc()))).scalars().first()
+            await mark_failed(run_id, "RuntimeError")
+            await staff.post("/api/v1/session/actor", json={"employee_id": 4})                                # acting as Kavita
+            r = await staff.post(f"/runs/{run_id}/action", data={"action": "rerun", "comment": "Retry please"})
+        async with sessions()() as s:
+            ha = (await s.execute(select(HumanAction).where(HumanAction.run_id == run_id))).scalars().one()
+            return r.status_code, (await s.get(Employee, ha.employee_id)).name, ha.comment
+
+    code, who, comment = asyncio.run(go())
+    assert code == 303 and who == "Kavita Rao"                                   # the acted-as person
+    assert comment.startswith("Retry please") and "logged-in employee #3" in comment   # and who was really logged in

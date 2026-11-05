@@ -138,7 +138,7 @@ def audit_comment(request, comment: str) -> str:
     return comment
 
 
-PASSWORD_RULE =f"At least {MIN_PASSWORD} characters, with an uppercase letter, a lowercase letter, a number and a symbol such as @"
+PASSWORD_RULE = f"At least {MIN_PASSWORD} characters, with an uppercase letter, a lowercase letter, a number and a symbol such as @"
 
 
 def password_problem(password: str) -> str:

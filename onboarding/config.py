@@ -51,7 +51,7 @@ class Settings(BaseSettings):
     demo_tools: bool = False  # development only: person switcher, demo scenarios, demo logins and sample files in the UI     # Vendor Intelligence: keys for identifier HMACs and encryption; if empty, derived like session_secret
     # --- reliability (agent E) ---
     read_cache_first: bool = True        # a saved reading for the same file (by SHA-256) is used before asking the AI: same file, same decision
-    read_deadline_seconds: float = 20.0  # one budget per run for reading all its documents; then the saved reading or "please re-upload"
+    read_deadline_seconds: float = 60.0  # one budget per run for reading all its documents; then the saved reading or "please re-upload"
     requeue_window_minutes: int = 60     # on startup, runs cut off by a restart less than this long ago are re-run once
 
 
