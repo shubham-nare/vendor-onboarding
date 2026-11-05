@@ -38,8 +38,17 @@ def pub(tmp_path_factory):
             from onboarding.seeding import DEMO_COMPANY_EMAIL, DEMO_PASSWORD
             await c.post("/company/login", data={"email": DEMO_COMPANY_EMAIL, "password": DEMO_PASSWORD})
             out["outbox"] = (await c.get("/outbox")).text
+            # signing up twice (a double click): the second one just logs in; a wrong password still gets the message
+            c.cookies.clear()
+            twice = {"company_name": "Twice Co", "contact_name": "T", "email": "twice@twice.example.com", "password": "Str0ng!pass"}
+            out["reg1"] = (await c.post("/vendor/register", data=twice)).status_code
+            c.cookies.clear()
+            out["reg2"] = (await c.post("/vendor/register", data=twice)).status_code
+            c.cookies.clear()
+            out["reg3"] = (await c.post("/vendor/register", data=twice | {"password": "Other!pass9"})).text
             # the bot check, switched on (demo mode uses Cloudflare's test keys; no token is sent, so no network call)
             os.environ["CAPTCHA"] = "true"
+            os.environ["TURNSTILE_SITE_KEY"], os.environ["TURNSTILE_SECRET_KEY"] = "0x-site-test", "0x-secret-test"
             cfg.get_settings.cache_clear()
             try:
                 c.cookies.clear()
@@ -50,6 +59,7 @@ def pub(tmp_path_factory):
                 out["login_no_token"] = (await c.post("/company/login", data={"email": DEMO_COMPANY_EMAIL, "password": DEMO_PASSWORD})).status_code
             finally:
                 os.environ["CAPTCHA"] = "false"
+                os.environ.pop("TURNSTILE_SITE_KEY", None), os.environ.pop("TURNSTILE_SECRET_KEY", None)
                 cfg.get_settings.cache_clear()
         await dbm.engine().dispose()
 
@@ -108,3 +118,8 @@ def test_every_language_covers_the_same_phrases():
         assert set(i18n.TABLES[code]) == used, code
         assert i18n.translate("View demo", code) != "View demo"
     assert i18n.translate("View demo", "zh") == "查看演示" and i18n.translate("Not a phrase", "te") == "Not a phrase"
+
+
+def test_signing_up_twice_logs_in(pub):
+    assert pub["reg1"] == 303 and pub["reg2"] == 303
+    assert "already exists" in pub["reg3"]

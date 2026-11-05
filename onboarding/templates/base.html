@@ -214,6 +214,22 @@
   <link href="https://fonts.googleapis.com/css2?family=Sacramento&display=block" rel="stylesheet">
 </head>
 <body class="min-h-screen">
+  <script>
+    /* Each form is sent once. A second click (or Enter) while the page is loading is ignored, so nobody creates an
+       account, sends a bill or approves twice. Buttons are dimmed only after the form's data is taken, so the
+       clicked button's name and value still go with it. Coming back to the page (Back button) resets it. */
+    document.addEventListener('submit', e => {
+      const f = e.target;
+      if (e.defaultPrevented || f.target === '_blank' || (f.method || '').toLowerCase() !== 'post') return;
+      if (f.dataset.sent) { e.preventDefault(); return; }
+      f.dataset.sent = '1';
+      setTimeout(() => f.querySelectorAll('button:not([type=button]), input[type=submit]').forEach(b => { b.disabled = true; b.style.opacity = '.6'; }), 0);
+    });
+    addEventListener('pageshow', () => document.querySelectorAll('form[data-sent]').forEach(f => {
+      delete f.dataset.sent;
+      f.querySelectorAll('button, input[type=submit]').forEach(b => { b.disabled = false; b.style.opacity = ''; });
+    }));
+  </script>
   <div class="sky" id="sky" aria-hidden="true">
     <div class="sky-glow"></div>
     <div class="sky-far">

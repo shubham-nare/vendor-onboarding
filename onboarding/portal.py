@@ -203,7 +203,11 @@ async def register(request: Request, company_name: str = Form(""), contact_name:
             error = "Please enter a valid email address."
         elif problem := auth.password_problem(password):
             error = problem
-        elif (await s.execute(select(VendorAccount).where(VendorAccount.email == email))).scalar_one_or_none():
+        elif existing := (await s.execute(select(VendorAccount).where(VendorAccount.email == email))).scalar_one_or_none():
+            if await auth.verify_password_async(password, existing.password_hash):
+                existing.last_login_at = now()
+                await s.commit()
+                return _cookie(RedirectResponse(nxt, status_code=303), request, existing.id)
             error = "An account with this email already exists. Log in instead."
         if error:
             return await render(request, s, "vendor_auth.html", mode="register", next=nxt, values=values, invite=await _invite_from_next(s, nxt), error=error)

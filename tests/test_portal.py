@@ -91,7 +91,7 @@ def flows(tmp_path_factory):
             out["weak"] = (await v.post("/vendor/register", data=reg | {"password": "short"})).text
             r = await v.post("/vendor/register", data=reg | {"password": PW})
             out["registered"] = (r.status_code, r.headers.get("set-cookie", ""))
-            out["dup"] = (await other.post("/vendor/register", data=reg | {"password": PW})).text
+            out["dup"] = (await other.post("/vendor/register", data=reg | {"password": "Diff3rent!pw"})).text
             out["home_new"] = (await v.get("/vendor")).text
             out["bill_form_page"] = (await v.get("/bill")).text
             out["weak_pw"] = (await other.post("/vendor/register", data={"company_name": "X", "contact_name": "Y", "email": "y@x.example.com",

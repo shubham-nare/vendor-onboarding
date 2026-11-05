@@ -1,7 +1,7 @@
 """Bot check for the public forms (sign-up, log-in, contact): Cloudflare Turnstile plus a hidden honeypot field.
 
-Keys come from TURNSTILE_SITE_KEY / TURNSTILE_SECRET_KEY. In demo mode without keys, Cloudflare's published test keys
-are used, so the widget shows and always passes. Outside demo mode without keys, only the honeypot runs.
+Keys come from TURNSTILE_SITE_KEY / TURNSTILE_SECRET_KEY (free from the Cloudflare dashboard). Without them only the
+honeypot runs: Cloudflare's public test keys would put a red "For testing only" notice on every form.
 CAPTCHA=false turns it all off (tests).
 """
 
@@ -25,7 +25,7 @@ def keys() -> tuple[str, str]:
         return "", ""
     if st.turnstile_site_key and st.turnstile_secret_key:
         return st.turnstile_site_key, st.turnstile_secret_key
-    return (TEST_SITE_KEY, TEST_SECRET) if st.demo_tools else ("", "")
+    return "", ""
 
 
 def site_key() -> str:
