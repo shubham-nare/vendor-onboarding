@@ -86,7 +86,7 @@ def flows(tmp_path_factory):
             out["console_page"] = (await staff.get("/api/v1/console/home")).text
             out["pending"] = (await staff.get("/api/v1/console/pending")).json()
             out["pending_anon"] = (await other.get("/api/v1/console/pending")).status_code
-            out["applications_page"] = (await staff.get("/purchase-orders")).text   # a staff page still drawn by the server
+            out["applications_page"] = (await staff.get("/audit")).text   # a staff page still drawn by the server
             r = await other.post("/vendor/login", data={"email": DEMO_VENDOR["email"], "password": DEMO_PASSWORD})
             out["demo_vendor"] = (r.status_code, (await other.get("/vendor")).text)
             out["vendor_cookie_on_console"] = (await other.get("/console")).headers.get("location", "")
@@ -162,7 +162,7 @@ def flows(tmp_path_factory):
             out["dup_vendor"] = (await v.get(f"/vendor/bills/{bid4}")).text
             out["review_clean"] = out.get("review_clean", "")
             for path in ("/invoices", "/purchase-orders", "/audit", "/invoices?status=Paid"):   # invoices come from the API
-                out[path] = await staff.get(path.replace("/invoices", "/api/v1/invoices", 1))
+                out[path] = await staff.get("/api/v1" + path if path.startswith(("/invoices", "/purchase-orders")) else path)
             for path in ("/invoices?sort=amount_desc", "/invoices?sort=amount_asc", "/invoices?amin=41000", "/invoices?amax=30000", "/invoices?vendor=V-9999"):
                 out["filter " + path] = (await staff.get("/api/v1" + path)).json()
             po3 = re.search(r'href="/purchase-orders/(\d+)"', out["over_page"]).group(1)

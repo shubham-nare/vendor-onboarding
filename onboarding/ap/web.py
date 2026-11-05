@@ -130,8 +130,15 @@ async def _po_bundle(s, po_ids=None):
     return [by_po[p.id] for p in pos]
 
 
-@router.get("/purchase-orders", response_class=HTMLResponse)
-async def purchase_orders(request: Request, q: str = ""):
+@router.get("/purchase-orders")
+async def purchase_orders():
+    """Drawn by the browser app from GET /api/v1/purchase-orders."""
+    from onboarding.appshell import app_shell
+    return app_shell()
+
+
+async def purchase_orders_data(request: Request, q: str = "") -> dict:
+    """Every purchase order with what was delivered, invoiced and paid against it (reviewers and Finance only)."""
     async with read_sessions()() as s:
         actor = await _actor(request, s)
         access.require_full(actor, "Purchase orders")
@@ -139,7 +146,7 @@ async def purchase_orders(request: Request, q: str = ""):
         if q:
             rows = [d for d in rows if q.lower() in f"{d['po'].po_number} {d['po'].vendor_name} {d['po'].cost_centre}".lower()]
         emps = {e.id: e for e in await _employees(s)}
-        return await render(request, s, "ap_pos.html", rows=rows, emps=emps, q=q)
+        return dict(rows=rows, emps=emps)
 
 
 @router.get("/purchase-orders/new", response_class=HTMLResponse)

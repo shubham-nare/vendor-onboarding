@@ -1,4 +1,4 @@
-"""Invoices from active vendors."""
+"""Invoices from active vendors, and the purchase orders they are matched against."""
 
 from __future__ import annotations
 
@@ -31,3 +31,20 @@ async def invoices(request: Request, status: str = "", q: str = "", vendor: str 
     return {"invoices": rows, "chips": chips, "full": full, "total": d["total"] if full else None,
             "vendors": [{"id": v, "name": n} for v, n in d["vendors_seen"]],
             "filters": {"status": status, "q": q, "vendor": vendor, "amin": amin, "amax": amax, "sort": sort}}
+
+
+# --- purchase orders --------------------------------------------------------------------------------------------
+@router.get("/purchase-orders")
+async def purchase_orders(request: Request, q: str = ""):
+    """Every order with delivered, invoiced and paid values; red when an invoice against it doesn't match."""
+    from onboarding.ap.web import purchase_orders_data
+    async with read_sessions()() as s:
+        await staff_or_401(request, s)
+    d = await purchase_orders_data(request, q)
+    emps = d["emps"]
+    return {"orders": [{"id": x["po"].id, "number": x["po"].po_number, "cost_centre": x["po"].cost_centre, "status": x["po"].status,
+                        "vendor": {"name": x["po"].vendor_name, "gstin": x["po"].vendor_gstin},
+                        "requested_by": emps[x["po"].requester_id].name if x["po"].requester_id in emps else None,
+                        "tone": x["tone"], "issues": list(x["issues"]), "total": x["total"], "delivered": x["delivered_value"],
+                        "delivery_recorded": bool(x["receipts"]), "invoiced": x["invoiced"] if x["invoices"] else None,
+                        "paid": x["paid"] or None} for x in d["rows"]], "q": q}

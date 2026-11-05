@@ -378,7 +378,8 @@ def test_fraud_case_shows_who_decides_and_where_the_doubt_is(flows):
     assert "I verified the flagged facts" in page                     # approving a fraud signal needs a deliberate tick
     facts = page.split("How well each fact is proven", 1)[1].split("Documents", 1)[0]
     assert "already on file for another vendor" in facts              # the conflict sits next to the bank account
-    assert "Registry" in facts and "Live source" in facts and "Simulated" not in facts
+    # the bank branch comes from the live RBI directory, or from the bundled copy when that lookup times out (network)
+    assert "Registry" in facts and ("Live source" in facts or "bundled snapshot" in facts) and "Simulated" not in facts
 
 
 def test_vendors_who_go_quiet_are_chased(flows):
