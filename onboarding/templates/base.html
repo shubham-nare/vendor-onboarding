@@ -202,7 +202,16 @@
     .cloud::after  { width: 40%; height: 115%; right: 12%; top: -38%; }
     @keyframes drift { from { transform: translateX(-30vw); } to { transform: translateX(130vw); } }
     @media (prefers-reduced-motion: reduce) { .cloud { animation: none; } .sky-far { transition: none; } }
+    /* the brand word (macro brand) */
+    .brand-word { display: inline-flex; align-items: center; border-radius: 10px; }
+    .brand-word svg { overflow: visible; filter: drop-shadow(0 3px 5px rgba(30,158,74,.28)); transition: transform .3s var(--ease); }
+    .brand-word:hover svg { transform: scale(1.04); }
+    .bw-text { font-family: 'Sacramento', cursive; font-size: 54px; stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; paint-order: stroke; }
+    .bw-cap { font-size: 40px; }
+    .bw-rim { stroke-width: .6; opacity: .75; }
   </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sacramento&display=block" rel="stylesheet">
 </head>
 <body class="min-h-screen">
   <div class="sky" id="sky" aria-hidden="true">
@@ -241,13 +250,15 @@
       <path d="M12.6 15.6l2.4 2.4 4.5-4.6" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
   {%- endmacro %}
-  {% macro brand(sub) -%}
-    <a href="/" title="Home" class="flex items-center gap-2.5 min-w-0">
-      {{ seal(32) }}
-      <span class="leading-tight min-w-0">
-        <span class="block text-[15px] font-semibold tracking-tight leading-tight">Mamoni <span class="font-normal text-slate-500">Vendor Onboarding</span></span>
-        <span class="block text-[11.5px] text-slate-500 truncate">{{ sub }}</span>
-      </span>
+  {# the name in green glass, like the home page; it always leads home. key keeps the gradient ids apart #}
+  {% macro brand(sub, key='b') -%}
+    <a href="/" title="Home" aria-label="Mamoni Vendor Onboarding, home" class="brand-word shrink-0">
+      <svg viewBox="0 0 170 64" width="118" height="44" aria-hidden="true">
+        <defs><linearGradient id="bw-{{ key }}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#A6F0BD"/><stop offset=".45" stop-color="#34C759"/><stop offset="1" stop-color="#1A8F43"/></linearGradient></defs>
+        <text x="85" y="47" text-anchor="middle" class="bw-text" fill="url(#bw-{{ key }})" stroke="url(#bw-{{ key }})"><tspan class="bw-cap">M</tspan>amoni</text>
+        <text x="84.6" y="46.4" text-anchor="middle" class="bw-text bw-rim" fill="none" stroke="#fff"><tspan class="bw-cap">M</tspan>amoni</text>
+      </svg>
     </a>
   {%- endmacro %}
   {% set NAV_ICONS = {
@@ -322,7 +333,7 @@
   {% set SUPPLIER_LINKS = [('/apply', 'Register for future work'), ('/bill', 'Submit a bill'), ('/vendor', 'Track your registration')] + ([] if vendor_account else [('/vendor/login', 'Log in')]) %}
   <header class="pub-bar sticky top-0 z-40">
     <div class="w-full px-4 sm:px-8 lg:px-12 2xl:px-16 h-16 flex items-center gap-2">
-      {{ brand(BUYER.legal_name) }}
+      {{ brand(BUYER.legal_name, 'top') }}
       <nav class="hidden lg:flex items-center gap-1 ml-10 xl:ml-14" aria-label="Main">
         <a href="/tour" class="pub-link" {{ 'aria-current=page' if path == '/tour' }}>{{ 'How it works' | t }}</a>
         <details class="pub-menu relative">
@@ -383,7 +394,7 @@
   {% set reviewer = actor and actor.role in ('maker', 'checker') %}
   {# desktop sidebar #}
   <aside class="apple-side hidden lg:flex fixed inset-y-0 left-0 z-30 w-64 flex-col">
-    <div class="h-16 px-5 flex items-center border-b border-slate-200">{{ brand(BUYER.legal_name) }}</div>
+    <div class="h-16 px-5 flex items-center border-b border-slate-200">{{ brand(BUYER.legal_name, 'side') }}</div>
     <nav class="flex-1 overflow-y-auto px-3 py-4 space-y-5" aria-label="Main">
       {% for group, items in NAV %}
       {% set shown = items | rejectattr('0', 'in', REVIEWER_ONLY if not reviewer else []) | list %}
@@ -420,7 +431,7 @@
   {# mobile / tablet top bar #}
   <header class="lg:hidden sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur">
     <div class="px-4 sm:px-6 h-14 flex items-center gap-3">
-      {{ brand(BUYER.legal_name) }}
+      {{ brand(BUYER.legal_name, 'mob') }}
       {% if actor %}
       <div class="ml-auto flex items-center gap-1.5">
         {% if DEMO_TOOLS %}{{ persona('right-0 top-full mt-2', compact=true) }}{% else %}<span class="text-[13px] font-medium text-slate-700">{{ actor.name.split()[0] }}</span>{% endif %}
