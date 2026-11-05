@@ -33,15 +33,18 @@
   </div>
 </a>
 
-{# what needs approving: two or three numbers, nothing else #}
-<div class="grid sm:grid-cols-2 {{ 'lg:grid-cols-3' if checker }} gap-3">
+{# what needs approving: two or three numbers, each in a star. Orange while something waits, green when clear #}
+<div class="flex flex-wrap justify-center gap-x-6 gap-y-2">
   {% for label, n, note, href in [
-      ('Vendors to approve', vendor_items | length, 'registrations waiting for your decision', '/review'),
-      ('Invoices to approve', invoice_items | length, 'bills waiting for your decision', '/review')] + ([('Payments to release', work.unpaid, (inr(work.unpaid_amt) ~ ' approved, not yet paid') if work.unpaid else 'nothing approved and unpaid', '/invoices?status=Approved for payment')] if checker else []) %}
-  <a href="{{ href }}" class="bg-white border rounded-xl px-5 py-4 hover:border-indigo-300 transition">
-    <div class="text-[13px] font-medium text-slate-500">{{ label }}</div>
-    <div class="mt-1 text-[34px] font-semibold tracking-tight leading-none tabular-nums {{ 'text-amber-700' if n else 'text-emerald-700' }}">{{ n }}</div>
-    <div class="mt-1.5 text-[12.5px] {{ 'text-slate-500' if n else 'text-emerald-700' }}">{{ note if n else 'All clear' }}</div>
+      ('Vendors to approve', vendor_items | length, 'registrations waiting', '/review'),
+      ('Invoices to approve', invoice_items | length, 'bills waiting', '/review')] + ([('Payments to release', work.unpaid, (inr(work.unpaid_amt) ~ ' not yet paid') if work.unpaid else '', '/invoices?status=Approved for payment')] if checker else []) %}
+  <a href="{{ href }}" class="star-tile {{ 'star-wait' if n else 'star-clear' }}">
+    <svg viewBox="0 0 200 200" aria-hidden="true"><polygon points="100.0,9.5 128.0,46.3 174.3,45.3 163.0,90.1 192.6,125.6 150.5,144.8 141.2,190.1 100.0,169.1 58.8,190.1 49.5,144.8 7.4,125.6 37.0,90.1 25.7,45.3 72.0,46.3"/></svg>
+    <span class="star-body">
+      <span class="block text-[13px] font-semibold text-slate-700 leading-tight">{{ label }}</span>
+      <span class="block mt-1 text-[40px] font-semibold tracking-tight leading-none tabular-nums {{ 'text-amber-700' if n else 'text-emerald-700' }}">{{ n }}</span>
+      <span class="block mt-1 text-[11.5px] leading-snug {{ 'text-slate-600' if n else 'text-emerald-700' }}">{{ note if n else 'All clear' }}</span>
+    </span>
   </a>
   {% endfor %}
 </div>

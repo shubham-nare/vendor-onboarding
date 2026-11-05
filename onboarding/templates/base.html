@@ -159,6 +159,16 @@
     main [class*="bg-amber-50/"] { background-color: transparent !important; }
     main [class*="bg-rose-50/"] { background-color: #FFF1F0 !important; }
     main [class*="bg-emerald-50/"] { background-color: #EFFAF2 !important; }
+    /* Home's counts sit in seven-pointed stars: orange while something waits, green when clear */
+    .star-tile { position: relative; display: grid; place-items: center; width: 250px; aspect-ratio: 1; text-align: center; transition: transform .25s ease; }
+    .star-tile:hover { transform: scale(1.04); }
+    .star-tile svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+    .star-tile polygon { stroke-width: 2.5; stroke-linejoin: round; vector-effect: non-scaling-stroke; transition: fill .2s; }
+    .star-wait polygon { fill: #FFF4E5; stroke: #FF9F0A; }
+    .star-wait:hover polygon { fill: #FFEBCC; }
+    .star-clear polygon { fill: #EAF9EE; stroke: #34C759; }
+    .star-clear:hover polygon { fill: #D9F4E1; }
+    .star-body { position: relative; max-width: 138px; margin-top: 14px; }
     /* Review's count: a red circle, gone when nothing is waiting */
     .review-count { margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: #FF3B30; color: #fff;
                     font-size: 11.5px; font-weight: 600; line-height: 20px; text-align: center; font-variant-numeric: tabular-nums; }
