@@ -627,6 +627,10 @@ async def _collect_form(request: Request) -> tuple[dict, dict[str, tuple[str, by
         for k in ("gstin", "pan", "cin", "llpin", "state", "pin", "ifsc", "udyam_no"):
             f[k] = ""
         f["msme"] = False
+    from onboarding.prefill import parse_record
+    rec = parse_record(str(data.get("prefill") or ""))
+    if rec:
+        f["prefill"] = rec          # what we read from the documents and suggested (R-PF-01 compares)
     if data.get("bill_mode") == "1":
         f["bill_mode"] = True
         f["bill_engaged_by"] = str(data.get("bill_engaged_by") or "").strip()   # the rest is read from the bill itself
@@ -655,6 +659,39 @@ def _fill_files(files: dict, demo: str, prev_files: dict[str, tuple[str, bytes]]
         elif slot in prev_files:
             files[slot] = prev_files[slot]
     return files
+
+
+_READS: dict[str, list[float]] = {}
+READS_PER_10_MIN = 20
+
+
+@router.post("/apply/read")
+async def apply_read(request: Request, slot: str = Form(...), file: UploadFile = File(...)):
+    """Upload first: read one document and suggest form values (onboarding/prefill.py). Suggests only; the
+    pipeline reads every document again after submission. Limited per visitor so the reader can't be abused."""
+    from onboarding.ai.read import read_with_cache
+    from onboarding.prefill import suggestions
+    if slot not in ("gst_certificate", "pan_card", "bank_proof", "udyam_certificate"):
+        raise HTTPException(400, "Unknown document")
+    who = request.client.host if request.client else "?"
+    t = time.time()
+    recent = [x for x in _READS.get(who, []) if t - x < 600]
+    if len(recent) >= READS_PER_10_MIN:
+        return JSONResponse({"ok": False, "message": "Too many files read in a short time. Please type the details below."}, status_code=429)
+    _READS[who] = recent + [t]
+    raw = await file.read()
+    if not raw or len(raw) > MAX_BYTES:
+        return JSONResponse({"ok": False, "message": "Please upload a PDF, JPG or PNG under 10 MB."}, status_code=400)
+    mime = file.content_type or mimetypes.guess_type(file.filename or "")[0] or ""
+    if mime not in ("application/pdf", "image/jpeg", "image/png"):
+        return JSONResponse({"ok": False, "message": "Please upload a PDF, JPG or PNG."}, status_code=400)
+    try:
+        res, origin = await asyncio.wait_for(read_with_cache(raw, mime, prefer="cache"), timeout=45)
+    except asyncio.TimeoutError:
+        res, origin = None, "failed"
+    if not res or not res.ok or not res.read:
+        return JSONResponse({"ok": False, "message": "We couldn't read this file just now. Please type the details below; we'll still check the file after you submit."})
+    return JSONResponse({"ok": True, **suggestions(slot, res.read)})
 
 
 @router.post("/apply/{token}")

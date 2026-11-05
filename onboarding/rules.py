@@ -282,6 +282,23 @@ def evaluate(ctx: Context) -> list[R]:
                 add(R(f"R-{s.code}", "authenticity", WARN if outcome == "WARN" else FAIL, f"{SLOT_TITLE.get(slot, slot)}: {s.title}",
                       outcome, {"file": d.filename, "detail": s.detail}, vendor_text=s.vendor_text, internal=s.detail, fraud=s.severity == "fraud"))
 
+    # Filled from the documents (upload first): did the vendor change what we read? Only a signal; the checks
+    # below compare the submitted values with the documents again, independently.
+    if f.get("prefill"):
+        from onboarding.prefill import KEY_FIELDS, changes, completed
+        filled, changed = changes(f)
+        key = [k for k in changed if k in KEY_FIELDS and not completed(k, f)]
+        names = lambda ks: ", ".join(FIELD_LABEL.get(k, k) for k in ks)  # noqa: E731
+        ev = {"filled_from_documents": filled, "changed_by_vendor": changed,
+              "read": {k: f["prefill"][k]["value"] for k in changed}, "submitted": {k: f.get(k) for k in changed}}
+        if key:
+            add(R("R-PF-01", "documents", WARN, f"Changed after we read it from the documents: {names(key)}", "WARN", ev,
+                  internal="The vendor edited values read from their own documents before submitting. The checks below compare "
+                           "what they submitted with the documents again; look at why the two differ."))
+        else:
+            add(R("R-PF-01", "documents", PASS, f"{len(filled)} details filled from the vendor's documents and confirmed by the vendor"
+                  + (f"; they adjusted: {names(changed)}" if changed else ""), ev))
+
     gst_doc = docs.get("gst_certificate") if usable(docs.get("gst_certificate"), "gst_certificate") else None
     pan_doc = docs.get("pan_card") if usable(docs.get("pan_card"), "pan_card") else None
     bank_doc = docs.get("bank_proof") if usable(docs.get("bank_proof"), "bank_proof") else None

@@ -2,6 +2,20 @@
 {% block title %}{{ 'Register and submit your bill' if (bill_mode or bill or values.get('bill_mode')) else 'Register as a vendor' }}{% endblock %}
 {% block content %}
 {% set REQ %}<span class="text-rose-600 ml-0.5" aria-hidden="true">*</span>{% endset %}
+<style>
+  /* filled from a document: blue; hard to read or changed by the vendor: orange */
+  .pf-chip { display: block; margin-top: 4px; font-size: 12px; font-weight: 500; }
+  .pf-chip[data-tone=doc] { color: #0066CC; }
+  .pf-chip[data-tone=doc]::before { content: "✓ "; }
+  .pf-chip[data-tone=check], .pf-chip[data-tone=changed] { color: #B25000; }
+  .pf-diff { display: block; margin-top: 4px; font-size: 12px; color: #B25000; }
+  .pf-diff button { color: #0066CC; font-weight: 600; text-decoration: underline; }
+  .pf-status[data-tone=wait] { color: #6E6E73; }
+  .pf-status[data-tone=ok] { color: #0066CC; font-weight: 500; }
+  .pf-status[data-tone=warn] { color: #B25000; }
+  .pf-status[data-tone=bad] { color: #D70015; font-weight: 500; }
+  input[data-filled="1"], select[data-filled="1"] { background: #F0F6FF; }
+</style>
 <div class="reveal">
 {% set v = values %}
 {% set is_bill = bill_mode or bill or v.get('bill_mode') %}
@@ -46,9 +60,30 @@
     <input type="hidden" name="demo" value="{{ demo }}">
     {% if is_bill %}<input type="hidden" name="bill_mode" value="1">{% endif %}
     <p class="text-[12.5px] text-slate-500">Fields marked <span class="text-rose-600 font-semibold">*</span> are required, and so are the documents.</p>
+    <input type="hidden" name="prefill" id="prefill" value="">
+    <section class="bg-white rounded-xl border p-4 sm:p-5">
+      <h2 class="text-xl flex items-baseline gap-3"><span class="mono text-[12px] text-indigo-600 tracking-widest">01</span>Start with your documents</h2>
+      <p class="text-[14px] text-slate-700 mt-1"><span data-in>Upload them first and we fill in most of the form from them. Check every detail before you submit.</span></p>
+      <p class="text-xs text-slate-500 mt-1">All documents are required. PDF, JPG or PNG, up to 10 MB each. Please upload the original files: the GST certificate as downloaded from the GST portal, and clear photos or scans of the PAN card and a cancelled cheque (or a bank-certified mandate letter). Government bodies, universities and trusts don't need a PAN card: the PAN is taken from the GST certificate.</p>
+      <div class="mt-4 space-y-3 text-sm">
+        {% for slot in ['gst_certificate', 'pan_card', 'bank_proof', 'udyam_certificate'] %}
+        <div class="grid gap-2 sm:grid-cols-[11rem_1fr] lg:grid-cols-[12rem_1fr_12rem] sm:items-center sm:gap-4 rounded-lg border px-3 py-3 sm:py-2.5" {{ 'data-msme' if slot == 'udyam_certificate' }} {{ 'data-in' if slot in ('gst_certificate', 'pan_card') }} {{ 'data-show="PVT_LTD PUBLIC_LTD LLP PARTNERSHIP PROPRIETORSHIP"' | safe if slot == 'pan_card' }}>
+          <div class="font-medium">{{ SLOT_LABEL[slot] }}{{ REQ }}</div>
+          <input type="file" data-read="{{ slot }}" name="{{ slot }}" {{ 'data-req' if not (prev_docs.get(slot) or demo_files.get(slot)) }} {{ 'data-gst' if slot == 'gst_certificate' }} aria-label="{{ SLOT_LABEL[slot] }}" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/*" class="text-xs min-w-0 max-w-full">
+          <div class="text-xs text-slate-500 sm:col-span-2 lg:col-span-1 lg:text-right truncate empty:hidden">
+            {%- if demo_files.get(slot) %}attached: <span class="mono">{{ demo_files[slot] }}</span>
+            {%- elif prev_docs.get(slot) %}keeps: <span class="mono">{{ prev_docs[slot].filename }}</span>{% endif -%}
+          </div>
+          <p class="pf-status sm:col-span-2 lg:col-span-3 text-[12.5px] empty:hidden" data-slot="{{ slot }}" role="status" aria-live="polite"></p>
+        </div>
+        {% endfor %}
+      </div>
+      <p data-intl class="text-xs text-slate-500 mt-2">Outside India we only need proof of your bank account now. Our team asks for your tax registration certificate when they contact you.</p>
+      {% if prev %}<p class="text-xs text-slate-500 mt-2">Leave a slot empty to keep the file you sent before.</p>{% endif %}
+    </section>
 
     <section class="bg-white rounded-xl border p-4 sm:p-5">
-      <h2 class="text-xl flex items-baseline gap-3"><span class="mono text-[12px] text-indigo-600 tracking-widest">01</span>Business</h2>
+      <h2 class="text-xl flex items-baseline gap-3"><span class="mono text-[12px] text-indigo-600 tracking-widest">02</span>Check your business details</h2>
       <div class="grid md:grid-cols-2 gap-4 mt-4 text-sm">
         {% set cur_country = v.get('country') or 'India' %}
         <label class="block md:col-span-2 md:max-w-[calc(50%-0.5rem)]">Country where the business is registered{{ REQ }}
@@ -79,7 +114,7 @@
     </section>
 
     <section class="bg-white rounded-xl border p-4 sm:p-5">
-      <h2 class="text-xl flex items-baseline gap-3"><span class="mono text-[12px] text-indigo-600 tracking-widest">02</span>Address &amp; contact</h2>
+      <h2 class="text-xl flex items-baseline gap-3"><span class="mono text-[12px] text-indigo-600 tracking-widest">03</span>Address &amp; contact</h2>
       <div class="grid md:grid-cols-2 gap-4 mt-4 text-sm">
         <div class="md:col-span-2 border border-slate-200 bg-slate-50 px-3 py-3">
           <div class="flex flex-wrap items-center gap-2">
@@ -122,7 +157,7 @@
     </section>
 
     <section class="bg-white rounded-xl border p-4 sm:p-5">
-      <h2 class="text-xl flex items-baseline gap-3"><span class="mono text-[12px] text-indigo-600 tracking-widest">03</span>Bank account for payments</h2>
+      <h2 class="text-xl flex items-baseline gap-3"><span class="mono text-[12px] text-indigo-600 tracking-widest">04</span>Bank account for payments</h2>
       <div class="grid md:grid-cols-3 gap-4 mt-4 text-sm">
         <label class="block">Account holder name{{ REQ }}<input name="bank_holder" required value="{{ v.get('bank_holder', '') }}" class="mt-1 w-full rounded-md border px-3 py-2"></label>
         <label class="block">Account number <span data-intl class="text-slate-400 font-normal">or IBAN</span>{{ REQ }}<input name="bank_account" required value="{{ v.get('bank_account', '') }}" class="mt-1 w-full rounded-md border px-3 py-2 mono"></label>
@@ -136,24 +171,6 @@
       <label class="block mt-3 text-sm max-w-sm" data-msme>Udyam registration number{{ REQ }}<input name="udyam_no" data-req value="{{ v.get('udyam_no', '') }}" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase" placeholder="UDYAM-XX-00-0000000"></label>
     </section>
 
-    <section class="bg-white rounded-xl border p-4 sm:p-5">
-      <h2 class="text-xl flex items-baseline gap-3"><span class="mono text-[12px] text-indigo-600 tracking-widest">04</span>Documents</h2>
-      <p class="text-xs text-slate-500 mt-1">All documents are required. PDF, JPG or PNG, up to 10 MB each. Please upload the original files: the GST certificate as downloaded from the GST portal, and clear photos or scans of the PAN card and a cancelled cheque (or a bank-certified mandate letter). Government bodies, universities and trusts don't need a PAN card: the PAN is taken from the GST certificate.</p>
-      <div class="mt-4 space-y-3 text-sm">
-        {% for slot in ['gst_certificate', 'pan_card', 'bank_proof', 'udyam_certificate'] %}
-        <div class="grid gap-2 sm:grid-cols-[11rem_1fr] lg:grid-cols-[12rem_1fr_12rem] sm:items-center sm:gap-4 rounded-lg border px-3 py-3 sm:py-2.5" {{ 'data-msme' if slot == 'udyam_certificate' }} {{ 'data-in' if slot in ('gst_certificate', 'pan_card') }} {{ 'data-show="PVT_LTD PUBLIC_LTD LLP PARTNERSHIP PROPRIETORSHIP"' | safe if slot == 'pan_card' }}>
-          <div class="font-medium">{{ SLOT_LABEL[slot] }}{{ REQ }}</div>
-          <input type="file" name="{{ slot }}" {{ 'data-req' if not (prev_docs.get(slot) or demo_files.get(slot)) }} {{ 'data-gst' if slot == 'gst_certificate' }} aria-label="{{ SLOT_LABEL[slot] }}" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/*" class="text-xs min-w-0 max-w-full">
-          <div class="text-xs text-slate-500 sm:col-span-2 lg:col-span-1 lg:text-right truncate empty:hidden">
-            {%- if demo_files.get(slot) %}attached: <span class="mono">{{ demo_files[slot] }}</span>
-            {%- elif prev_docs.get(slot) %}keeps: <span class="mono">{{ prev_docs[slot].filename }}</span>{% endif -%}
-          </div>
-        </div>
-        {% endfor %}
-      </div>
-      <p data-intl class="text-xs text-slate-500 mt-2">Outside India we only need proof of your bank account now. Our team asks for your tax registration certificate when they contact you.</p>
-      {% if prev %}<p class="text-xs text-slate-500 mt-2">Leave a slot empty to keep the file you sent before.</p>{% endif %}
-    </section>
 
     {% if is_bill %}
     <section class="bg-white rounded-xl border p-4 sm:p-5 ring-1 ring-indigo-100">
@@ -266,6 +283,66 @@ function checkPin() {
 }
 ['input', 'change'].forEach(e => { document.querySelector('[name=pin]')?.addEventListener(e, checkPin); document.querySelector('[name=state]')?.addEventListener(e, checkPin); });
 toggleType();
+
+// ---- upload first: we read each document and fill the form; the vendor checks every value ----
+const PF = {}, pfInput = document.getElementById('prefill');
+const pfNorm = (f, v) => ['gstin', 'pan', 'ifsc', 'udyam_no', 'bank_account'].includes(f) ? String(v || '').replace(/[\s-]/g, '').toUpperCase() : String(v || '').trim().toLowerCase().replace(/\s+/g, ' ');
+const pfSave = () => pfInput.value = Object.keys(PF).length ? JSON.stringify(PF) : '';
+function pfChip(el, text, tone) {
+  const lab = el.closest('label') || el.parentElement;
+  let c = lab.querySelector('.pf-chip');
+  if (!c) { c = document.createElement('span'); c.className = 'pf-chip'; lab.appendChild(c); }
+  c.textContent = text; c.dataset.tone = tone;
+}
+function pfFill(field, s, source) {
+  if (field === 'msme') { const m = document.getElementById('msme'); if (!m.checked) { m.checked = true; toggleType(); } PF.msme = { value: 'on', from: source }; return 0; }
+  const el = document.querySelector(`[name=${field}]`);
+  if (!el) return 0;
+  const cur = el.value, mine = cur && el.dataset.filled !== '1';
+  if (mine && pfNorm(field, cur) !== pfNorm(field, s.value)) {          // the vendor typed something else: say so, don't overwrite
+    const lab = el.closest('label') || el.parentElement;
+    let n = lab.querySelector('.pf-diff');
+    if (!n) { n = document.createElement('span'); n.className = 'pf-diff'; lab.appendChild(n); }
+    n.innerHTML = ''; n.append(`Your ${source} says `); const b = document.createElement('b'); b.textContent = s.value; n.append(b, '. ');
+    const use = document.createElement('button'); use.type = 'button'; use.textContent = 'Use this';
+    use.onclick = () => { n.remove(); el.dataset.filled = ''; pfFill(field, s, source); };
+    n.append(use);
+    return 0;
+  }
+  if (mine) return 0;                                                   // already the same
+  setField(field, s.value);
+  if (el.tagName === 'SELECT' && pfNorm(field, el.value) !== pfNorm(field, s.value)) return 0;   // not one of the options
+  el.dataset.filled = '1'; el.dataset.ai = s.value;
+  PF[field] = { value: s.value, from: source };
+  pfChip(el, s.check ? `Check this: hard to read on your ${source}` : `From your ${source}`, s.check ? 'check' : 'doc');
+  return 1;
+}
+document.querySelectorAll('input[type=file][data-read]').forEach(inp => inp.addEventListener('change', async () => {
+  const slot = inp.dataset.read, st = document.querySelector(`.pf-status[data-slot=${slot}]`);
+  if (!inp.files.length || !isIndia()) { st.textContent = ''; return; }
+  st.dataset.tone = 'wait'; st.textContent = 'Reading your document…';
+  const body = new FormData(); body.append('slot', slot); body.append('file', inp.files[0]);
+  try {
+    const r = await fetch('/apply/read', { method: 'POST', body, credentials: 'same-origin' });
+    const d = await r.json();
+    if (!d.ok) { st.dataset.tone = 'warn'; st.textContent = d.message || "We couldn't read this file. Please type the details below."; return; }
+    if (!d.right_slot) { st.dataset.tone = 'bad'; st.textContent = d.message; return; }
+    const order = ['business_type', 'legal_name', 'gstin', 'pan', 'proprietor_name', 'address', 'city', 'state', 'pin', 'bank_holder', 'bank_account', 'ifsc', 'msme', 'udyam_no'];
+    let n = 0;
+    order.forEach(f => { if (d.fields[f]) { n += pfFill(f, d.fields[f], d.source); if (f === 'business_type') toggleType(); } });
+    pfSave(); checkIds(); checkPin();
+    st.dataset.tone = n ? 'ok' : 'warn';
+    st.textContent = n ? `Filled ${n} detail${n === 1 ? '' : 's'} from your ${d.source}. Please check them below.` : (d.message || `Nothing new to fill from your ${d.source}.`);
+  } catch (e) { st.dataset.tone = 'warn'; st.textContent = "We couldn't read this file just now. Please type the details below; we'll still check it after you submit."; }
+}));
+// a value the vendor changes after we filled it is marked, and stays theirs
+document.querySelectorAll('form input, form select').forEach(el => ['input', 'change'].forEach(ev => el.addEventListener(ev, e => {
+  if (!e.isTrusted || !el.dataset.ai) return;
+  const same = pfNorm(el.name, el.value) === pfNorm(el.name, el.dataset.ai);
+  el.dataset.filled = same ? '1' : '0';
+  const src = (PF[el.name] || {}).from || 'document';
+  pfChip(el, same ? `From your ${src}` : `Changed by you: your ${src} says ${el.dataset.ai}`, same ? 'doc' : 'changed');
+})));
 
 // ---- pick the address on a map (Leaflet + OpenStreetMap; loaded only when opened) ----
 const COUNTRY_BY_CODE = Object.fromEntries(Object.entries(COUNTRIES).map(([n, c]) => [c.code.toLowerCase(), n]));

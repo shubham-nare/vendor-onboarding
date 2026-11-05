@@ -3,6 +3,7 @@ human actions (incl. segregation of duties), resubmission and the document check
 Uses a throwaway SQLite database and cached AI readings (no API calls)."""
 
 import asyncio
+import json
 import os
 import re
 from pathlib import Path
@@ -59,7 +60,7 @@ def flows(tmp_path_factory):
             async def as_(who):
                 c.cookies.set("actor", str(emp[who]))
 
-            async def submit(key, files=None, token=None, demo=None):
+            async def submit(key, files=None, token=None, demo=None, extra=None):
                 if token is None:
                     r = await c.get(f"/demo/{key}")
                     assert r.status_code == 303
@@ -68,7 +69,7 @@ def flows(tmp_path_factory):
                     page = await c.get(loc)
                     assert page.status_code == 200
                 url = f"/apply/{token}" if token else "/apply"
-                r = await c.post(url, data=_form_data(cat[demo or key]["form"], demo or key), files=files or {})
+                r = await c.post(url, data=_form_data(cat[demo or key]["form"], demo or key) | (extra or {}), files=files or {})
                 assert r.status_code == 303, r.text
                 run_id = int(re.search(r"/runs/(\d+)", r.headers["location"]).group(1))
                 await asyncio.gather(*pending)
@@ -79,7 +80,9 @@ def flows(tmp_path_factory):
             # happy path, with a real upload in one slot
             pan = ROOT / "fixtures" / "documents" / "happy_nilgiri" / "pan_card.pdf"
             files = {"pan_card": (pan.name, pan.read_bytes(), "application/pdf")} if pan.exists() else None
-            rid, tok = await submit("happy_nilgiri", files=files)
+            hf = cat["happy_nilgiri"]["form"]       # the vendor started with the documents and kept what we read
+            rec = {k: {"value": hf[k], "from": "GST certificate"} for k in ("legal_name", "gstin", "pan", "bank_account", "ifsc")}
+            rid, tok = await submit("happy_nilgiri", files=files, extra={"prefill": json.dumps(rec)})
             out["happy_page"] = (await c.get(f"/runs/{rid}")).text
             out["happy_events"] = (await c.get(f"/runs/{rid}/events")).json()
             out["happy_stream"] = (await c.get(f"/runs/{rid}/stream")).text
@@ -299,6 +302,11 @@ def test_bill_first_denied_engagement_goes_to_finance_and_vendor_learns_nothing(
     assert flows["brindavan_maker_approve"] == 403
     assert "says they didn't engage this vendor" in flows["brindavan_after"]
     assert "didn't engage" not in flows["brindavan_status"] and "Waiting for our team to confirm the work" in flows["brindavan_status"]
+
+
+def test_a_form_filled_from_documents_runs_end_to_end(flows):
+    page = flows["happy_page"]
+    assert "5 details filled from the vendor" in page or "5 details filled from the vendor" in str(flows["happy_events"])
 
 
 def test_action_queue_follows_the_same_rules_as_the_buttons(flows):
