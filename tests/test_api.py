@@ -38,6 +38,8 @@ def api(tmp_path_factory):
             out["act"] = await c.post("/api/v1/session/actor", json={"employee_id": priya["id"]})
             out["home as priya"] = (await c.get("/api/v1/console/home")).json()
             out["act bad"] = await c.post("/api/v1/session/actor", json={"employee_id": "x"})
+            out["reset requester"] = await c.post("/api/v1/system/reset", json={"passcode": "change-me"})   # still Priya
+            await c.post("/api/v1/session/actor", json={"employee_id": out["/api/v1/session"].json()["actor"]["id"]})   # back to Arjun
             out["reset default"] = await c.post("/api/v1/system/reset", json={"passcode": "change-me"})
             out["system"] = await c.get("/api/v1/system")
             from onboarding import auth
@@ -84,6 +86,7 @@ def test_session_and_home(api):
 
 
 def test_reset_is_off_with_the_default_passcode(api):
+    assert api["reset requester"].status_code == 403 and "Requesters" in api["reset requester"].json()["error"]
     r = api["reset default"]
     assert r.status_code == 403 and "ADMIN_PASSCODE" in r.json()["error"]
     assert any(c["name"].startswith("Database") for c in api["system"].json()["checks"])
