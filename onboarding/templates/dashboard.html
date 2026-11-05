@@ -50,7 +50,7 @@
   {% endfor %}
 </div>
 {# the stars turn slowly. Grab one and spin it; spin it hard or flick it up and it flies into the sky, twinkles and falls back.
-   A plain click still opens the list. #}
+   A plain click still opens the list. It flies whichever way it is thrown. #}
 <style>
   .star-tile { cursor: grab; touch-action: none; -webkit-user-drag: none; user-select: none; }
   .star-tile.held { cursor: grabbing; }
@@ -67,7 +67,7 @@
     const stars = [...document.querySelectorAll('.star-tile')].map((tile, i) => {
       const base = calm ? 0 : (i % 2 ? -1 : 1) * (6 + i);          // degrees a second, alternate directions
       tile.setAttribute('draggable', 'false');
-      tile.title = 'Spin me, or flick me up';
+      tile.title = 'Spin me, or throw me';
       return { tile, svg: tile.querySelector('svg'), base, vel: base, angle: i * 25, drag: null, moved: false, flying: false };
     });
     const angleAt = (s, e) => { const r = s.tile.getBoundingClientRect(); return Math.atan2(e.clientY - (r.top + r.height / 2), e.clientX - (r.left + r.width / 2)) * 180 / Math.PI; };
@@ -82,19 +82,24 @@
                    { duration: 700 + Math.random() * 700, delay: Math.random() * 500, easing: 'cubic-bezier(.2,.7,.3,1)' }).onfinish = () => el.remove();
       }
     };
-    const launch = s => {
+    const launch = (s, ux, uy) => {
       if (s.flying || calm) return;
       s.flying = true; s.tile.classList.add('flying');
       s.vel = Math.sign(s.vel || 1) * 900;
-      const r = s.tile.getBoundingClientRect(), h = r.top + r.height / 2 - 70;  // up to just under the top of the window
+      // fly the way it was thrown, until it is near the edge of the window (70px in)
+      const r = s.tile.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, M = 70;
+      const reach = [ux > 0 ? (innerWidth - M - cx) / ux : ux < 0 ? (M - cx) / ux : Infinity,
+                     uy > 0 ? (innerHeight - M - cy) / uy : uy < 0 ? (M - cy) / uy : Infinity];
+      const dist = Math.max(80, Math.min(...reach)), dx = ux * dist, dy = uy * dist;
+      const bx = -ux * 16, by = -uy * 16;   // the little overshoot on the way back
       const fly = s.tile.animate([
-        { transform: 'translateY(0) scale(1)', offset: 0, easing: 'cubic-bezier(.15,.75,.3,1)' },
-        { transform: `translateY(${-h}px) scale(.32)`, offset: .3 },
-        { transform: `translateY(${-h - 8}px) scale(.36)`, offset: .62, easing: 'cubic-bezier(.55,0,.8,.3)' },
-        { transform: 'translateY(16px) scale(1.06)', offset: .86 },
-        { transform: 'translateY(0) scale(1)', offset: 1 }], { duration: 2800 });
-      setTimeout(() => sparkles(r.left + r.width / 2, r.top + r.height / 2 - h), 850);
-      setTimeout(() => sparkles(r.left + r.width / 2, r.top + r.height / 2 - h), 1450);
+        { transform: 'translate(0, 0) scale(1)', offset: 0, easing: 'cubic-bezier(.15,.75,.3,1)' },
+        { transform: `translate(${dx}px, ${dy}px) scale(.32)`, offset: .3 },
+        { transform: `translate(${dx * 1.03}px, ${dy * 1.03}px) scale(.36)`, offset: .62, easing: 'cubic-bezier(.55,0,.8,.3)' },
+        { transform: `translate(${bx}px, ${by}px) scale(1.06)`, offset: .86 },
+        { transform: 'translate(0, 0) scale(1)', offset: 1 }], { duration: 2800 });
+      setTimeout(() => sparkles(cx + dx, cy + dy), 850);
+      setTimeout(() => sparkles(cx + dx, cy + dy), 1450);
       fly.onfinish = () => { s.flying = false; s.tile.classList.remove('flying'); };
     };
 
@@ -103,7 +108,7 @@
       s.tile.addEventListener('pointerdown', e => {
         if (s.flying || e.button !== 0) return;
         s.tile.setPointerCapture(e.pointerId);
-        s.drag = { a: angleAt(s, e), t: performance.now(), x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, vy: 0 };
+        s.drag = { a: angleAt(s, e), t: performance.now(), x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, vx: 0, vy: 0 };
         s.moved = false; s.tile.classList.add('held');
       });
       s.tile.addEventListener('pointermove', e => {
@@ -112,6 +117,7 @@
         let da = a - d.a; if (da > 180) da -= 360; if (da < -180) da += 360;
         s.angle += da;
         s.vel = s.vel * .5 + (da / dt) * .5;
+        d.vx = d.vx * .5 + ((e.clientX - d.x) / dt) * .5;
         d.vy = d.vy * .5 + ((e.clientY - d.y) / dt) * .5;
         if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 6) s.moved = true;
         Object.assign(d, { a, t: now, x: e.clientX, y: e.clientY });
@@ -119,7 +125,11 @@
       const release = () => {
         const d = s.drag; if (!d) return;
         s.drag = null; s.tile.classList.remove('held');
-        if (s.moved && (d.vy < -900 || Math.abs(s.vel) > 1100)) launch(s);   // a flick up or a hard spin
+        const speed = Math.hypot(d.vx, d.vy);
+        if (s.moved && speed > 900) launch(s, d.vx / speed, d.vy / speed);          // thrown: off the way it was thrown
+        else if (s.moved && Math.abs(s.vel) > 1100) {                               // spun hard: off in a random direction
+          const a = Math.random() * Math.PI * 2; launch(s, Math.cos(a), Math.sin(a));
+        }
       };
       s.tile.addEventListener('pointerup', release);
       s.tile.addEventListener('pointercancel', release);
