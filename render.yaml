@@ -22,3 +22,9 @@ services:
         sync: false
       - key: ADMIN_PASSCODE
         generateValue: true
+      # signs login and person-switcher cookies; the app refuses to start without it on a remote database
+      - key: SESSION_SECRET
+        generateValue: true
+      # demo mode only: the password of the seeded demo logins (none are created while it is unset)
+      - key: DEMO_PASSWORD
+        sync: false
