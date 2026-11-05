@@ -34,16 +34,18 @@
 </a>
 
 {# what needs approving: two or three numbers, each in a star. Orange while something waits, green when clear #}
-<div class="flex flex-wrap justify-center gap-x-6 gap-y-2">
+<div class="flex flex-wrap justify-evenly gap-x-10 gap-y-6 py-2">
   {% for label, n, note, href in [
       ('Vendors to approve', vendor_items | length, 'registrations waiting', '/review'),
       ('Invoices to approve', invoice_items | length, 'bills waiting', '/review')] + ([('Payments to release', work.unpaid, (inr(work.unpaid_amt) ~ ' not yet paid') if work.unpaid else '', '/invoices?status=Approved for payment')] if checker else []) %}
   <a href="{{ href }}" class="star-tile {{ 'star-wait' if n else 'star-clear' }}">
-    <svg viewBox="0 0 200 200" aria-hidden="true"><polygon points="100.0,9.5 128.0,46.3 174.3,45.3 163.0,90.1 192.6,125.6 150.5,144.8 141.2,190.1 100.0,169.1 58.8,190.1 49.5,144.8 7.4,125.6 37.0,90.1 25.7,45.3 72.0,46.3"/></svg>
+    <svg viewBox="0 0 200 200" aria-hidden="true">
+      <defs><linearGradient id="starfill{{ loop.index }}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="{{ '#E3EEFF' if n else '#F0F5FC' }}"/><stop offset="1" stop-color="{{ '#C9DFFF' if n else '#E1EBF8' }}"/></linearGradient></defs>
+      <path d="M100.0 6.0 L103.3 6.3 L106.5 7.4 L109.6 9.0 L112.5 11.2 L115.2 13.8 L117.7 16.8 L119.9 20.1 L122.0 23.4 L123.8 26.8 L125.5 30.0 L127.1 33.0 L128.7 35.6 L130.3 37.9 L132.1 39.7 L134.0 41.1 L136.2 42.1 L138.7 42.7 L141.4 43.0 L144.5 43.0 L147.9 42.9 L151.5 42.8 L155.3 42.7 L159.2 42.8 L163.2 43.1 L167.0 43.8 L170.7 44.8 L174.0 46.2 L177.0 48.1 L179.5 50.3 L181.4 53.0 L182.7 56.0 L183.5 59.3 L183.6 62.8 L183.2 66.4 L182.2 70.1 L180.9 73.7 L179.2 77.3 L177.3 80.7 L175.3 84.0 L173.4 87.1 L171.6 89.9 L170.1 92.6 L169.0 95.2 L168.2 97.6 L168.0 100.0 L168.2 102.4 L169.0 104.8 L170.1 107.4 L171.6 110.1 L173.4 112.9 L175.3 116.0 L177.3 119.3 L179.2 122.7 L180.9 126.3 L182.2 129.9 L183.2 133.6 L183.6 137.2 L183.5 140.7 L182.7 144.0 L181.4 147.0 L179.5 149.7 L177.0 151.9 L174.0 153.8 L170.7 155.2 L167.0 156.2 L163.2 156.9 L159.2 157.2 L155.3 157.3 L151.5 157.2 L147.9 157.1 L144.5 157.0 L141.4 157.0 L138.7 157.3 L136.2 157.9 L134.0 158.9 L132.1 160.3 L130.3 162.1 L128.7 164.4 L127.1 167.0 L125.5 170.0 L123.8 173.2 L122.0 176.6 L119.9 179.9 L117.7 183.2 L115.2 186.2 L112.5 188.8 L109.6 191.0 L106.5 192.6 L103.3 193.7 L100.0 194.0 L96.7 193.7 L93.5 192.6 L90.4 191.0 L87.5 188.8 L84.8 186.2 L82.3 183.2 L80.1 179.9 L78.0 176.6 L76.2 173.2 L74.5 170.0 L72.9 167.0 L71.3 164.4 L69.7 162.1 L67.9 160.3 L66.0 158.9 L63.8 157.9 L61.3 157.3 L58.6 157.0 L55.5 157.0 L52.1 157.1 L48.5 157.2 L44.7 157.3 L40.8 157.2 L36.8 156.9 L33.0 156.2 L29.3 155.2 L26.0 153.8 L23.0 151.9 L20.5 149.7 L18.6 147.0 L17.3 144.0 L16.5 140.7 L16.4 137.2 L16.8 133.6 L17.8 129.9 L19.1 126.3 L20.8 122.7 L22.7 119.3 L24.7 116.0 L26.6 112.9 L28.4 110.1 L29.9 107.4 L31.0 104.8 L31.8 102.4 L32.0 100.0 L31.8 97.6 L31.0 95.2 L29.9 92.6 L28.4 89.9 L26.6 87.1 L24.7 84.0 L22.7 80.7 L20.8 77.3 L19.1 73.7 L17.8 70.1 L16.8 66.4 L16.4 62.8 L16.5 59.3 L17.3 56.0 L18.6 53.0 L20.5 50.3 L23.0 48.1 L26.0 46.2 L29.3 44.8 L33.0 43.8 L36.8 43.1 L40.8 42.8 L44.7 42.7 L48.5 42.8 L52.1 42.9 L55.5 43.0 L58.6 43.0 L61.3 42.7 L63.8 42.1 L66.0 41.1 L67.9 39.7 L69.7 37.9 L71.3 35.6 L72.9 33.0 L74.5 30.0 L76.2 26.8 L78.0 23.4 L80.1 20.1 L82.3 16.8 L84.8 13.8 L87.5 11.2 L90.4 9.0 L93.5 7.4 L96.7 6.3Z" fill="url(#starfill{{ loop.index }})"/></svg>
     <span class="star-body">
       <span class="block text-[13px] font-semibold text-slate-700 leading-tight">{{ label }}</span>
-      <span class="block mt-1 text-[40px] font-semibold tracking-tight leading-none tabular-nums {{ 'text-amber-700' if n else 'text-emerald-700' }}">{{ n }}</span>
-      <span class="block mt-1 text-[11.5px] leading-snug {{ 'text-slate-600' if n else 'text-emerald-700' }}">{{ note if n else 'All clear' }}</span>
+      <span class="block mt-1 text-[42px] font-semibold tracking-tight leading-none tabular-nums {{ 'text-[#0071E3]' if n else 'text-[#6E8DB8]' }}">{{ n }}</span>
+      <span class="block mt-1 text-[11.5px] leading-snug text-slate-600">{{ note if n else 'All clear' }}</span>
     </span>
   </a>
   {% endfor %}
