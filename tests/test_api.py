@@ -38,8 +38,13 @@ def api(tmp_path_factory):
             out["act"] = await c.post("/api/v1/session/actor", json={"employee_id": priya["id"]})
             out["home as priya"] = (await c.get("/api/v1/console/home")).json()
             out["act bad"] = await c.post("/api/v1/session/actor", json={"employee_id": "x"})
+            from onboarding import auth
+            kept = c.cookies.get(auth.COMPANY_COOKIE)                        # someone copied the cookie before log-out
             out["logout"] = await c.post("/api/v1/session/logout")
             out["after logout"] = await c.get("/api/v1/session")
+            c.cookies.set(auth.COMPANY_COOKIE, kept)
+            out["copied cookie"] = await c.get("/api/v1/session")
+            out["copied cookie page"] = await c.get("/console")
         await dbm.engine().dispose()
 
     asyncio.run(go())
@@ -62,6 +67,7 @@ def test_logins_are_enforced(api):
         assert r.status_code == 401 and r.headers["content-type"].startswith("application/json") and "log in" in r.json()["error"]
     assert api["anon /console"].status_code == 303                              # the screen itself still asks you to log in
     assert api["after logout"].status_code == 401
+    assert api["copied cookie"].status_code == 401 and api["copied cookie page"].status_code == 303   # log-out really ends it
 
 
 def test_session_and_home(api):

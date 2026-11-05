@@ -31,6 +31,7 @@ async def lifespan(_app: FastAPI):
         from onboarding.seeding import ensure_demo_logins
         async with sessions()() as s:  # a fresh deploy can always be logged into
             await ensure_demo_logins(s)
+            await auth.load_revoked(s)  # log-outs from before the restart stay logged out
             await s.commit()
         from onboarding.config import get_settings
         if get_settings().demo_tools:   # development fixtures: the company's sample purchase orders

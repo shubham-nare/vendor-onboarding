@@ -77,12 +77,16 @@ def make_session(account_id: int, purpose: str = "vendor") -> str:
     return f"{payload}.{_sign(purpose + '|' + payload)}"
 
 
+# Signatures of ended log-ins (loaded from revoked_sessions at start-up, added to on every log-out).
+_REVOKED: set[str] = set()
+
+
 def read_session(value: str | None, purpose: str = "vendor") -> int | None:
-    """The id in a valid, unexpired cookie made for this purpose, else None."""
+    """The id in a valid, unexpired, not logged-out cookie made for this purpose, else None."""
     if not value or value.count(".") != 2:
         return None
     acct, issued, sig = value.split(".")
-    if not hmac.compare_digest(sig, _sign(f"{purpose}|{acct}.{issued}")):
+    if not hmac.compare_digest(sig, _sign(f"{purpose}|{acct}.{issued}")) or sig in _REVOKED:
         return None
     try:
         if time.time() - int(issued) > MAX_AGE:
@@ -113,3 +117,29 @@ def password_problem(password: str) -> str:
     if password.lower() in {"password@1", "password1!", "p@ssw0rd", "p@ssword1", "welcome@123", "admin@123"}:
         return "That password is too easy to guess."
     return ""
+
+
+async def revoke(value: str | None, purpose: str) -> None:
+    """End a log-in for good: its cookie stops working on this server at once and after a restart."""
+    from datetime import datetime, timezone
+    from onboarding.models import RevokedSession
+    from onboarding.pipeline import sessions
+    if read_session(value, purpose) is None:
+        return
+    _, issued, sig = value.split(".")
+    _REVOKED.add(sig)
+    async with sessions()() as s:
+        if not await s.get(RevokedSession, sig):
+            s.add(RevokedSession(sig=sig, expires_at=datetime.fromtimestamp(int(issued) + MAX_AGE, timezone.utc)))
+            await s.commit()
+
+
+async def load_revoked(s) -> int:
+    """At start-up: remember the ended log-ins that haven't expired, and forget the rest."""
+    from datetime import datetime, timezone
+    from sqlalchemy import delete, select
+    from onboarding.models import RevokedSession
+    now = datetime.now(timezone.utc)
+    await s.execute(delete(RevokedSession).where(RevokedSession.expires_at < now))
+    _REVOKED.update((await s.execute(select(RevokedSession.sig))).scalars())
+    return len(_REVOKED)

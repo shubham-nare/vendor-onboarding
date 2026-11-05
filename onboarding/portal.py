@@ -99,7 +99,8 @@ async def company_login(request: Request, email: str = Form(""), password: str =
 
 
 @router.post("/company/logout")
-async def company_logout():
+async def company_logout(request: Request):
+    await auth.revoke(request.cookies.get(auth.COMPANY_COOKIE), "company")
     resp = RedirectResponse("/", status_code=303)
     resp.delete_cookie(auth.COMPANY_COOKIE)
     resp.delete_cookie("actor")
@@ -343,7 +344,8 @@ def secrets_eq(a: str, b: str) -> bool:
 
 
 @router.post("/vendor/logout")
-async def logout():
+async def logout(request: Request):
+    await auth.revoke(request.cookies.get(auth.COOKIE), "vendor")
     resp = RedirectResponse("/", status_code=303)
     resp.delete_cookie(auth.COOKIE)
     return resp

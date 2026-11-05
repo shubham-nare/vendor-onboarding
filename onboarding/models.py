@@ -328,3 +328,11 @@ class VendorBill(Base):
 from onboarding.intel import models as _intel_models  # noqa: E402,F401
 
 from onboarding.ap import models as _ap_models  # noqa: E402,F401  (purchase orders, invoices, payments, audit)
+
+
+class RevokedSession(Base):
+    """A log-in that was ended (log-out). Its cookie is refused even if someone kept a copy, until it would
+    have expired anyway (auth.MAX_AGE). Only the signature is stored, never the cookie itself."""
+    __tablename__ = "revoked_sessions"
+    sig: Mapped[str] = mapped_column(String(64), primary_key=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)

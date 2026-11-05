@@ -88,7 +88,8 @@ async def act_as(request: Request, body: ActAs):
 
 
 @router.post("/session/logout")
-async def logout():
+async def logout(request: Request):
+    await auth.revoke(request.cookies.get(auth.COMPANY_COOKIE), "company")
     resp = JSONResponse({"ok": True, "next": "/"})
     resp.delete_cookie(auth.COMPANY_COOKIE)
     resp.delete_cookie("actor")
