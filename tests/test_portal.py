@@ -85,7 +85,7 @@ def flows(tmp_path_factory):
             out["console_page"] = (await staff.get("/api/v1/console/home")).text
             out["pending"] = (await staff.get("/api/v1/console/pending")).json()
             out["pending_anon"] = (await other.get("/api/v1/console/pending")).status_code
-            out["applications_page"] = (await staff.get("/applications")).text
+            out["applications_page"] = (await staff.get("/invoices")).text       # a staff page still drawn by the server
             r = await other.post("/vendor/login", data={"email": DEMO_VENDOR["email"], "password": DEMO_PASSWORD})
             out["demo_vendor"] = (r.status_code, (await other.get("/vendor")).text)
             out["vendor_cookie_on_console"] = (await other.get("/console")).headers.get("location", "")
@@ -183,15 +183,16 @@ def flows(tmp_path_factory):
             out["cr_post"] = r.status_code
             out["profile_after"] = (await v.get("/vendor/profile")).text
             staff.cookies.set("actor", "3")
-            out["review_maker"] = (await staff.get("/review")).text
+            out["review_maker"] = (await staff.get("/api/v1/review")).json()
             out["pending_maker_cr"] = (await staff.get("/api/v1/console/pending")).json()
             staff.cookies.set("actor", "4")
-            out["review_finance"] = (await staff.get("/review")).text
+            out["review_finance"] = (await staff.get("/api/v1/review")).json()
             out["pending_finance_cr"] = (await staff.get("/api/v1/console/pending")).json()
-            out["applications_finance"] = (await staff.get("/applications")).text
-            cr_id = re.search(r'/change-requests/(\d+)/decide', out["review_finance"]).group(1)
+            out["applications_finance"] = (await staff.get("/api/v1/applications")).json()
+            cr_id = out["review_finance"]["changes"][0]["id"]
             staff.cookies.set("actor", "3")
             out["cr_maker"] = (await staff.post(f"/change-requests/{cr_id}/decide", data={"decision": "approve", "note": "looks fine"})).status_code
+            out["cr_maker_api"] = await staff.post(f"/api/v1/change-requests/{cr_id}/decision", json={"decision": "approve", "note": "looks fine"})
             staff.cookies.set("actor", "4")
             out["cr_nonote"] = (await staff.post(f"/change-requests/{cr_id}/decide", data={"decision": "approve", "note": ""})).status_code
             out["cr_checker"] = (await staff.post(f"/change-requests/{cr_id}/decide", data={"decision": "approve", "note": "Called the number on record; Sneha confirmed"})).status_code
@@ -397,7 +398,8 @@ def test_bank_change_needs_finance_and_an_independent_check(flows):
     assert "Company and tax details" in flows["profile"] and "never inherits" in flows["profile"]
     assert flows["cr_post"] == 303 and "Being checked" in flows["profile_after"]
     assert flows["cr_maker"] == 403 and flows["cr_nonote"] == 400 and flows["cr_checker"] == 303
-    assert "decided by the Finance controller" in flows["review_maker"]
+    assert [c["mine"] for c in flows["review_maker"]["changes"]] == [False]          # the reviewer sees it, Finance decides
+    assert flows["cr_maker_api"].status_code == 403 and "Finance controller" in flows["cr_maker_api"].json()["error"]
     assert "••••7766" in flows["profile_done"] and "Approved" in flows["profile_done"]
     for path in ("/review", "/applications", "/relationships", "/audit?entity=change_request"):
         assert flows[path].status_code == 200, path
@@ -550,18 +552,18 @@ def test_review_badge_home_and_review_count_the_same_things(flows):
     fin, mk = flows["pending_finance_cr"], flows["pending_maker_cr"]
     assert any(i["href"] == "/review#changes" for i in fin["items"])           # a bank change waits for Finance ...
     assert not any(i["href"] == "/review#changes" for i in mk["items"])        # ... not for the reviewer
-    assert f'aria-label="{fin["count"]} waiting"' in flows["review_finance"]          # the Review badge on the Review page
+    assert flows["review_finance"]["counts"]["review"] == fin["count"]                # Review and the badge count the same things
+    rv = flows["review_finance"]
+    assert len(rv["changes"]) + len(rv["invoices"]) + len(rv["apps"]) >= 1
     page = APP_JS
     assert 'id="invite-box"' in page and 'review-count' in page
-    fin_review = html.unescape(flows["review_finance"])                       # drawn into the page, no wait for the count request
-    assert f'class="review-count" aria-label="{fin["count"]} waiting">{fin["count"]}<' in fin_review
-    assert 'href="/invites" class="side-link' not in page                     # Invites lives on Home now
+    assert "['/invites'" not in page                                             # Invites lives on Home, not in the menu
 
 
 def test_applications_is_a_main_tab_with_its_own_count(flows):
-    page, fin = flows["applications_finance"], flows["pending_finance_cr"]
-    side = page[page.index('aria-label="Main"'):]
-    assert side.index('href="/applications"') < side.index('href="/review"') < side.index('href="/invoices"')
+    apps, fin = flows["applications_finance"], flows["pending_finance_cr"]
+    nav = APP_JS[APP_JS.index("const NAV"):]
+    assert nav.index("'/applications'") < nav.index("'/review'") < nav.index("'/invoices'")
     assert "apps" in fin and fin["apps"] <= fin["count"]
-    if fin["apps"]:
-        assert f'aria-label="{fin["apps"]} applications waiting"' in page and "Waiting for you" in page
+    waiting = [a for a in apps["applications"] if a["waiting"]]
+    assert len(waiting) == fin["apps"] and apps["applications"][:len(waiting)] == waiting       # waiting ones first

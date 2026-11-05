@@ -277,14 +277,19 @@ async def audit_log(request: Request, entity: str = ""):
 
 @router.post("/change-requests/{cr_id}/decide")
 async def decide_change(request: Request, cr_id: int):
+    form = await request.form()
+    await decide_change_core(request, cr_id, str(form.get("decision") or ""), str(form.get("note") or "").strip())
+    return RedirectResponse(str(form.get("back") or "/review"), status_code=303)
+
+
+async def decide_change_core(request: Request, cr_id: int, decision: str, note: str) -> None:
     """A bank-account change needs its own review by Finance (not the vendor's word, not the old account's status):
-    approve only after confirming it independently, e.g. a call to a number already on record."""
+    approve only after confirming it independently, e.g. a call to a number already on record. Used by the page form
+    and by POST /api/v1/change-requests/{id}/decision."""
     import json as _json
     from onboarding.ap.models import ChangeRequest
     from onboarding.intel.crypto import decrypt
     from onboarding.intel.project import _identifier
-    form = await request.form()
-    decision, note = str(form.get("decision") or ""), str(form.get("note") or "").strip()
     async with sessions()() as s:
         actor = await _actor(request, s)
         cr = await s.get(ChangeRequest, cr_id)
@@ -329,5 +334,4 @@ async def decide_change(request: Request, cr_id: int):
                action=f"{decision}d", actor=actor, actor_label=f"{actor.name} ({ROLE_LABEL.get(actor.role, actor.role)})", vendor_pk=cr.vendor_pk, reason=note,
                detail=cr.requested)
         await s.commit()
-    return RedirectResponse(str(form.get("back") or "/review"), status_code=303)
 

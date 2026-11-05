@@ -34,46 +34,18 @@ async def _apps(s, actor):
     return out
 
 
-@router.get("/applications", response_class=HTMLResponse)
-async def applications(request: Request, status: str = "", q: str = ""):
-    """Every registration; the ones waiting for this person's decision come first."""
-    from onboarding.web import _dashboard_ctx
-    async with read_sessions()() as s:
-        actor = await _actor(request, s)
-        todo = (await _dashboard_ctx(request, s))["todo"]
-        waiting = {t["href"] for t in todo if t["status"] not in ("BILL", "CHANGE")}
-        rows = await _apps(s, actor)
-        for x in rows:
-            x["waiting"] = bool(x["run"] and f"/runs/{x['run'].id}" in waiting)
-        rows.sort(key=lambda x: not x["waiting"])   # stable: otherwise newest first, as before
-        emps = {e.id: e for e in await _employees(s)}
-        if status:
-            rows = [x for x in rows if x["app"].current_status == status]
-        if q:
-            rows = [x for x in rows if q.lower() in f"{x['app'].ref} {x['app'].legal_name} {(x['run'].form or {}).get('gstin', '') if x['run'] else ''}".lower()]
-        return await render(request, s, "ws_applications.html", rows=rows, emps=emps, status=status, q=q, full=access.full_view(actor), todo=todo)
+@router.get("/applications")
+async def applications():
+    """Drawn by the browser app from GET /api/v1/applications."""
+    from onboarding.appshell import app_shell
+    return app_shell()
 
 
-@router.get("/review", response_class=HTMLResponse)
-async def review_queue(request: Request):
-    """Everything waiting on this person, most urgent first: the same list as Home, the badge and the reminder,
-    grouped into change requests, invoices and vendor decisions."""
-    from onboarding.web import _dashboard_ctx
-    async with read_sessions()() as s:
-        ctx = await _dashboard_ctx(request, s)
-        actor, full, todo = await _actor(request, s), ctx["full"], ctx["todo"]
-        changes = []
-        if full:   # every open change request; the ones this person can't decide say who does
-            r = await _reads(changes=_all(select(ChangeRequest).where(ChangeRequest.status == "submitted").order_by(ChangeRequest.id)),
-                             masters=_all(select(VendorMaster)), vendors=_all(select(Vendor)))
-            names = {m.vendor_id: m.legal_name for m in r["masters"]}
-            vend = {v.erp_vendor_id: v for v in r["vendors"] if v.erp_vendor_id}
-            changes = [dict(cr=c, name=names.get(c.erp_vendor_id, c.erp_vendor_id), vendor=vend.get(c.erp_vendor_id),
-                            mine=bool(actor and ((c.kind == "bank_account" and actor.role == "checker") or c.kind != "bank_account")))
-                       for c in r["changes"]]
-        return await render(request, s, "ws_review.html", todo=todo, changes=changes, full=full,
-                            invoices=[x for x in todo if x["status"] == "BILL"],
-                            apps_todo=[x for x in todo if x["status"] not in ("BILL", "CHANGE")])
+@router.get("/review")
+async def review_queue():
+    """Drawn by the browser app from GET /api/v1/review."""
+    from onboarding.appshell import app_shell
+    return app_shell()
 
 
 @router.get("/relationships", response_class=HTMLResponse)
