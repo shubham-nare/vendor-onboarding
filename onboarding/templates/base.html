@@ -255,6 +255,17 @@
     main ol.rounded-xl.border { background: #fff !important; }
     @media (min-width: 640px) { main ol.rounded-xl.border > li + li { box-shadow: -1px 0 0 #EDF0F4; } }
   </style>
+  {% if not (landing or vendor_page) %}
+  <style>
+    /* the staff console: a paler sky, and box edges that blend in quietly instead of glowing */
+    .sky { background: linear-gradient(180deg, #BBD6F8 0%, #D6E7FB 38%, #E7F0FB 70%, #F1F4F9 100%); }
+    main :is(section.bg-white, article.bg-white, details.bg-white, form.bg-white, .bg-white.border,
+             .bg-white:is(.rounded-xl, .rounded-2xl, [class*="rounded-["])):not(.bg-white *):not(button, input, select, textarea, .rounded-full, .rounded-md),
+    main ol.rounded-xl.border {
+      box-shadow: 0 0 3px 1px rgba(255,255,255,.55), 0 0 14px 5px rgba(255,255,255,.28), 0 4px 22px rgba(60,90,140,.06) !important;
+    }
+  </style>
+  {% endif %}
   {% macro seal(size=32, light=false) -%}
     <svg width="{{ size }}" height="{{ size }}" viewBox="0 0 32 32" aria-hidden="true" class="shrink-0">
       <rect width="32" height="32" rx="8" fill="#0071E3"/>
