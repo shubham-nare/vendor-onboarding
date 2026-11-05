@@ -183,6 +183,7 @@ def flows(tmp_path_factory):
             staff.cookies.set("actor", "4")
             out["review_finance"] = (await staff.get("/review")).text
             out["pending_finance_cr"] = (await staff.get("/console/pending")).json()
+            out["applications_finance"] = (await staff.get("/applications")).text
             cr_id = re.search(r'/change-requests/(\d+)/decide', out["review_finance"]).group(1)
             staff.cookies.set("actor", "3")
             out["cr_maker"] = (await staff.post(f"/change-requests/{cr_id}/decide", data={"decision": "approve", "note": "looks fine"})).status_code
@@ -550,3 +551,12 @@ def test_review_badge_home_and_review_count_the_same_things(flows):
     fin_review = html.unescape(flows["review_finance"])                       # drawn into the page, no wait for the count request
     assert f'class="review-count" aria-label="{fin["count"]} waiting">{fin["count"]}<' in fin_review
     assert 'href="/invites" class="side-link' not in page                     # Invites lives on Home now
+
+
+def test_applications_is_a_main_tab_with_its_own_count(flows):
+    page, fin = flows["applications_finance"], flows["pending_finance_cr"]
+    side = page[page.index('aria-label="Main"'):]
+    assert side.index('href="/applications"') < side.index('href="/review"') < side.index('href="/invoices"')
+    assert "apps" in fin and fin["apps"] <= fin["count"]
+    if fin["apps"]:
+        assert f'aria-label="{fin["apps"]} applications waiting"' in page and "Waiting for you" in page

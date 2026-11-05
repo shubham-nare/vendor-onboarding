@@ -20,8 +20,8 @@
       <thead class="text-left text-slate-500 bg-slate-50/70 border-b border-slate-100"><tr><th class="pl-5 pr-2 py-2.5">Application</th><th class="px-2">Vendor</th><th class="px-2">Status</th><th class="px-2">Risk</th><th class="px-2">Came in through</th><th class="pr-5 pl-2">Submitted</th></tr></thead>
       <tbody class="divide-y divide-slate-100">
       {% for x in rows %}{% set a = x.app %}
-        <tr class="group hover:bg-slate-50/80 {{ 'cursor-pointer' if x.run }}" {% if x.run %}onclick="location.href='/runs/{{ x.run.id }}'"{% endif %}>
-          <td class="pl-5 pr-2 py-3"><span class="mono font-medium group-hover:text-indigo-700">{{ a.ref }}</span><div class="text-[11.5px] text-slate-500">{{ a.legal_name }}</div></td>
+        <tr class="group hover:bg-slate-50/80 {{ 'cursor-pointer' if x.run }} {{ 'bg-rose-50/40' if x.waiting }}" {% if x.run %}onclick="location.href='/runs/{{ x.run.id }}'"{% endif %}>
+          <td class="pl-5 pr-2 py-3"><span class="mono font-medium group-hover:text-indigo-700">{{ a.ref }}</span>{% if x.waiting %} <span class="ml-1 inline-flex items-center rounded-full bg-[#FF3B30] text-white text-[10.5px] font-semibold px-2 py-0.5 align-middle">Waiting for you</span>{% endif %}<div class="text-[11.5px] text-slate-500">{{ a.legal_name }}</div></td>
           <td class="px-2 py-3" data-label="Vendor">{% if x.vendor and full %}<a class="hover:text-indigo-700" onclick="event.stopPropagation()" href="/vendors/{{ x.vendor.vendor_id }}">{{ x.vendor.display_name }}</a><div class="text-[11.5px] text-slate-500 mono">{{ x.vendor.vendor_id }}</div>{% else %}—{% endif %}</td>
           <td class="px-2 py-3" data-label="Status">{{ status_badge(a.current_status) }}</td>
           <td class="px-2 py-3" data-label="Risk">{{ tier_chip(x.run.risk_tier) if x.run and full else '—' }}</td>

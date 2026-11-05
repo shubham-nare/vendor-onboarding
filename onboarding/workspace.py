@@ -36,15 +36,22 @@ async def _apps(s, actor):
 
 @router.get("/applications", response_class=HTMLResponse)
 async def applications(request: Request, status: str = "", q: str = ""):
+    """Every registration; the ones waiting for this person's decision come first."""
+    from onboarding.web import _dashboard_ctx
     async with read_sessions()() as s:
         actor = await _actor(request, s)
+        todo = (await _dashboard_ctx(request, s))["todo"]
+        waiting = {t["href"] for t in todo if t["status"] not in ("BILL", "CHANGE")}
         rows = await _apps(s, actor)
+        for x in rows:
+            x["waiting"] = bool(x["run"] and f"/runs/{x['run'].id}" in waiting)
+        rows.sort(key=lambda x: not x["waiting"])   # stable: otherwise newest first, as before
         emps = {e.id: e for e in await _employees(s)}
         if status:
             rows = [x for x in rows if x["app"].current_status == status]
         if q:
             rows = [x for x in rows if q.lower() in f"{x['app'].ref} {x['app'].legal_name} {(x['run'].form or {}).get('gstin', '') if x['run'] else ''}".lower()]
-        return await render(request, s, "ws_applications.html", rows=rows, emps=emps, status=status, q=q, full=access.full_view(actor))
+        return await render(request, s, "ws_applications.html", rows=rows, emps=emps, status=status, q=q, full=access.full_view(actor), todo=todo)
 
 
 @router.get("/review", response_class=HTMLResponse)

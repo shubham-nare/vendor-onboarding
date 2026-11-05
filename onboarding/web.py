@@ -281,9 +281,10 @@ async def pending(request: Request):
     """What the bottom-right reminder shows on every staff page: how many decisions are still waiting."""
     async with read_sessions()() as s:
         if not await _actor(request, s):
-            return JSONResponse({"count": 0, "items": []})
+            return JSONResponse({"count": 0, "apps": 0, "items": []})
         todo = (await _dashboard_ctx(request, s))["todo"]
-        return JSONResponse({"count": len(todo), "items": [dict(name=t["name"], ref=t["ref"], verb=t["verb"], href=t["href"]) for t in todo[:4]]})
+        return JSONResponse({"count": len(todo), "apps": sum(t["status"] not in ("BILL", "CHANGE") for t in todo),
+                             "items": [dict(name=t["name"], ref=t["ref"], verb=t["verb"], href=t["href"]) for t in todo[:4]]})
 
 
 async def _dashboard_ctx(request: Request, s) -> dict:
