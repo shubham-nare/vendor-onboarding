@@ -204,7 +204,7 @@
     @media (prefers-reduced-motion: reduce) { .cloud { animation: none; } .sky-far { transition: none; } }
     /* the brand word (macro brand) */
     .brand-word { display: inline-flex; align-items: center; border-radius: 10px; }
-    .brand-word svg { overflow: visible; filter: drop-shadow(0 3px 5px rgba(30,158,74,.28)); transition: transform .3s var(--ease); }
+    .brand-word svg { overflow: visible; filter: drop-shadow(0 3px 5px rgba(20,110,52,.3)); transition: transform .3s var(--ease); }
     .brand-word:hover svg { transform: scale(1.04); }
     .bw-text { font-family: 'Sacramento', cursive; font-size: 54px; stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; paint-order: stroke; }
     .bw-cap { font-size: 40px; }
@@ -243,11 +243,11 @@
   </script>
   {% set landing = path == '/' or path.startswith('/company/') or path in ('/tour', '/contact', '/thanks') %}
   {% set vendor_page = path.startswith('/apply') or path.startswith('/status') or path == '/bill' or path.startswith('/bill?') or (path.startswith('/vendor') and not path.startswith('/vendors')) %}
-  {% if landing or vendor_page %}
   <style>
-    /* cloudy edges on the public and supplier pages: an outer white box has no grey outline; layers of white haze fade it
-       into the sky. Boxes inside a white box keep their borders. The console keeps crisp borders. */
-    main :is(section, article, form, details, div, a, li).bg-white:not(.bg-white *):is(.rounded-xl, .rounded-2xl, [class*="rounded-["]),
+    /* cloudy edges on every page (public, supplier and the staff console): an outer white box has no grey outline;
+       layers of white haze fade it into the sky. Boxes inside a white box keep their borders; buttons and pills are left alone. */
+    main :is(section.bg-white, article.bg-white, details.bg-white, form.bg-white, .bg-white.border,
+             .bg-white:is(.rounded-xl, .rounded-2xl, [class*="rounded-["])):not(.bg-white *):not(button, input, select, textarea, .rounded-full, .rounded-md),
     main ol.rounded-xl.border {
       border: 0 !important; border-radius: 22px !important; --tw-ring-shadow: 0 0 #0000;
       box-shadow: 0 0 6px 3px rgba(255,255,255,.95), 0 0 22px 10px rgba(255,255,255,.7), 0 0 52px 24px rgba(255,255,255,.35) !important;
@@ -255,7 +255,6 @@
     main ol.rounded-xl.border { background: #fff !important; }
     @media (min-width: 640px) { main ol.rounded-xl.border > li + li { box-shadow: -1px 0 0 #EDF0F4; } }
   </style>
-  {% endif %}
   {% macro seal(size=32, light=false) -%}
     <svg width="{{ size }}" height="{{ size }}" viewBox="0 0 32 32" aria-hidden="true" class="shrink-0">
       <rect width="32" height="32" rx="8" fill="#0071E3"/>
@@ -268,7 +267,7 @@
     <a href="/" title="Home" aria-label="Mamoni Vendor Onboarding, home" class="brand-word shrink-0">
       <svg viewBox="0 0 170 64" width="118" height="44" aria-hidden="true">
         <defs><linearGradient id="bw-{{ key }}" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stop-color="#A6F0BD"/><stop offset=".45" stop-color="#34C759"/><stop offset="1" stop-color="#1A8F43"/></linearGradient></defs>
+          <stop offset="0" stop-color="#3EDE70"/><stop offset=".45" stop-color="#248B3E"/><stop offset="1" stop-color="#12642F"/></linearGradient></defs>
         <text x="85" y="47" text-anchor="middle" class="bw-text" fill="url(#bw-{{ key }})" stroke="url(#bw-{{ key }})"><tspan class="bw-cap">M</tspan>amoni</text>
         <text x="84.6" y="46.4" text-anchor="middle" class="bw-text bw-rim" fill="none" stroke="#fff"><tspan class="bw-cap">M</tspan>amoni</text>
       </svg>
