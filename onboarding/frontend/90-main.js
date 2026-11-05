@@ -69,6 +69,7 @@ document.addEventListener('click', e => {
   if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || a.target || a.hasAttribute('download')) return;
   const url = new URL(a.href, location.href);
   if (url.origin !== location.origin || !route(url.pathname)) return;
+  if (url.pathname === location.pathname && url.search === location.search && url.hash) return;   // a jump within the page
   e.preventDefault();
   navigate(url.href);
 });

@@ -1453,8 +1453,14 @@ async def vendor_directory(request: Request, q: str = "", status: str = "", risk
         return dict(rows=rows, full=full)
 
 
-@router.get("/vendors/{vendor_key}", response_class=HTMLResponse)
-async def vendor_profile(request: Request, vendor_key: str):
+@router.get("/vendors/{vendor_key}")
+async def vendor_profile_page(vendor_key: str):
+    """Drawn by the browser app from GET /api/v1/vendors/{id}."""
+    from onboarding.appshell import app_shell
+    return app_shell()
+
+
+async def vendor_profile(request: Request, vendor_key: str) -> dict:
     """Vendor 360: who the vendor is, what proves it, who it's connected to, what's risky and what to do next."""
     async with read_sessions()() as s:
         actor = await _actor(request, s)
@@ -1551,11 +1557,11 @@ async def vendor_profile(request: Request, vendor_key: str):
                                 why=x["next"][1], detail="", evidence=[], who=["Finance"] if x["status"] in ("Approved for payment", "Payment in progress", "Payment on hold") else ["Procurement or Finance"],
                                 href=f"/bills/{x['b'].id}", kind="invoice"))
         nba = [a for a in nba if a["kind"] != "none"] or nba
-        return await render(request, s, "vendor360.html", v=v, apps=apps, idents=r["idents"], facts=facts, conns=conns, risks=risks, doubts=doubts,
-                            invoices=invoices, pos=r3["pos"], documents=documents, pay=pay, msum=msum, BL=BL,
-                            evidence=evidence, actions=r["actions"] if full else [], nba=nba, full=full, vendors_by_pk=vendors_by_pk,
-                            lay=V360.layout(v, r["my_edges"], conns) if full else None, my_edges=r["my_edges"] if full else [],
-                            snaps={rid: (ok, rec) for rid, ok, rec in r["snaps"]}, full_bank=full_bank, V360=V360)
+        return dict(v=v, apps=apps, idents=r["idents"], facts=facts, conns=conns, risks=risks, doubts=doubts,
+                    invoices=invoices, pos=r3["pos"], documents=documents, pay=pay, msum=msum,
+                    evidence=evidence, actions=r["actions"] if full else [], nba=nba, full=full, vendors_by_pk=vendors_by_pk,
+                    lay=V360.layout(v, r["my_edges"], conns) if full else None, my_edges=r["my_edges"] if full else [],
+                    snaps={rid: (ok, rec) for rid, ok, rec in r["snaps"]}, full_bank=full_bank)
 
 
 @router.post("/runs/{run_id}/simulate", response_class=HTMLResponse)

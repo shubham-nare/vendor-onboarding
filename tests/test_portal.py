@@ -186,7 +186,7 @@ def flows(tmp_path_factory):
             staff.cookies.set("actor", "3")
             out["vendor_dir"] = (await staff.get("/api/v1/vendors")).text
             vnd = next(v["id"] for v in json.loads(out["vendor_dir"])["vendors"] if v["name"].startswith("Kesari"))
-            out["kesari_360"] = (await staff.get(f"/vendors/{vnd}")).text
+            out["kesari_360"] = (await staff.get(f"/api/v1/vendors/{vnd}")).text
             out["vendor_dir_unpaid"] = (await staff.get("/api/v1/vendors?inv=needs_review")).text
 
             # bank-account change request: the vendor asks, Finance (only) approves after an independent check
@@ -215,7 +215,7 @@ def flows(tmp_path_factory):
             out["documents_bills"] = (await staff.get("/api/v1/documents?kind=invoice&show=all")).json()
             for path in ("/review", "/applications", "/relationships", "/audit?entity=change_request"):
                 out[path] = await staff.get(path.replace("/audit", "/api/v1/history"))
-            out["kesari_360_after_change"] = (await staff.get(f"/vendors/{vnd}")).text
+            out["kesari_360_after_change"] = (await staff.get(f"/api/v1/vendors/{vnd}")).text
 
             # who sees what: Priya (1) is named on the bills, Rahul (2) isn't, Arjun (3) reviews, Kavita (4) is Finance
             sha = re.search(r'href="/files/([0-9a-f]+)"', out["newbank_page"]).group(1)
@@ -400,11 +400,11 @@ def test_payables_pages_and_delivery_recording(flows):
 
 
 def test_vendor_360_is_the_supplier_record(flows):
-    page = flows["kesari_360"]
-    for text in ("Invoices and payments", "KFS/2026-27/0207", "UTR HDFC261103000417", "Supplier master", "Payment eligibility", "Documents",
-                 "Cancelled cheque", "Blocked for investigation"):
-        assert text in page or text.lower() in page.lower(), text
-    assert "Investigate before anything is paid" in page          # the blocked duplicate leads the next actions
+    page, v = flows["kesari_360"], json.loads(flows["kesari_360"])           # GET /api/v1/vendors/{id}
+    for text in ("KFS/2026-27/0207", "UTR HDFC261103000417", "Supplier master", "Payment eligibility", "Cancelled cheque", "Blocked for investigation"):
+        assert text.lower() in page.lower(), text
+    assert v["invoices"]["show"] and v["invoices"]["rows"] and v["documents"]
+    assert "Investigate before anything is paid" in v["next"][0]["title"]    # the blocked duplicate leads the next actions
     assert "Kesari" in flows["vendor_dir"] and ('"eligible"' in flows["vendor_dir"] or '"blocked"' in flows["vendor_dir"])
     assert "Kesari" in flows["vendor_dir_unpaid"]
 
@@ -422,21 +422,20 @@ def test_bank_change_needs_finance_and_an_independent_check(flows):
 
 
 def test_new_bank_account_does_not_inherit_the_old_level(flows):
-    page = flows["kesari_360_after_change"]
-    facts = page.split("Evidence and fact history", 1)[1].split("Relationships", 1)[0]
-    assert "7766" in facts and "change request" in facts and "Not confirmed at source" in facts
-    bank = facts.split("Bank account", 1)[1][:1500]
-    assert "A1" in bank and "7766" in bank      # the current bank fact is the new account, at its own (lower) level
+    v = json.loads(flows["kesari_360_after_change"])
+    bank = next(f for f in v["facts"] if f["label"] == "Bank account")
+    assert "7766" in bank["value"] and bank["where"] == "change request" and "Not confirmed at source" in (bank["note"] or "")
+    assert bank["level"] == "A1"      # the current bank fact is the new account, at its own (lower) level
 
 
 
 def test_vendor_360_reads_as_a_product(flows):
     """Supplier record and latest application are separate cards; known files and registration bills say what they are."""
-    page = flows["kesari_360_after_change"]
-    assert "Supplier master" in page and "Latest application" in page and "Payment eligibility" in page
+    page, v = flows["kesari_360_after_change"], json.loads(flows["kesari_360_after_change"])
+    assert [c["label"] for c in v["cards"]][:3] == ["Supplier master", "Payment eligibility", "Latest application"]
     assert "demo specimen" not in page and "fictional" not in page.lower()
-    if "Onboarding bill" in page:
-        assert "not a payable invoice" in page
+    if any(d["registration_bill"] for d in v["documents"]):
+        assert "not as payable invoices" in APP_JS
 
 
 def test_old_development_wording_is_not_shown_for_known_files():
@@ -511,7 +510,7 @@ def test_documents_page_lists_every_upload(flows):
 def test_pending_reminder_feed_and_house_style(flows):
     assert flows["pending_anon"] == 401                                          # signed out: the API says so
     assert isinstance(flows["pending"]["count"], int) and len(flows["pending"]["items"]) <= 4
-    page = flows["kesari_360"]                                                    # a page still drawn by the server
+    page = flows["newbank_page"]                                                  # a page still drawn by the server
     assert 'id="pending-note"' in page and "/api/v1/console/pending" in page     # reminder on other pages
     assert "path === '/console'" in APP_JS                                        # ... not on Home, which already lists them
     assert "/static/app.css" in page and "-apple-system" in APP_CSS and "Verdana" not in APP_CSS and "#F5F5F7" in APP_CSS

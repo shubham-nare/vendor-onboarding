@@ -2,6 +2,7 @@
 relationships, risk flags, decision snapshots, Vendor 360 pages and access rules. Throwaway SQLite database."""
 
 import asyncio
+import json
 import os
 import re
 from pathlib import Path
@@ -14,6 +15,10 @@ pytestmark = pytest.mark.skipif(not CACHE.exists() or not any(CACHE.iterdir()), 
 
 KEYS = ["happy_nilgiri", "wrongdoc_tejas", "wrongdoc_tejas_resubmit", "borrowed_gstin_kaveri", "shared_bank_rangoli", "proprietor_shinde",
         "unsolicited_nilgiri"]
+
+from pathlib import Path as _Path  # noqa: E402
+
+APP_JS = (_Path(__file__).resolve().parent.parent / "onboarding" / "static" / "app.js").read_text(encoding="utf-8")
 
 
 @pytest.fixture(scope="module")
@@ -103,17 +108,17 @@ def intel(tmp_path_factory):
             rangoli, deccan = out["vendor_of"]["shared_bank_rangoli"][0], out["deccan"].vendor_id
             c.cookies.set("actor", str(emp["maker"]))
             out["dir"] = (await c.get("/api/v1/vendors")).text
-            out["rangoli_page"] = (await c.get(f"/vendors/{rangoli}")).text
-            out["deccan_page"] = (await c.get(f"/vendors/{deccan}")).text
+            out["rangoli_page"] = (await c.get(f"/api/v1/vendors/{rangoli}")).text
+            out["deccan_page"] = (await c.get(f"/api/v1/vendors/{deccan}")).text
             out["dash"] = (await c.get("/api/v1/console/home")).text
             out["run_page"] = (await c.get(f"/runs/{parents['shared_bank_rangoli']}")).text
-            out["missing"] = (await c.get("/vendors/VND-9999")).status_code
+            out["missing"] = (await c.get("/api/v1/vendors/VND-9999")).status_code
             out["accounts"] = (await c.get("/supplier-accounts")).status_code
             c.cookies.set("actor", str(emp["Priya Nair"]))          # didn't request Rangoli
-            out["priya_rangoli"] = (await c.get(f"/vendors/{rangoli}")).status_code
+            out["priya_rangoli"] = (await c.get(f"/api/v1/vendors/{rangoli}")).status_code
             out["priya_dir"] = (await c.get("/api/v1/vendors")).text
             c.cookies.set("actor", str(emp["Rahul Desai"]))         # requested Rangoli
-            out["rahul_rangoli"] = (await c.get(f"/vendors/{rangoli}")).text
+            out["rahul_rangoli"] = (await c.get(f"/api/v1/vendors/{rangoli}")).text
             # counterfactuals: same rules, a copy of the saved input, nothing real touched
             real = (Run, RuleResult, RunFact, Message, HumanAction, RiskEvent, EvidenceItem, DecisionSnapshot, Application, VendorApplication)
             async def real_counts():
@@ -184,10 +189,12 @@ def test_shared_bank_account_is_a_relationship_not_a_merge(intel):
     flags = [r for r in intel["risks"] if r[0] == "R-RISK-02"]
     assert flags and flags[0][3] == rangoli_pk and flags[0][4] == deccan.id
     assert flags[0][5] and flags[0][6]                                     # a reviewer action and evidence provenance
-    page = intel["rangoli_page"]
-    assert "Shared bank account" in page and "Deccan Office Supplies" in page and "Needs a reviewer (1)" in page
-    assert "In doubt despite its level" in page                            # a good evidence level never hides an open conflict
-    assert "Verify who owns the shared bank account" in page
+    v = json.loads(intel["rangoli_page"])                                  # GET /api/v1/vendors/{id}
+    shared = [i["what"] for c in v["connections"] for i in c["shared"]]
+    assert "Shared bank account" in shared and any(c["vendor"]["name"].startswith("Deccan Office Supplies") for c in v["connections"])
+    assert sum(c["actionable"] for c in v["connections"]) == 1             # needs a reviewer: exactly one
+    assert any(f["doubts"] for f in v["facts"])                            # a good evidence level never hides an open conflict
+    assert any("Verify who owns the shared bank account" in a["title"] for a in v["next"])
 
 
 def test_identity_conflict_is_unresolved_and_flagged(intel):
@@ -227,23 +234,26 @@ def test_sensitive_identifiers_are_hmacd_and_encrypted(intel):
 
 
 def test_registry_sources_are_labelled(intel):
-    page = intel["rangoli_page"]
-    assert "Registry" in page and "SIMULATED" not in page
+    v = json.loads(intel["rangoli_page"])
+    bases = {f["basis"] for f in v["facts"]} | {e["basis"] for e in v["evidence"]}
+    assert "simulated" in bases and "SIMULATED" not in intel["rangoli_page"] and "Registry" in APP_JS   # shown as "Registry"
 
 
 def test_pages_and_navigation(intel):
     assert "Rangoli Print House" in intel["dir"] and "Deccan Office Supplies" in intel["dir"]
     assert '"todo"' in intel["dash"] and "Open vendor profile" in intel["run_page"]
     assert intel["missing"] == 404 and intel["accounts"] == 200
-    assert "What to do next" in intel["rangoli_page"] and "Who:" in intel["rangoli_page"]
-    assert "On record (vendor master)" in intel["deccan_page"] and "Rangoli Print House" in intel["deccan_page"]   # seen from the other side too
+    v = json.loads(intel["rangoli_page"])
+    assert v["next"] and any(a["who"] or a["nobody"] for a in v["next"])    # what to do next, and who can do it
+    d = json.loads(intel["deccan_page"])
+    assert d["status_label"] == "On record (vendor master)" and any(c["vendor"]["name"].startswith("Rangoli Print House") for c in d["connections"])
 
 
 def test_requesters_see_only_their_vendors_and_less(intel):
     assert intel["priya_rangoli"] == 403
     assert "Rangoli" not in intel["priya_dir"]
-    rahul = intel["rahul_rangoli"]
-    assert "Relationships" not in rahul and "Evidence register" not in rahul
+    rahul = json.loads(intel["rahul_rangoli"])
+    assert rahul["full"] is False and "connections" not in rahul and "evidence" not in rahul and "facts" not in rahul
 
 
 def test_human_decisions_close_flags_and_activate(intel):
