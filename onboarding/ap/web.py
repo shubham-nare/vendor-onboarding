@@ -6,7 +6,7 @@ from __future__ import annotations
 from collections import defaultdict
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 
 from onboarding import access
@@ -18,7 +18,7 @@ from onboarding.intel.models import Vendor
 from onboarding.models import Employee, VendorBill, VendorMaster, now
 from onboarding.pipeline import read_sessions, sessions
 from onboarding.rules import money
-from onboarding.web import ROLE_LABEL, _actor, _all, _employees, _reads, render
+from onboarding.web import ROLE_LABEL, _actor, _all, _employees, _reads
 
 router = APIRouter()
 STATUS_ORDER = ["Blocked for investigation", "Needs internal review", "Matched and ready for approval", "Approved for payment", "Payment on hold",
@@ -149,18 +149,30 @@ async def purchase_orders_data(request: Request, q: str = "") -> dict:
         return dict(rows=rows, emps=emps)
 
 
-@router.get("/purchase-orders/new", response_class=HTMLResponse)
-async def po_new(request: Request):
+@router.get("/purchase-orders/new")
+async def po_new():
+    """Drawn by the browser app from GET /api/v1/purchase-orders/options."""
+    from onboarding.appshell import app_shell
+    return app_shell()
+
+
+async def po_options(request: Request) -> dict:
+    """What a new order can be raised against: active vendors and the employees (reviewers and Finance only)."""
     async with read_sessions()() as s:
         actor = await _actor(request, s)
         access.require_full(actor, "Purchase orders")
         masters = (await s.execute(select(VendorMaster).where(VendorMaster.status == "Active").order_by(VendorMaster.legal_name))).scalars().all()
-        return await render(request, s, "ap_po_new.html", masters=masters, emps=await _employees(s), error="")
+        return dict(masters=masters, emps=await _employees(s))
 
 
 @router.post("/purchase-orders/new")
 async def po_create(request: Request):
-    form = await request.form()
+    pid = await po_create_core(request, await request.form())
+    return RedirectResponse(f"/purchase-orders/{pid}", status_code=303)
+
+
+async def po_create_core(request: Request, form) -> int:
+    """Raise a purchase order from a form or a JSON body (same field names). Returns its id."""
     async with sessions()() as s:
         actor = await _actor(request, s)
         access.require_full(actor, "Purchase orders")
@@ -198,12 +210,18 @@ async def po_create(request: Request):
                actor_label=f"{actor.name} ({ROLE_LABEL.get(actor.role, actor.role)})", vendor_pk=vendor_pk,
                detail={"vendor": vm.vendor_id, "lines": len(lines)})
         await s.commit()
-        pid = po.id
-    return RedirectResponse(f"/purchase-orders/{pid}", status_code=303)
+        return po.id
 
 
-@router.get("/purchase-orders/{po_id}", response_class=HTMLResponse)
-async def po_detail(request: Request, po_id: int):
+@router.get("/purchase-orders/{po_id}")
+async def po_detail_page(po_id: int):
+    """Drawn by the browser app from GET /api/v1/purchase-orders/{id}."""
+    from onboarding.appshell import app_shell
+    return app_shell()
+
+
+async def po_detail(request: Request, po_id: int) -> dict:
+    """One order: lines, what was delivered, invoices against it and its history (reviewers, Finance, its requester)."""
     async with read_sessions()() as s:
         actor = await _actor(request, s)
         found = await _po_bundle(s, {po_id})
@@ -218,13 +236,17 @@ async def po_detail(request: Request, po_id: int):
         audit = [e for e in (await s.execute(select(AuditEvent).where(AuditEvent.entity.in_(("purchase_order", "receipt"))).order_by(AuditEvent.id))).scalars()
                  if (e.entity == "purchase_order" and e.entity_id == str(po_id)) or (e.entity == "receipt" and e.entity_label.endswith(po.po_number))]
         emps = {e.id: e for e in await _employees(s)}
-        return await render(request, s, "ap_po.html", d=d, po=d["po"], vendor=vendor, emps=emps, audit=audit, B=B)
+        return dict(d=d, vendor=vendor, emps=emps, audit=audit)
 
 
 @router.post("/purchase-orders/{po_id}/receipts")
 async def po_receipt(request: Request, po_id: int):
-    """Record what was delivered (goods receipt) or performed (service confirmation)."""
-    form = await request.form()
+    await po_receipt_core(request, po_id, await request.form())
+    return RedirectResponse(f"/purchase-orders/{po_id}", status_code=303)
+
+
+async def po_receipt_core(request: Request, po_id: int, form) -> None:
+    """Record what was delivered (goods receipt) or performed (service confirmation), from a form or a JSON body."""
     async with sessions()() as s:
         actor = await _actor(request, s)
         if not actor:
@@ -258,7 +280,6 @@ async def po_receipt(request: Request, po_id: int):
                actor_label=f"{actor.name} ({ROLE_LABEL.get(actor.role, actor.role)})", vendor_pk=po.vendor_pk,
                detail={"po": po.po_number, "quantities": {l.description[:40]: q for l, q in qtys if q}})
         await s.commit()
-    return RedirectResponse(f"/purchase-orders/{po_id}", status_code=303)
 
 
 @router.get("/audit")

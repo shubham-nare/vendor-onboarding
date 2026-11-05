@@ -1,19 +1,35 @@
 /* Start-up and moving between screens. Screens built in the app (App.views) open without reloading the page;
-   any other link is an ordinary page load. The address bar, filters (?status=...) and the Back button work as usual. */
+   any other link is an ordinary page load. The address bar, filters (?status=...) and the Back button work as usual.
+   A screen's key is its path, or a pattern with :names for the parts that vary (e.g. '/runs/:id'). */
 
 let leaveView = null;
 
+// which screen draws this path, and the values of its :names
+function route(path) {
+  if (App.views[path]) return { screen: App.views[path], params: {} };
+  for (const [pattern, screen] of Object.entries(App.views)) {
+    if (!pattern.includes(':')) continue;
+    const names = [];
+    const re = new RegExp('^' + pattern.replace(/:([a-z_]+)/g, (_, n) => { names.push(n); return '([^/]+)'; }) + '$');
+    const m = path.match(re);
+    if (m) return { screen, params: Object.fromEntries(names.map((n, i) => [n, decodeURIComponent(m[i + 1])])) };
+  }
+  return null;
+}
+
 async function show(path) {
-  const view = qs('#view'), screen = App.views[path];
-  if (!screen) { location.href = path + location.search + location.hash; return; }
+  const view = qs('#view'), found = route(path);
+  if (!found) { location.href = path + location.search + location.hash; return; }
   if (leaveView) { leaveView(); leaveView = null; }
-  document.title = `${screen.title} · Mamoni Vendor Onboarding`;
+  const { screen, params } = found;
+  document.title = `${typeof screen.title === 'function' ? screen.title(params) : screen.title} · Mamoni Vendor Onboarding`;
   qsa('a.side-link, #mainnav a').forEach(a => {
     if (isOn(a.getAttribute('href'), path)) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
   });
   view.setAttribute('aria-busy', 'true');
   try {
-    leaveView = (await screen.render(view)) || null;
+    leaveView = (await screen.render(view, params)) || null;
+    if (location.hash) qs(location.hash.replace(/[^#\w-]/g, ''), view)?.scrollIntoView();
   } catch (e) {
     if (e.status === 401) return;
     view.innerHTML = `<div class="max-w-lg mx-auto mt-16 text-center"><h1 class="text-[28px]">${e.status === 403 ? "You can't open this" : e.status === 404 ? 'Not found' : "Couldn't load this"}</h1>
@@ -26,14 +42,17 @@ async function show(path) {
 }
 
 // open a link: inside the app when it is an app screen, otherwise a normal page load
-function navigate(href) {
+function navigate(href, { replace = false } = {}) {
   const url = new URL(href, location.href);
-  if (url.origin !== location.origin || !App.views[url.pathname]) { location.href = url.href; return; }
+  if (url.origin !== location.origin || !route(url.pathname)) { location.href = url.href; return; }
   const target = url.pathname + url.search + url.hash;
-  if (target !== location.pathname + location.search + location.hash) history.pushState({}, '', target);
+  if (target !== location.pathname + location.search + location.hash) history[replace ? 'replaceState' : 'pushState']({}, '', target);
   show(url.pathname);
-  scrollTo(0, 0);
+  if (!url.hash) scrollTo(0, 0);
 }
+
+// the same screen again, with fresh data (after an action on it)
+const reload = () => show(location.pathname);
 
 async function boot() {
   const root = qs('#app');
@@ -49,7 +68,7 @@ document.addEventListener('click', e => {
   const a = e.target.closest('a[href]');
   if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || a.target || a.hasAttribute('download')) return;
   const url = new URL(a.href, location.href);
-  if (url.origin !== location.origin || !App.views[url.pathname]) return;
+  if (url.origin !== location.origin || !route(url.pathname)) return;
   e.preventDefault();
   navigate(url.href);
 });

@@ -168,9 +168,22 @@ def flows(tmp_path_factory):
             po3 = re.search(r'href="/purchase-orders/(\d+)"', out["over_page"]).group(1)
             staff.cookies.set("actor", "1")                      # Priya, the requester on the order, records the third shift
             out["receipt"] = (await staff.post(f"/purchase-orders/{po3}/receipts", data={"kind": "service", "qty_x": ""} |
-                                               {k: "1" for k in re.findall(r'name="(qty_\d+)"', (await staff.get(f"/purchase-orders/{po3}")).text)})).status_code
+                                               {f"qty_{ln['id']}": "1" for ln in (await staff.get(f"/api/v1/purchase-orders/{po3}")).json()["lines"]})).status_code
             staff.cookies.set("actor", "3")
-            out["po3_page"] = (await staff.get(f"/purchase-orders/{po3}")).text
+            out["po3_page"] = (await staff.get(f"/api/v1/purchase-orders/{po3}")).text
+            # a new order and its delivery, through the API
+            opts = (await staff.get("/api/v1/purchase-orders/options")).json()
+            new_po = dict(po_number="PO-2026-0999", vendor_id=opts["vendors"][0]["id"], cost_centre="PL2-TEST", requester_id=1,
+                          lines=[dict(description="Test service", quantity=2, unit="job", unit_price=1000, tax_rate=18)])
+            out["po_api"] = (await staff.post("/api/v1/purchase-orders", json=new_po)).json()
+            out["po_api_dup"] = await staff.post("/api/v1/purchase-orders", json=new_po)
+            line = (await staff.get(f"/api/v1/purchase-orders/{out['po_api']['id']}")).json()["lines"][0]["id"]
+            staff.cookies.set("actor", "2")                      # Rahul is not the requester on it
+            out["po_api_rahul"] = await staff.post(f"/api/v1/purchase-orders/{out['po_api']['id']}/deliveries", json={"quantities": {str(line): 1}})
+            staff.cookies.set("actor", "1")                      # Priya is
+            out["po_api_priya"] = await staff.post(f"/api/v1/purchase-orders/{out['po_api']['id']}/deliveries", json={"quantities": {str(line): 2}})
+            out["po_api_after"] = (await staff.get(f"/api/v1/purchase-orders/{out['po_api']['id']}")).json()
+            staff.cookies.set("actor", "3")
             out["vendor_dir"] = (await staff.get("/api/v1/vendors")).text
             vnd = next(v["id"] for v in json.loads(out["vendor_dir"])["vendors"] if v["name"].startswith("Kesari"))
             out["kesari_360"] = (await staff.get(f"/vendors/{vnd}")).text
@@ -569,3 +582,13 @@ def test_applications_is_a_main_tab_with_its_own_count(flows):
     assert "apps" in fin and fin["apps"] <= fin["count"]
     waiting = [a for a in apps["applications"] if a["waiting"]]
     assert len(waiting) == fin["apps"] and apps["applications"][:len(waiting)] == waiting       # waiting ones first
+
+
+
+def test_orders_through_the_api(flows):
+    assert flows["po_api"]["next"].startswith("/purchase-orders/")
+    assert flows["po_api_dup"].status_code == 409 and "already exists" in flows["po_api_dup"].json()["error"]
+    assert flows["po_api_rahul"].status_code == 403
+    assert flows["po_api_priya"].status_code == 200
+    after = flows["po_api_after"]
+    assert after["lines"][0]["delivered"] == 2 and after["totals"]["order"] == 2360 and len(after["deliveries"]) == 1
