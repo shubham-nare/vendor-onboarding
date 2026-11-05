@@ -8,15 +8,16 @@ same role rules as the pages. One module per area:
   console.py      Home and the menu counts
   registrations.py applications, review queue, change requests, pre-qualified suppliers, invites
   payables.py     invoices
-  vendors.py      vendor directory
+  vendors.py      vendor directory, history, relationships, supplier accounts
+  admin.py        system health, follow-ups now, reset (passcode)
   common.py       ApiError, staff_or_401, and how people, dates and to-do items are shown
 """
 
 from fastapi import APIRouter
 
-from onboarding.api import console, payables, registrations, session, vendors
+from onboarding.api import admin, console, payables, registrations, session, vendors
 from onboarding.api.common import ApiError, error_response  # noqa: F401  (registered in main.py)
 
 router = APIRouter(prefix="/api/v1")
-for _module in (session, console, registrations, payables, vendors):
+for _module in (session, console, registrations, payables, vendors, admin):
     router.include_router(_module.router)

@@ -38,6 +38,8 @@ def api(tmp_path_factory):
             out["act"] = await c.post("/api/v1/session/actor", json={"employee_id": priya["id"]})
             out["home as priya"] = (await c.get("/api/v1/console/home")).json()
             out["act bad"] = await c.post("/api/v1/session/actor", json={"employee_id": "x"})
+            out["reset default"] = await c.post("/api/v1/system/reset", json={"passcode": "change-me"})
+            out["system"] = await c.get("/api/v1/system")
             from onboarding import auth
             kept = c.cookies.get(auth.COMPANY_COOKIE)                        # someone copied the cookie before log-out
             out["logout"] = await c.post("/api/v1/session/logout")
@@ -79,6 +81,12 @@ def test_session_and_home(api):
     assert home["open_invites"] == 6 and home["scenarios"] and isinstance(home["todo"], list)
     assert api["home as priya"]["requester"] is True and api["home as priya"]["actor"]["first_name"] == "Priya"
     assert api["act bad"].status_code == 422 and "employee_id" in api["act bad"].json()["error"]
+
+
+def test_reset_is_off_with_the_default_passcode(api):
+    r = api["reset default"]
+    assert r.status_code == 403 and "ADMIN_PASSCODE" in r.json()["error"]
+    assert any(c["name"].startswith("Database") for c in api["system"].json()["checks"])
 
 
 def test_the_app_shell_has_no_inline_script_and_a_strict_policy(api):

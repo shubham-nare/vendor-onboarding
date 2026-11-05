@@ -1272,8 +1272,15 @@ async def assumptions(request: Request):
         return await render(request, s, "assumptions.html", access_matrix=access.MATRIX)
 
 
-@router.get("/system", response_class=HTMLResponse)
-async def system(request: Request, done: str = "", r: int = 0, e: int = 0, w: int = 0):
+@router.get("/system")
+async def system_page():
+    """Drawn by the browser app from GET /api/v1/system."""
+    from onboarding.appshell import app_shell
+    return app_shell()
+
+
+async def system(request: Request) -> dict:
+    """Live health of everything the process depends on, and the follow-up job's state (reviewers and Finance only)."""
     st = get_settings()
     checks = []
     t = time.monotonic()
@@ -1299,7 +1306,7 @@ async def system(request: Request, done: str = "", r: int = 0, e: int = 0, w: in
         from onboarding.models import FollowUp
         last = (await s.execute(select(FollowUp).order_by(FollowUp.id.desc()).limit(1))).scalar()
         chasing = await followups.waiting(s)
-        return await render(request, s, "system.html", checks=checks, done=done, fu_result=dict(r=r, e=e, w=w), FU=followups, chasing=chasing, last_fu=last)
+        return dict(checks=checks, chasing=chasing, last_fu=last)
 
 
 @router.post("/system/followups")
@@ -1307,13 +1314,26 @@ async def followups_now(request: Request):
     """Run the follow-up job now (it also runs by itself every few hours)."""
     async with sessions()() as s:
         access.require_full(await _actor(request, s), "Running follow-ups")
-    from onboarding import followups
-    r = await followups.run_once()
+    r = await run_followups(request)
     return RedirectResponse(f"/system?done=followups&r={r['reminders']}&e={r['escalations']}&w={r['waiting']}", status_code=303)
+
+
+async def run_followups(request: Request) -> dict:
+    """Run the follow-up job now. Used by the form route and POST /api/v1/system/followups."""
+    async with sessions()() as s:
+        access.require_full(await _actor(request, s), "Running follow-ups")
+    from onboarding import followups
+    return await followups.run_once()
 
 
 @router.post("/system/reset")
 async def reset(request: Request, passcode: str = Form(...)):
+    await reset_data(request, passcode)
+    return RedirectResponse("/system?done=reset", status_code=303)
+
+
+async def reset_data(request: Request, passcode: str) -> None:
+    """Delete every run and reload the reference data. Needs a reviewer and the admin passcode."""
     async with sessions()() as s:
         access.require_full(await _actor(request, s), "Resetting the demo")
     code = get_settings().admin_passcode
@@ -1325,7 +1345,6 @@ async def reset(request: Request, passcode: str = Form(...)):
         raise HTTPException(409, "A run is in progress; try again in a minute.")
     from onboarding.seeding import seed
     await seed(reset=True, dispose=False)
-    return RedirectResponse("/system?done=reset", status_code=303)
 
 
 # --- Vendor Intelligence: vendor directory and Vendor 360 ------------------------------------------------------------

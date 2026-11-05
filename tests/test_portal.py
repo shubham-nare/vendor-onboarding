@@ -86,7 +86,7 @@ def flows(tmp_path_factory):
             out["console_page"] = (await staff.get("/api/v1/console/home")).text
             out["pending"] = (await staff.get("/api/v1/console/pending")).json()
             out["pending_anon"] = (await other.get("/api/v1/console/pending")).status_code
-            out["applications_page"] = (await staff.get("/system")).text   # a staff page still drawn by the server
+            out["applications_page"] = (await staff.get("/assumptions")).text   # a staff page still drawn by the server
             r = await other.post("/vendor/login", data={"email": DEMO_VENDOR["email"], "password": DEMO_PASSWORD})
             out["demo_vendor"] = (r.status_code, (await other.get("/vendor")).text)
             out["vendor_cookie_on_console"] = (await other.get("/console")).headers.get("location", "")

@@ -199,7 +199,7 @@ def flows(tmp_path_factory):
             out["console_chasing"] = (await c.get("/api/v1/console/home")).text
 
             for p in ("/", "/outbox", "/assumptions", "/system", "/check?sample=genuine", "/invites"):
-                out[p] = await c.get("/api/v1/outbox" if p == "/outbox" else p)
+                out[p] = await c.get("/api/v1" + p if p in ("/outbox", "/system") else p)
             for who in ("maker", "checker", "Rahul Desai"):  # each person's "Needs your action" queue
                 await as_(who)
                 out[f"todo_{who}"] = json.dumps((await c.get("/api/v1/console/home")).json()["todo"])   # the Waiting for you list
@@ -393,7 +393,7 @@ def test_vendors_who_go_quiet_are_chased(flows):
     assert "reminder" in outbox and "hasn&#39;t replied" in outbox or "hasn't replied" in outbox
     home = json.loads(flows["console_chasing"])                      # Home's Waiting on vendors, from the API
     assert home["chasing"] and any(w["tone"] == "red" and w["escalated"] for w in home["chasing"])
-    assert "Vendor follow-ups" in flows["/system"].text
+    assert flows["/system"].json()["followups"]["waiting"] >= 0 and "Vendor follow-ups" in APP_JS
 
 
 def test_registering_for_future_work_puts_a_vendor_on_the_prequalified_list(flows):
