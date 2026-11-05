@@ -19,6 +19,7 @@ HI = {
     "Submit a bill": "बिल जमा करें",
     "Track your registration": "अपना पंजीकरण देखें",
     "Log in": "लॉग इन करें",
+    "Vendor log in": "विक्रेता लॉग इन",
     "Employee log in": "कर्मचारी लॉग इन",
     "View demo": "डेमो देखें",
     "Contact us": "संपर्क करें",
