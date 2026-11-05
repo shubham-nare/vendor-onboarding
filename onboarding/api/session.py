@@ -43,7 +43,8 @@ async def act_as(request: Request, body: ActAs):
         if not any(e.id == body.employee_id for e in await _employees(s)):
             raise ApiError(400, "No such employee.")
     resp = JSONResponse({"ok": True})
-    resp.set_cookie("actor", str(body.employee_id), max_age=60 * 60 * 24 * 30, samesite="lax")
+    staff_id = auth.read_session(request.cookies.get(auth.COMPANY_COOKIE), purpose="company")
+    resp.set_cookie(auth.ACTOR_COOKIE, auth.make_actor(body.employee_id, staff_id), max_age=auth.MAX_AGE, httponly=True, samesite="lax")
     return resp
 
 

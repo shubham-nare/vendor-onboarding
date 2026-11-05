@@ -124,19 +124,11 @@ async def staff_member(request: Request, s) -> Employee | None:
 async def _actor(request: Request, s) -> Employee | None:
     """Who is using the console: the logged-in employee. Only with DEMO_TOOLS on (development) can the person
     switcher act as someone else."""
-    if not get_settings().demo_tools:
-        return await staff_member(request, s)
-    emps = await _employees(s)
-    if not emps:
+    staff_id, actor_id = auth.actor_ids(request)   # the switcher's cookie is signed and bound to this login
+    if not actor_id:
         return None
-    try:
-        wanted = int(request.cookies.get("actor", "0"))
-    except ValueError:
-        wanted = 0
-    if not wanted:
-        me = await staff_member(request, s)
-        wanted = me.id if me else 0
-    return next((e for e in emps if e.id == wanted), None) or next((e for e in emps if e.role == "maker"), emps[0])
+    emps = await _employees(s)
+    return next((e for e in emps if e.id == actor_id), None) or next((e for e in emps if e.id == staff_id), None)
 
 
 async def render(request: Request, s, name: str, **ctx) -> HTMLResponse:
@@ -191,6 +183,12 @@ async def claim(s, acct: VendorAccount, *, invite: Invite | None = None, app: Ap
     link = VendorLink(account_id=acct.id, invite_id=invite.id if invite else None, application_id=app.id if app else None)
     s.add(link)
     return link
+
+
+def demo_key(demo: str) -> str:
+    """The `demo` form/query value, honoured only in demo mode and only when it names a known scenario. It pre-fills
+    the form and supplies sample files; it never replaces the vendor login or the invite token check."""
+    return demo if demo and get_settings().demo_tools and demo in demo_catalog() else ""
 
 
 def demo_catalog() -> dict[str, dict]:
@@ -454,7 +452,8 @@ async def act_as(request: Request, employee_id: int = Form(...)):
         raise HTTPException(404, "Not found")
     back = request.headers.get("referer") or "/console"
     resp = RedirectResponse(back, status_code=303)
-    resp.set_cookie("actor", str(employee_id), max_age=60 * 60 * 24 * 30, samesite="lax")
+    staff_id = auth.read_session(request.cookies.get(auth.COMPANY_COOKIE), purpose="company")
+    resp.set_cookie(auth.ACTOR_COOKIE, auth.make_actor(employee_id, staff_id), max_age=auth.MAX_AGE, httponly=True, samesite="lax")
     return resp
 
 
@@ -565,10 +564,11 @@ async def _resolve_employee(s, text: str) -> Employee | None:
 
 @router.get("/apply/{token}", response_class=HTMLResponse)
 async def apply_form(request: Request, token: str, demo: str = ""):
+    demo = demo_key(demo)
     async with sessions()() as s:
         inv, bill, app = await _vendor_link(s, token)
         acct = await vendor_account(request, s)
-        if not acct and not demo and await _needs_login(s, app):
+        if not acct and await _needs_login(s, app):
             return login_redirect(f"/apply/{token}", register=app is None)
         if acct:
             await claim(s, acct, invite=inv, app=app)
@@ -589,8 +589,9 @@ async def apply_form(request: Request, token: str, demo: str = ""):
 
 @router.get("/apply", response_class=HTMLResponse)
 async def apply_unsolicited(request: Request, demo: str = ""):
+    demo = demo_key(demo)
     async with sessions()() as s:
-        if not demo and not await vendor_account(request, s):
+        if not await vendor_account(request, s):
             return login_redirect("/apply")
         return await render(request, s, "apply.html", invite=None, bill=None, token="", app=None, prev=None, prev_docs={}, message=None, **_form_context(demo, {}))
 
@@ -598,9 +599,10 @@ async def apply_unsolicited(request: Request, demo: str = ""):
 @router.get("/bill", response_class=HTMLResponse)
 async def bill_form(request: Request, demo: str = ""):
     """Self-registration for a vendor who already did work for us and wants to be paid."""
+    demo = demo_key(demo)
     async with sessions()() as s:
         acct = await vendor_account(request, s)
-        if not demo and not acct:
+        if not acct:
             return login_redirect("/bill", register=True)
         start = {"bill_mode": True}
         if acct:
@@ -652,13 +654,13 @@ async def _collect_form(request: Request) -> tuple[dict, dict[str, tuple[str, by
     for slot in SLOTS:
         up = data.get(slot)
         if up is not None and hasattr(up, "read") and getattr(up, "filename", ""):
-            raw = await up.read()
+            raw = await security.read_upload(up, SLOT_TITLE[slot])   # stops reading past 10 MB
             if len(raw) > MAX_BYTES:
                 raise HTTPException(413, f"{SLOT_TITLE[slot]} is larger than 10 MB. Please upload a smaller file.")
             if raw:
                 security.require_document(raw, f"The {SLOT_TITLE[slot].lower()}")
                 files[slot] = (up.filename, raw)
-    return f, files, str(data.get("demo") or "")
+    return f, files, demo_key(str(data.get("demo") or ""))
 
 
 def _fill_files(files: dict, demo: str, prev_files: dict[str, tuple[str, bytes]], form: dict) -> dict:
@@ -763,7 +765,10 @@ async def apply_read(request: Request, slot: str = Form(...), file: UploadFile =
         raise HTTPException(400, "Unknown document")
     if get_settings().rate_limits and not security.READ_PER_IP.allow(security.client_ip(request)):
         return JSONResponse({"ok": False, "message": security.READ_PER_IP.message}, status_code=429)
-    raw = await file.read()
+    try:
+        raw = await security.read_upload(file)   # stops reading past 10 MB
+    except HTTPException:
+        return JSONResponse({"ok": False, "message": "Please upload a PDF, JPG or PNG under 10 MB."}, status_code=413)
     if not raw or len(raw) > MAX_BYTES:
         return JSONResponse({"ok": False, "message": "Please upload a PDF, JPG or PNG under 10 MB."}, status_code=400)
     mime = security.sniff(raw) or ""                      # what the file really is, not what its name says
@@ -784,7 +789,7 @@ async def apply_submit(request: Request, token: str):
     async with sessions()() as s:
         inv, bill, app = await _vendor_link(s, token)
         acct = await vendor_account(request, s)
-        if not acct and not demo and await _needs_login(s, app):
+        if not acct and await _needs_login(s, app):
             return login_redirect(f"/apply/{token}")
         if acct:
             await claim(s, acct, invite=inv, app=app)
@@ -828,7 +833,7 @@ async def bill_submit(request: Request):
     files = _fill_files(files, demo, {}, form)
     async with sessions()() as s:
         acct = await vendor_account(request, s)
-        if not acct and not demo:
+        if not acct:
             return login_redirect("/bill")
         run = await create_run(s, form, files, invite_token=None)
         emp = await _resolve_employee(s, form.get("bill_engaged_by", ""))
@@ -848,7 +853,7 @@ async def apply_unsolicited_submit(request: Request):
     files = _fill_files(files, demo, {}, form)
     async with sessions()() as s:
         acct = await vendor_account(request, s)
-        if not acct and not demo:
+        if not acct:
             return login_redirect("/apply")
         run = await create_run(s, form, files, invite_token=None)
         ref = (await s.get(Application, run.application_id)).ref
@@ -1254,7 +1259,7 @@ async def check_files(request: Request, files: list, with_sample: bool) -> list[
         results.append(_check_one(PUBLIC_SAMPLE.name, PUBLIC_SAMPLE.read_bytes(), "genuine sample"))
     for up in files:
         if up is not None and getattr(up, "filename", ""):
-            raw = await up.read()
+            raw = await security.read_upload(up)   # stops reading past 10 MB
             if len(raw) > MAX_BYTES:
                 raise HTTPException(413, "File larger than 10 MB")
             security.require_document(raw)
@@ -1333,15 +1338,20 @@ async def reset_data(request: Request, passcode: str) -> None:
     """Delete every run and reload the reference data. Needs a reviewer and the admin passcode."""
     async with sessions()() as s:
         access.require_full(await _actor(request, s), "Resetting the demo")
-    code = get_settings().admin_passcode
-    if code in ("", "change-me"):   # the default would let any reviewer wipe the data
-        raise HTTPException(403, "Reset is switched off: set ADMIN_PASSCODE on the server first.")
-    if not secrets.compare_digest(passcode, code):
+    from onboarding.config import reset_passcode
+    code = reset_passcode()   # no default: blank, short or "change-me" means reset is off
+    if not code:
+        raise HTTPException(403, "Reset is switched off: set ADMIN_PASSCODE (at least 12 characters) on the server first.")
+    who = security.client_ip(request)
+    if not security.RESET_WRONG.allow_more(who):
+        raise HTTPException(429, security.RESET_WRONG.message)
+    if not secrets.compare_digest(passcode.encode(), code.encode()):
+        security.RESET_WRONG.allow(who)   # count the wrong try
         raise HTTPException(403, "Wrong passcode")
     if runner.busy():
         raise HTTPException(409, "A run is in progress; try again in a minute.")
     from onboarding.seeding import seed
-    await seed(reset=True, dispose=False)
+    await seed(reset=True, dispose=False, allow_remote=True)   # the passcode is the confirmation here
 
 
 # --- Vendor Intelligence: vendor directory and Vendor 360 ------------------------------------------------------------

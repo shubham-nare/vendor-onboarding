@@ -10,11 +10,14 @@ from fastapi import HTTPException, Request
 
 # --- the visitor's address ------------------------------------------------------------------------------------
 def client_ip(request: Request) -> str:
-    """Render (and most hosts) put the visitor's address first in X-Forwarded-For; without it, the socket address.
-    Using only the socket address would put every visitor behind the proxy into one bucket."""
-    fwd = request.headers.get("x-forwarded-for", "")
-    if fwd:
-        return fwd.split(",")[0].strip()[:64]
+    """The visitor's address. Each trusted proxy (TRUSTED_PROXY_HOPS, Render: 1) APPENDS the address it saw to
+    X-Forwarded-For, so the right-most entries are the trustworthy ones; anything to their left was sent by the client
+    and can be made up (it used to reset the rate limits). With no proxy hops, or no header, the socket address."""
+    from onboarding.config import get_settings
+    hops = get_settings().trusted_proxy_hops
+    fwd = [p.strip() for p in request.headers.get("x-forwarded-for", "").split(",") if p.strip()]
+    if hops > 0 and fwd:
+        return fwd[-min(hops, len(fwd))][:64]
     return request.client.host if request.client else "?"
 
 
@@ -44,6 +47,11 @@ class RateLimit:
         self._hits[key] = recent + [now]
         return True
 
+    def allow_more(self, key: str) -> bool:
+        """True while this key is under the limit, without counting an event."""
+        now = time.monotonic()
+        return len([t for t in self._hits.get(key, []) if now - t < self.window]) < self.limit
+
     def check(self, key: str) -> None:
         """Raise 429 with a plain message when the limit is reached."""
         from onboarding.config import get_settings
@@ -62,7 +70,9 @@ SIGNUP_PER_IP = RateLimit(10, 3600, "Too many accounts created from your network
 SUBMIT_PER_IP = RateLimit(12, 3600, "Too many submissions from your network in the last hour. Please try again later.")
 READ_PER_IP = RateLimit(20, 600, "Too many files read in a short time. Please type the details below.")
 CONTACT_PER_IP = RateLimit(5, 3600, "Too many messages from your network. Please try again in an hour.")
-ALL_LIMITS = [LOGIN_PER_ACCOUNT, LOGIN_PER_IP, SIGNUP_PER_IP, SUBMIT_PER_IP, READ_PER_IP, CONTACT_PER_IP]
+# wrong reset passcodes: always on (not switched off with RATE_LIMITS), so the passcode can't be guessed
+RESET_WRONG = RateLimit(5, 3600, "Too many wrong passcodes. Reset is locked for an hour.")
+ALL_LIMITS = [LOGIN_PER_ACCOUNT, LOGIN_PER_IP, SIGNUP_PER_IP, SUBMIT_PER_IP, READ_PER_IP, CONTACT_PER_IP, RESET_WRONG]
 
 
 def check_login(request: Request, email: str) -> None:
@@ -74,6 +84,76 @@ def check_login(request: Request, email: str) -> None:
 # --- uploads ----------------------------------------------------------------------------------------------------
 ALLOWED_MIME = {"application/pdf", "image/jpeg", "image/png"}
 UPLOAD_HELP = "Please upload a PDF, JPG or PNG file."
+MAX_FILE_BYTES = 10 * 1024 * 1024
+_CHUNK = 256 * 1024
+
+
+async def read_upload(up, what: str = "The file", limit: int = MAX_FILE_BYTES) -> bytes:
+    """An uploaded file's bytes, read in chunks and abandoned with 413 as soon as it passes `limit`, so a huge file
+    is never held in memory whole."""
+    buf = bytearray()
+    while chunk := await up.read(_CHUNK):
+        buf += chunk
+        if len(buf) > limit:
+            raise HTTPException(413, f"{what} is larger than {limit // (1024 * 1024)} MB. Please upload a smaller file.")
+    return bytes(buf)
+
+
+class BodyLimit:
+    """ASGI middleware: refuse a request body over the limit with 413, before the app parses it. Checks the declared
+    Content-Length first, then counts the bytes actually received (a chunked upload has no length)."""
+
+    def __init__(self, app, limit: int | None = None):
+        self.app, self.limit = app, limit
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        from onboarding.config import get_settings
+        limit = self.limit or get_settings().max_request_bytes
+        declared = dict(scope.get("headers") or []).get(b"content-length")
+        if declared and declared.isdigit() and int(declared) > limit:
+            return await _too_large(send, limit)
+        seen, started = 0, False
+
+        async def counted_receive():
+            nonlocal seen
+            msg = await receive()
+            if msg["type"] == "http.request":
+                seen += len(msg.get("body", b""))
+                if seen > limit:
+                    raise BodyTooLarge()
+            return msg
+
+        async def tracking_send(msg):
+            nonlocal started
+            started = started or msg["type"] == "http.response.start"
+            await send(msg)
+
+        try:
+            await self.app(scope, counted_receive, tracking_send)
+        except BaseException as e:   # may arrive wrapped in an exception group by the middlewares in between
+            if not _contains(e, BodyTooLarge):
+                raise
+            if not started:
+                await _too_large(send, limit)
+
+
+class BodyTooLarge(Exception):
+    pass
+
+
+def _contains(e: BaseException, kind: type) -> bool:
+    if isinstance(e, kind):
+        return True
+    return isinstance(e, BaseExceptionGroup) and any(_contains(x, kind) for x in e.exceptions)
+
+
+async def _too_large(send, limit: int) -> None:
+    import json
+    body = json.dumps({"error": f"The upload is too large (over {limit // (1024 * 1024)} MB in total)."}).encode()
+    await send({"type": "http.response.start", "status": 413, "headers": [(b"content-type", b"application/json"), (b"content-length", str(len(body)).encode())]})
+    await send({"type": "http.response.body", "body": body})
 
 
 def sniff(raw: bytes) -> str | None:

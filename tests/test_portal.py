@@ -12,9 +12,11 @@ from pathlib import Path
 
 import pytest
 
+from tests.helpers import set_actor
+
 ROOT = Path(__file__).resolve().parent.parent
 CACHE = ROOT / "fixtures" / "read_cache"   # committed saved readings of the fictional demo documents
-pytestmark = pytest.mark.skipif(not CACHE.exists() or not any(CACHE.iterdir()), reason="committed saved AI readings (fixtures/read_cache/) missing")
+assert CACHE.exists() and any(CACHE.iterdir()), "fixtures/read_cache/ (committed saved AI readings) is missing: a broken checkout, not a skip"
 PW = "Ks@9" + secrets.token_urlsafe(10)   # meets the policy: upper, lower, number, symbol, 8+
 
 from pathlib import Path  # noqa: E402
@@ -111,7 +113,7 @@ def flows(tmp_path_factory):
             await drain()
             out["home_reg"] = (await v.get("/vendor")).text
             for actor, action in ((1, "confirm_engagement"), (3, "activate")):
-                staff.cookies.set("actor", str(actor))
+                set_actor(staff, str(actor))
                 await staff.post(f"/runs/{run_id}/action", data={"action": action})
             out["home_active"] = (await v.get("/vendor")).text
 
@@ -133,7 +135,7 @@ def flows(tmp_path_factory):
             # Priya engaged them (can't approve); Arjun approves; only Finance releases; payment needs its bank reference
             for actor, action, comment in ((1, "approve_payment", ""), (3, "approve_payment", ""), (3, "release_payment", ""),
                                            (4, "release_payment", ""), (4, "mark_paid", ""), (4, "mark_paid", "UTR HDFC261103000417")):
-                staff.cookies.set("actor", str(actor))
+                set_actor(staff, str(actor))
                 codes.append((await staff.post(f"/bills/{bid}/action", data={"action": action, "comment": comment})).status_code)
             out["clean_codes"] = codes
             out["clean_paid_page"] = (await staff.get(f"/bills/{bid}")).text
@@ -141,19 +143,19 @@ def flows(tmp_path_factory):
             bid2 = await bill("newbank")
             out["newbank_page"] = (await staff.get(f"/bills/{bid2}")).text
             out["newbank_vendor"] = (await v.get(f"/vendor/bills/{bid2}")).text
-            staff.cookies.set("actor", "1")
+            set_actor(staff, "1")
             await staff.post(f"/bills/{bid2}/action", data={"action": "confirm_engagement"})
-            staff.cookies.set("actor", "3")
+            set_actor(staff, "3")
             out["newbank_maker"] = (await staff.post(f"/bills/{bid2}/action", data={"action": "approve_payment"})).status_code
-            staff.cookies.set("actor", "4")
+            set_actor(staff, "4")
             out["newbank_checker"] = (await staff.post(f"/bills/{bid2}/action", data={"action": "reject_bill", "comment": "Bank change not confirmed by phone."})).status_code
 
             # three-way match journeys
             bid3 = await bill("overbilled")                     # bills 3 shifts; delivery recorded for 2
-            staff.cookies.set("actor", "3")
+            set_actor(staff, "3")
             out["over_page"] = (await staff.get(f"/bills/{bid3}")).text
             out["over_vendor"] = (await v.get(f"/vendor/bills/{bid3}")).text
-            staff.cookies.set("actor", "4")                      # Finance approves over the discrepancy, with a reason ...
+            set_actor(staff, "4")                      # Finance approves over the discrepancy, with a reason ...
             out["over_override_no_reason"] = (await staff.post(f"/bills/{bid3}/action", data={"action": "approve_payment"})).status_code
             out["over_override"] = (await staff.post(f"/bills/{bid3}/action", data={"action": "approve_payment", "comment": "Third shift done on 3 Nov, confirmed by phone"})).status_code
             out["over_release_self"] = (await staff.post(f"/bills/{bid3}/action", data={"action": "release_payment"})).status_code   # ... but can't release it
@@ -166,10 +168,10 @@ def flows(tmp_path_factory):
             for path in ("/invoices?sort=amount_desc", "/invoices?sort=amount_asc", "/invoices?amin=41000", "/invoices?amax=30000", "/invoices?vendor=V-9999"):
                 out["filter " + path] = (await staff.get("/api/v1" + path)).json()
             po3 = re.search(r'href="/purchase-orders/(\d+)"', out["over_page"]).group(1)
-            staff.cookies.set("actor", "1")                      # Priya, the requester on the order, records the third shift
+            set_actor(staff, "1")                      # Priya, the requester on the order, records the third shift
             out["receipt"] = (await staff.post(f"/purchase-orders/{po3}/receipts", data={"kind": "service", "qty_x": ""} |
                                                {f"qty_{ln['id']}": "1" for ln in (await staff.get(f"/api/v1/purchase-orders/{po3}")).json()["lines"]})).status_code
-            staff.cookies.set("actor", "3")
+            set_actor(staff, "3")
             out["po3_page"] = (await staff.get(f"/api/v1/purchase-orders/{po3}")).text
             # a new order and its delivery, through the API
             opts = (await staff.get("/api/v1/purchase-orders/options")).json()
@@ -178,12 +180,12 @@ def flows(tmp_path_factory):
             out["po_api"] = (await staff.post("/api/v1/purchase-orders", json=new_po)).json()
             out["po_api_dup"] = await staff.post("/api/v1/purchase-orders", json=new_po)
             line = (await staff.get(f"/api/v1/purchase-orders/{out['po_api']['id']}")).json()["lines"][0]["id"]
-            staff.cookies.set("actor", "2")                      # Rahul is not the requester on it
+            set_actor(staff, "2")                      # Rahul is not the requester on it
             out["po_api_rahul"] = await staff.post(f"/api/v1/purchase-orders/{out['po_api']['id']}/deliveries", json={"quantities": {str(line): 1}})
-            staff.cookies.set("actor", "1")                      # Priya is
+            set_actor(staff, "1")                      # Priya is
             out["po_api_priya"] = await staff.post(f"/api/v1/purchase-orders/{out['po_api']['id']}/deliveries", json={"quantities": {str(line): 2}})
             out["po_api_after"] = (await staff.get(f"/api/v1/purchase-orders/{out['po_api']['id']}")).json()
-            staff.cookies.set("actor", "3")
+            set_actor(staff, "3")
             out["vendor_dir"] = (await staff.get("/api/v1/vendors")).text
             vnd = next(v["id"] for v in json.loads(out["vendor_dir"])["vendors"] if v["name"].startswith("Kesari"))
             out["kesari_360"] = (await staff.get(f"/api/v1/vendors/{vnd}")).text
@@ -196,18 +198,18 @@ def flows(tmp_path_factory):
                              files={"proof": ("new_cheque.pdf", b"%PDF-1.4 test cheque", "application/pdf")})
             out["cr_post"] = r.status_code
             out["profile_after"] = (await v.get("/vendor/profile")).text
-            staff.cookies.set("actor", "3")
+            set_actor(staff, "3")
             out["review_maker"] = (await staff.get("/api/v1/review")).json()
             out["pending_maker_cr"] = (await staff.get("/api/v1/console/pending")).json()
-            staff.cookies.set("actor", "4")
+            set_actor(staff, "4")
             out["review_finance"] = (await staff.get("/api/v1/review")).json()
             out["pending_finance_cr"] = (await staff.get("/api/v1/console/pending")).json()
             out["applications_finance"] = (await staff.get("/api/v1/applications")).json()
             cr_id = out["review_finance"]["changes"][0]["id"]
-            staff.cookies.set("actor", "3")
+            set_actor(staff, "3")
             out["cr_maker"] = (await staff.post(f"/change-requests/{cr_id}/decide", data={"decision": "approve", "note": "looks fine"})).status_code
             out["cr_maker_api"] = await staff.post(f"/api/v1/change-requests/{cr_id}/decision", json={"decision": "approve", "note": "looks fine"})
-            staff.cookies.set("actor", "4")
+            set_actor(staff, "4")
             out["cr_nonote"] = (await staff.post(f"/change-requests/{cr_id}/decide", data={"decision": "approve", "note": ""})).status_code
             out["cr_checker"] = (await staff.post(f"/change-requests/{cr_id}/decide", data={"decision": "approve", "note": "Called the number on record; Sneha confirmed"})).status_code
             out["profile_done"] = (await v.get("/vendor/profile")).text
@@ -221,31 +223,31 @@ def flows(tmp_path_factory):
             sha = re.search(r'href="/files/([0-9a-f]+)"', out["newbank_page"]).group(1)
             seen = {}
             for who in (1, 2, 3, 4):
-                staff.cookies.set("actor", str(who))
+                set_actor(staff, str(who))
                 seen[who] = dict(bills=(await staff.get("/api/v1/bills")).text, bill=await staff.get(f"/bills/{bid2}"), run=await staff.get(f"/runs/{run_id}"),
                                  events=(await staff.get(f"/runs/{run_id}/events")).status_code, file=(await staff.get(f"/files/{sha}")).status_code,
                                  outbox=(await staff.get("/api/v1/outbox")).status_code, console=(await staff.get("/api/v1/console/home")).text,
                                  vendors=(await staff.get("/api/v1/supplier-accounts")).text,
                                  accounts_status=(await staff.get("/api/v1/supplier-accounts")).status_code)
             out["seen"] = seen
-            staff.cookies.set("actor", "2")
+            set_actor(staff, "2")
             out["rahul_action"] = (await staff.post(f"/bills/{bid2}/action", data={"action": "confirm_engagement"})).status_code
-            staff.cookies.set("actor", "3")
+            set_actor(staff, "3")
             # tag a teammate: Arjun asks Rahul about the invoice; Rahul sees it, opens it, answers
             out["rahul_bill_before_tag"] = seen[2]["bill"].status_code
             out["tag"] = (await staff.post(f"/bills/{bid2}/tag", data={"to_employee_id": "2", "note": "Did the team ask Kesari for this extra cleaning?"})).status_code
             out["tag_self"] = (await staff.post(f"/bills/{bid2}/tag", data={"to_employee_id": "3", "note": "me"})).status_code
-            staff.cookies.set("actor", "2")
+            set_actor(staff, "2")
             out["rahul_console_tagged"] = (await staff.get("/api/v1/console/home")).text
             page = await staff.get(f"/bills/{bid2}")
             out["rahul_bill_tagged"] = page
             tag_id = re.search(r'/bills/\d+/tag/(\d+)/done', page.text).group(1)
-            staff.cookies.set("actor", "1")
+            set_actor(staff, "1")
             out["tag_wrong_person"] = (await staff.post(f"/bills/{bid2}/tag/{tag_id}/done", data={"reply": "x"})).status_code
-            staff.cookies.set("actor", "2")
+            set_actor(staff, "2")
             out["tag_done"] = (await staff.post(f"/bills/{bid2}/tag/{tag_id}/done", data={"reply": "Yes, I asked them on 2 Nov."})).status_code
             out["rahul_console_after"] = (await staff.get("/api/v1/console/home")).text
-            staff.cookies.set("actor", "3")
+            set_actor(staff, "3")
             out["bill_after_tag"] = (await staff.get(f"/bills/{bid2}")).text
 
             await other.post("/vendor/register", data={"company_name": "Someone Else", "contact_name": "A B", "email": "a@else.example.com", "password": PW})
