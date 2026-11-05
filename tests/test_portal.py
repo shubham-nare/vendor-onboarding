@@ -557,7 +557,8 @@ def test_review_badge_home_and_review_count_the_same_things(flows):
     assert len(rv["changes"]) + len(rv["invoices"]) + len(rv["apps"]) >= 1
     page = APP_JS
     assert 'id="invite-box"' in page and 'review-count' in page
-    assert "['/invites'" not in page                                             # Invites lives on Home, not in the menu
+    nav = page[page.index("const NAV"):page.index("const REVIEWER_ONLY")]
+    assert "'/invites'" not in nav                                              # Invites lives on Home, not in the menu
 
 
 def test_applications_is_a_main_tab_with_its_own_count(flows):

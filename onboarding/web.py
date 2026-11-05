@@ -459,8 +459,15 @@ async def act_as(request: Request, employee_id: int = Form(...)):
 
 
 # --- invites (sponsor) -------------------------------------------------------------------------
-@router.get("/invites", response_class=HTMLResponse)
-async def invites(request: Request, created: str = ""):
+@router.get("/invites")
+async def invites_page():
+    """Drawn by the browser app from GET /api/v1/invites."""
+    from onboarding.appshell import app_shell
+    return app_shell()
+
+
+async def invites(request: Request) -> dict:
+    """Recent invites this person may see (requesters: their own), with the application each one led to."""
     async with read_sessions()() as s:
         actor = await _actor(request, s)
         emps = {e.id: e for e in await _employees(s)}
@@ -470,12 +477,22 @@ async def invites(request: Request, created: str = ""):
         if not access.full_view(actor):
             rows = [i for i in rows if actor and i.sponsor_id == actor.id]
         apps = {a.invite_id: a for a in r["apps"]}
-        return await render(request, s, "invites.html", invites=rows, emps=emps, apps=apps, created=created, bands=SPEND_BANDS, high=HIGH_SPEND)
+        return dict(invites=rows, emps=emps, apps=apps, actor=actor)
 
 
 @router.post("/invites")
 async def create_invite(request: Request, company_name: str = Form(...), contact_email: str = Form(...), business_reason: str = Form(...),
                         spend_category: str = Form(...), spend_band: str = Form(...)):
+    token = await create_invite_core(request, company_name, contact_email, business_reason, spend_category, spend_band)
+    return RedirectResponse(f"/invites?created={token}", status_code=303)
+
+
+async def create_invite_core(request: Request, company_name: str, contact_email: str, business_reason: str, spend_category: str, spend_band: str) -> str:
+    """A requester invites a vendor. Returns the invite token. Used by the form route and POST /api/v1/invites."""
+    if spend_band not in SPEND_BANDS:
+        raise HTTPException(400, "Choose the expected yearly spend.")
+    if not company_name.strip() or "@" not in contact_email or not spend_category.strip():
+        raise HTTPException(400, "Fill in the vendor's name, contact email and spend category.")
     async with sessions()() as s:
         actor = await _actor(request, s)
         if not actor or actor.role != "sponsor":
@@ -487,7 +504,7 @@ async def create_invite(request: Request, company_name: str = Form(...), contact
                      high_spend=spend_band in HIGH_SPEND, expires_at=now() + timedelta(days=14))
         s.add(inv)
         await s.commit()
-        return RedirectResponse(f"/invites?created={inv.token}", status_code=303)
+        return inv.token
 
 
 # --- vendor form ---------------------------------------------------------------------------------
@@ -657,8 +674,14 @@ def _fill_files(files: dict, demo: str, prev_files: dict[str, tuple[str, bytes]]
     return files
 
 
-@router.get("/prequalified", response_class=HTMLResponse)
-async def prequalified(request: Request, q: str = ""):
+@router.get("/prequalified")
+async def prequalified_page():
+    """Drawn by the browser app from GET /api/v1/prequalified."""
+    from onboarding.appshell import app_shell
+    return app_shell()
+
+
+async def prequalified(request: Request, q: str = "") -> list[dict]:
     """Suppliers who registered for future work and passed the checks. Not payable until an employee asks for one."""
     from onboarding.models import ReliabilityCheck
     async with read_sessions()() as s:
@@ -674,13 +697,19 @@ async def prequalified(request: Request, q: str = ""):
         rows = [dict(app=a, run=runs[a.id], form=(runs[a.id].form or {}) if runs[a.id] else {}, check=checks.get(a.id)) for a in apps]
         if q:
             rows = [x for x in rows if q.lower() in f"{x['app'].legal_name} {x['form'].get('supply_note', '')} {x['form'].get('city', '')} {x['form'].get('state', '')}".lower()]
-        return await render(request, s, "prequalified.html", rows=rows, q=q, bands=SPEND_BANDS)
+        return rows
 
 
 @router.post("/prequalified/{app_id}/request")
 async def prequalified_request(request: Request, app_id: int, business_reason: str = Form(""), spend_category: str = Form(""), spend_band: str = Form("")):
+    run_id = await prequalified_request_core(request, app_id, business_reason, spend_category, spend_band)
+    return RedirectResponse(f"/runs/{run_id}", status_code=303)
+
+
+async def prequalified_request_core(request: Request, app_id: int, business_reason: str, spend_category: str, spend_band: str) -> int:
     """A requester needs a pre-qualified supplier: that's the business need. The supplier is invited on the spot and
-    every check runs again on what they sent (bank, registries, documents), so nothing stale becomes payable."""
+    every check runs again on what they sent (bank, registries, documents), so nothing stale becomes payable.
+    Returns the new run's id. Used by the form route and POST /api/v1/prequalified/{id}/request."""
     async with sessions()() as s:
         actor = await _actor(request, s)
         if not actor or actor.role != "sponsor":
@@ -707,7 +736,7 @@ async def prequalified_request(request: Request, app_id: int, business_reason: s
         run = await create_run(s, f, files, invite_token=inv.token, parent_run_id=prev.id)
         await s.commit()
     runner.start(run.id)
-    return RedirectResponse(f"/runs/{run.id}", status_code=303)
+    return run.id
 
 
 @router.post("/runs/{run_id}/reliability")

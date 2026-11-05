@@ -269,3 +269,72 @@ async def vendors(request: Request, q: str = "", status: str = "", risk: str = "
                     "payment": r["pay"], "active_invoices": r["msum"]["active"], "awaiting_review": r["msum"]["awaiting_review"],
                     "approved_unpaid": r["msum"]["approved_unpaid"], "last_activity": _when(r["last"]), "next": r["next"] or None})
     return {"vendors": out, "full": full, "filters": {"q": q, "status": status, "risk": risk, "pay": pay, "inv": inv, "sort": sort}}
+
+
+# --- pre-qualified suppliers -----------------------------------------------------------------------------------------
+@router.get("/prequalified")
+async def prequalified(request: Request, q: str = ""):
+    """Registered for future work and checked; not payable until a requester asks for one."""
+    from onboarding.web import SPEND_BANDS, prequalified as pq_rows
+    async with read_sessions()() as s:
+        _, actor = await _staff_or_401(request, s)
+    rows = await pq_rows(request, q)
+    return {"suppliers": [{"id": x["app"].id, "ref": x["app"].ref, "name": x["app"].legal_name, "run_id": x["run"].id if x["run"] else None,
+                           "city": x["form"].get("city", ""), "state": x["form"].get("state", ""), "supplies": x["form"].get("supply_note", ""),
+                           "reliability": {"level": x["check"].level, "score": x["check"].score} if x["check"] else None} for x in rows],
+            "can_request": actor.role == "sponsor", "spend_bands": SPEND_BANDS, "q": q}
+
+
+class SupplierNeed(BaseModel):
+    business_reason: str
+    spend_category: str = ""
+    spend_band: str
+
+
+@router.post("/prequalified/{app_id}/request")
+async def need_supplier(request: Request, app_id: int, body: SupplierNeed):
+    """A requester needs this supplier: invite them and run every check again. Answers with the new application page."""
+    from onboarding.web import prequalified_request_core
+    async with read_sessions()() as s:
+        await _staff_or_401(request, s)
+    run_id = await prequalified_request_core(request, app_id, body.business_reason, body.spend_category, body.spend_band)
+    return {"ok": True, "run_id": run_id, "next": f"/runs/{run_id}"}
+
+
+# --- invites -----------------------------------------------------------------------------------------------------------
+@router.get("/invites")
+async def invites(request: Request):
+    """Recent invites (requesters see their own) and what is needed to send one."""
+    from onboarding.web import SPEND_BANDS, invites as invite_rows
+    async with read_sessions()() as s:
+        await _staff_or_401(request, s)
+    d = await invite_rows(request)
+    emps, apps, actor = d["emps"], d["apps"], d["actor"]
+    rows = []
+    for i in d["invites"]:
+        a = apps.get(i.id)
+        rows.append({"company": i.company_name, "email": i.contact_email, "requested_by": emps[i.sponsor_id].name if i.sponsor_id in emps else "",
+                     "reason": i.business_reason, "spend_band": i.spend_band, "high_spend": bool(i.high_spend),
+                     "application": {"status": a.current_status, "ref": a.ref} if a else None, "invite_status": i.status,
+                     "link": (f"/status/{i.token}" if a else (f"/apply/{i.token}" if not i.scenario_key else None)),
+                     "link_label": "vendor view" if a else "open link"})
+    return {"invites": rows, "can_invite": actor.role == "sponsor", "actor": _person(actor), "demo": get_settings().demo_tools,
+            "spend_bands": SPEND_BANDS}
+
+
+class NewInvite(BaseModel):
+    company_name: str
+    contact_email: str
+    business_reason: str
+    spend_category: str
+    spend_band: str
+
+
+@router.post("/invites")
+async def create_invite(request: Request, body: NewInvite):
+    """A requester invites a vendor; answers with the registration link to send them."""
+    from onboarding.web import create_invite_core
+    async with read_sessions()() as s:
+        await _staff_or_401(request, s)
+    token = await create_invite_core(request, body.company_name, body.contact_email, body.business_reason, body.spend_category, body.spend_band)
+    return {"ok": True, "token": token, "link": f"/apply/{token}"}

@@ -14,6 +14,10 @@ ROOT = Path(__file__).resolve().parent.parent
 CACHE = ROOT / ".read_cache"
 pytestmark = pytest.mark.skipif(not CACHE.exists() or not any(CACHE.iterdir()), reason="no cached AI readings")
 
+from pathlib import Path as _Path  # noqa: E402
+
+APP_JS = (_Path(__file__).resolve().parent.parent / "onboarding" / "static" / "app.js").read_text(encoding="utf-8")
+
 
 def _form_data(form: dict, demo: str) -> dict:
     d = {k: ("" if v is None else str(v)) for k, v in form.items() if not isinstance(v, bool)}
@@ -133,7 +137,11 @@ def flows(tmp_path_factory):
             await as_("Rahul Desai")
             r = await c.post("/invites", data=inv)
             out["sponsor_invite"] = (r.status_code, r.headers.get("location", ""))
-            out["invites_page"] = (await c.get(r.headers["location"])).text
+            out["invites_page"] = (await c.get("/api/v1/invites")).text
+            await as_("maker")
+            out["maker_invite_api"] = await c.post("/api/v1/invites", json=inv)
+            await as_("Rahul Desai")
+            out["sponsor_invite_api"] = (await c.post("/api/v1/invites", json=inv | {"company_name": "Acme Bolts LLP"})).json()
 
             # bill-first: a vendor who already did work registers with its bill (no invite)
             async def submit_bill(key):
@@ -210,10 +218,10 @@ def flows(tmp_path_factory):
                 out["pq_master"] = (await s.execute(select(VendorMaster).where(VendorMaster.source_run_id == rid))).scalars().first()
                 out["pq_msg"] = (await s.execute(select(Message).where(Message.run_id == rid, Message.audience == "vendor"))).scalars().all()[-1].subject
                 out["pq_checks"] = (await s.execute(select(ReliabilityCheck).where(ReliabilityCheck.run_id == rid))).scalars().all()
-            out["pq_list_checker"] = (await c.get("/prequalified")).text
+            out["pq_list_checker"] = (await c.get("/api/v1/prequalified")).json()
             await as_("Rahul Desai")
-            out["pq_list_requester"] = (await c.get("/prequalified")).text
-            app_id = int(re.search(r"/prequalified/(\d+)/request", out["pq_list_requester"]).group(1))
+            out["pq_list_requester"] = (await c.get("/api/v1/prequalified")).json()
+            app_id = out["pq_list_requester"]["suppliers"][0]["id"]
             out["pq_short_reason"] = (await c.post(f"/prequalified/{app_id}/request", data={"business_reason": "boxes", "spend_band": web.SPEND_BANDS[0]})).status_code
             r = await c.post(f"/prequalified/{app_id}/request", data={"business_reason": "Export cartons for the new line from January",
                                                                       "spend_category": "Packaging", "spend_band": web.SPEND_BANDS[0]})
@@ -297,6 +305,8 @@ def test_only_sponsors_send_invites(flows):
     assert flows["maker_invite"] == 403
     code, loc = flows["sponsor_invite"]
     assert code == 303 and "created=" in loc and "Acme Fasteners LLP" in flows["invites_page"]
+    assert flows["maker_invite_api"].status_code == 403 and "requester" in flows["maker_invite_api"].json()["error"]
+    assert flows["sponsor_invite_api"]["link"].startswith("/apply/")
 
 
 def test_other_pages_render(flows):
@@ -392,8 +402,9 @@ def test_registering_for_future_work_puts_a_vendor_on_the_prequalified_list(flow
     assert flows["pq_master"] is None                                  # not payable: no vendor ID, no bank account in the master
     assert "pre-qualified supplier list" in flows["pq_msg"]
     assert "pre-qualified supplier list" in html.unescape(flows["pq_run"])
-    assert "Corrugated boxes" in flows["pq_list_checker"] and "I need this supplier" not in flows["pq_list_checker"]   # reviewers don't request
-    assert "I need this supplier" in flows["pq_list_requester"]
+    pq = flows["pq_list_checker"]
+    assert any("Corrugated boxes" in x["supplies"] for x in pq["suppliers"]) and pq["can_request"] is False   # reviewers don't request
+    assert flows["pq_list_requester"]["can_request"] is True and "I need this supplier" in APP_JS
 
 
 def test_a_requester_needing_a_prequalified_supplier_runs_every_check_again(flows):
