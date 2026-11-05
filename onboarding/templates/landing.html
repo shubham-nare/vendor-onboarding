@@ -2,32 +2,12 @@
 {% from "_macros.html" import icon %}
 {% block title %}Welcome{% endblock %}
 {% block content %}
-{# the moving sky behind the home page: clouds drift, parcels ride the cables, everything leans a little toward the cursor #}
+{# the ropeway over the sky (the sky itself is in base.html): it hangs from the top bar and from the bottom of the cards #}
 <style>
-  .sky { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none;
-         background: linear-gradient(180deg, #CFE2FA 0%, #E2EEFC 38%, #EEF4FC 70%, #F5F7FB 100%); }
-  .sky-glow { position: absolute; inset: 0; background: radial-gradient(520px circle at var(--cx, 50%) var(--cy, 30%), rgba(255,255,255,.55), transparent 65%); transition: background .2s linear; }
-  .sky-layer { position: absolute; inset: -24px; transition: transform .9s cubic-bezier(.2,.7,.2,1); will-change: transform; }
-  .sky-far  { transform: translate(calc(var(--mx, 0) * -8px),  calc(var(--my, 0) * -5px)); }
-  .sky-near { transform: translate(calc(var(--mx, 0) * -20px), calc(var(--my, 0) * -12px)); }
-  .cloud { position: absolute; left: 0; border-radius: 999px; background: #fff; filter: blur(14px); opacity: .75;
-           animation: drift linear infinite; }
-  .cloud::before, .cloud::after { content: ""; position: absolute; border-radius: 999px; background: inherit; }
-  .cloud::before { width: 55%; height: 140%; left: 14%; top: -55%; }
-  .cloud::after  { width: 40%; height: 115%; right: 12%; top: -38%; }
-  @keyframes drift { from { transform: translateX(-30vw); } to { transform: translateX(130vw); } }
-  .sky svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-  @media (prefers-reduced-motion: reduce) { .cloud { animation: none; } .sky-layer, .sky-glow { transition: none; } }
+  .ropes { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+  .ropes svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 </style>
-<div class="sky" id="sky" aria-hidden="true">
-  <div class="sky-glow"></div>
-  <div class="sky-layer sky-far">
-    <div class="cloud" style="top: 9%;  width: 220px; height: 54px; animation-duration: 140s; animation-delay: -30s"></div>
-    <div class="cloud" style="top: 26%; width: 160px; height: 40px; animation-duration: 170s; animation-delay: -110s; opacity: .6"></div>
-    <div class="cloud" style="top: 58%; width: 260px; height: 60px; animation-duration: 190s; animation-delay: -70s; opacity: .55"></div>
-    <div class="cloud" style="top: 80%; width: 180px; height: 44px; animation-duration: 155s; animation-delay: -140s; opacity: .6"></div>
-  </div>
-  <div class="sky-layer sky-near">
+<div class="ropes" id="ropes" aria-hidden="true">
     <svg viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice">
       <defs>
         {# a parcel hanging from its trolley; the group is moved along a cable #}
@@ -49,14 +29,13 @@
       <g id="posts" fill="#fff" stroke="#8FB0D8" stroke-width="1.5"></g>
       <g id="parcels"></g>
     </svg>
-  </div>
   <p id="rope-tip" class="absolute bottom-5 left-1/2 -translate-x-1/2 text-[12.5px] text-[#5B7FAE] bg-white/70 rounded-full px-3 py-1 opacity-0 transition-opacity duration-700">Psst… grab a cable and pull it</p>
 </div>
 <script>
   /* The ropeway: cables sag between posts and parcels ride them. Grab a cable, pull, let go:
      it springs back past its rest line, the bounce runs into the next spans, and the parcels swing. */
   (() => {
-    const sky = document.getElementById('sky');
+    const sky = document.getElementById('ropes');
     if (!sky) return;
     const NS = 'http://www.w3.org/2000/svg';
     const svg = sky.querySelector('svg'), gCables = svg.querySelector('#cables'), gPosts = svg.querySelector('#posts'), gParcels = svg.querySelector('#parcels');
@@ -137,9 +116,10 @@
       const doors = document.getElementById('doors'), m = svg.getScreenCTM();
       if (!doors || !m) return;
       const yAt = py => new DOMPoint(0, py).matrixTransform(m.inverse()).y;
-      const under = yAt(doors.getBoundingClientRect().bottom + window.scrollY + 40);
+      const bar = document.querySelector('.pub-bar');
       const place = (c, y) => { c.y = y; c.postEls.forEach(el => el.setAttribute('cy', y)); c.items.forEach(it => { it.px = null; }); };
-      place(CABLES[1], Math.max(CABLES[1].base, under));
+      if (bar) place(CABLES[0], yAt(bar.getBoundingClientRect().bottom + window.scrollY));
+      place(CABLES[1], yAt(doors.getBoundingClientRect().bottom + window.scrollY));
       place(CABLES[2], Math.max(CABLES[2].base, CABLES[1].y + 120));
     };
     CABLES.forEach(c => { c.base = c.y; });
@@ -189,20 +169,6 @@
     };
     requestAnimationFrame(frame);
 
-    // clouds and cables lean a little toward the cursor; a soft glow follows it
-    if (calm) return;
-    let raf = 0, ev = null;
-    addEventListener('pointermove', e => {
-      ev = e;
-      if (raf) return;
-      raf = requestAnimationFrame(() => {
-        raf = 0;
-        sky.style.setProperty('--mx', (ev.clientX / innerWidth * 2 - 1).toFixed(3));
-        sky.style.setProperty('--my', (ev.clientY / innerHeight * 2 - 1).toFixed(3));
-        sky.style.setProperty('--cx', ev.clientX + 'px');
-        sky.style.setProperty('--cy', ev.clientY + 'px');
-      });
-    }, { passive: true });
   })();
 </script>
 <div class="reveal max-w-7xl mx-auto">

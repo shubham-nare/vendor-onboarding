@@ -190,9 +190,48 @@
     .review-count[hidden] { display: none; }
     /* the reminder in the bottom-right corner */
     #pending-note { position: fixed; right: 1rem; bottom: 1rem; z-index: 60; width: 22rem; max-width: calc(100vw - 2rem); border-radius: 18px; box-shadow: 0 12px 40px rgba(0,0,0,.14); overflow: hidden; }
+    /* the sky behind every page: clouds drift, a soft glow follows the cursor, the clouds lean toward it */
+    .sky { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none;
+           background: linear-gradient(180deg, #CFE2FA 0%, #E2EEFC 38%, #EEF4FC 70%, #F5F7FB 100%); }
+    .sky-glow { position: absolute; inset: 0; background: radial-gradient(520px circle at var(--cx, 50%) var(--cy, 30%), rgba(255,255,255,.55), transparent 65%); }
+    .sky-far { position: absolute; inset: -24px; transition: transform .9s cubic-bezier(.2,.7,.2,1); will-change: transform;
+               transform: translate(calc(var(--mx, 0) * -10px), calc(var(--my, 0) * -6px)); }
+    .cloud { position: absolute; left: 0; border-radius: 999px; background: #fff; filter: blur(14px); opacity: .75; animation: drift linear infinite; }
+    .cloud::before, .cloud::after { content: ""; position: absolute; border-radius: 999px; background: inherit; }
+    .cloud::before { width: 55%; height: 140%; left: 14%; top: -55%; }
+    .cloud::after  { width: 40%; height: 115%; right: 12%; top: -38%; }
+    @keyframes drift { from { transform: translateX(-30vw); } to { transform: translateX(130vw); } }
+    @media (prefers-reduced-motion: reduce) { .cloud { animation: none; } .sky-far { transition: none; } }
   </style>
 </head>
 <body class="min-h-screen">
+  <div class="sky" id="sky" aria-hidden="true">
+    <div class="sky-glow"></div>
+    <div class="sky-far">
+      <div class="cloud" style="top: 9%;  width: 220px; height: 54px; animation-duration: 140s; animation-delay: -30s"></div>
+      <div class="cloud" style="top: 26%; width: 160px; height: 40px; animation-duration: 170s; animation-delay: -110s; opacity: .6"></div>
+      <div class="cloud" style="top: 58%; width: 260px; height: 60px; animation-duration: 190s; animation-delay: -70s; opacity: .55"></div>
+      <div class="cloud" style="top: 80%; width: 180px; height: 44px; animation-duration: 155s; animation-delay: -140s; opacity: .6"></div>
+    </div>
+  </div>
+  <script>
+    (() => {
+      if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      const sky = document.getElementById('sky');
+      let raf = 0, ev = null;
+      addEventListener('pointermove', e => {
+        ev = e;
+        if (raf) return;
+        raf = requestAnimationFrame(() => {
+          raf = 0;
+          sky.style.setProperty('--mx', (ev.clientX / innerWidth * 2 - 1).toFixed(3));
+          sky.style.setProperty('--my', (ev.clientY / innerHeight * 2 - 1).toFixed(3));
+          sky.style.setProperty('--cx', ev.clientX + 'px');
+          sky.style.setProperty('--cy', ev.clientY + 'px');
+        });
+      }, { passive: true });
+    })();
+  </script>
   {% set landing = path == '/' or path.startswith('/company/') or path in ('/tour', '/contact', '/thanks') %}
   {% set vendor_page = path.startswith('/apply') or path.startswith('/status') or path == '/bill' or path.startswith('/bill?') or (path.startswith('/vendor') and not path.startswith('/vendors')) %}
   {% macro seal(size=32, light=false) -%}
