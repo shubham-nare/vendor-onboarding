@@ -85,7 +85,7 @@ def flows(tmp_path_factory):
             out["console_page"] = (await staff.get("/api/v1/console/home")).text
             out["pending"] = (await staff.get("/api/v1/console/pending")).json()
             out["pending_anon"] = (await other.get("/api/v1/console/pending")).status_code
-            out["applications_page"] = (await staff.get("/invoices")).text       # a staff page still drawn by the server
+            out["applications_page"] = (await staff.get("/purchase-orders")).text   # a staff page still drawn by the server
             r = await other.post("/vendor/login", data={"email": DEMO_VENDOR["email"], "password": DEMO_PASSWORD})
             out["demo_vendor"] = (r.status_code, (await other.get("/vendor")).text)
             out["vendor_cookie_on_console"] = (await other.get("/console")).headers.get("location", "")
@@ -160,10 +160,10 @@ def flows(tmp_path_factory):
             out["dup_page"] = (await staff.get(f"/bills/{bid4}")).text
             out["dup_vendor"] = (await v.get(f"/vendor/bills/{bid4}")).text
             out["review_clean"] = out.get("review_clean", "")
-            for path in ("/invoices", "/purchase-orders", "/audit", "/invoices?status=Paid"):
-                out[path] = await staff.get(path)
+            for path in ("/invoices", "/purchase-orders", "/audit", "/invoices?status=Paid"):   # invoices come from the API
+                out[path] = await staff.get(path.replace("/invoices", "/api/v1/invoices", 1))
             for path in ("/invoices?sort=amount_desc", "/invoices?sort=amount_asc", "/invoices?amin=41000", "/invoices?amax=30000", "/invoices?vendor=V-9999"):
-                out["filter " + path] = (await staff.get(path)).text
+                out["filter " + path] = (await staff.get("/api/v1" + path)).json()
             po3 = re.search(r'href="/purchase-orders/(\d+)"', out["over_page"]).group(1)
             staff.cookies.set("actor", "1")                      # Priya, the requester on the order, records the third shift
             out["receipt"] = (await staff.post(f"/purchase-orders/{po3}/receipts", data={"kind": "service", f"qty_x": ""} |
@@ -459,16 +459,15 @@ def test_the_vendor_is_emailed_when_a_decision_is_released(flows):
 
 
 def test_invoices_filter_by_amount_vendor_and_sort(flows):
-    def order(page):
-        import re as _re
-        return [m for m in _re.findall(r"KFS/2026-27/0\d{3}", page.split("<tbody", 1)[1])]
+    def order(d):
+        return [x["invoice_number"] for x in d["invoices"] if (x["invoice_number"] or "").startswith("KFS/2026-27/0")]
     desc, asc = order(flows["filter /invoices?sort=amount_desc"]), order(flows["filter /invoices?sort=amount_asc"])
     assert desc[0] == "KFS/2026-27/0219" and asc[0] == "KFS/2026-27/0211"          # 42,480 is the largest, 23,600 the smallest
     assert set(order(flows["filter /invoices?amin=41000"])) == {"KFS/2026-27/0219"}
     assert set(order(flows["filter /invoices?amax=30000"])) == {"KFS/2026-27/0211"}
-    assert "No invoices match" in flows["filter /invoices?vendor=V-9999"]
-    page = flows["filter /invoices?amin=41000"]
-    assert 'name="vendor"' in page and "Amount: high to low" in page and "Clear</a>" in page
+    assert flows["filter /invoices?vendor=V-9999"]["invoices"] == []
+    assert flows["filter /invoices?amin=41000"]["filters"]["amin"] == "41000"
+    assert 'name="vendor"' in APP_JS and "Amount: high to low" in APP_JS and "No invoices match" in APP_JS and "Clear</a>" in APP_JS
 
 
 def test_navigation_uses_short_names_and_help_replaces_sources(flows):

@@ -29,9 +29,15 @@ def _po_total(lines) -> float:
     return round(sum(l.quantity * l.unit_price * (1 + l.tax_rate / 100) for l in lines), 2)
 
 
-@router.get("/invoices", response_class=HTMLResponse)
-async def invoices(request: Request, status: str = "", q: str = "", vendor: str = "", amin: str = "", amax: str = "", sort: str = ""):
-    """Every invoice from active vendors, newest first, with its status, the amount and the specific next step."""
+@router.get("/invoices")
+async def invoices():
+    """Drawn by the browser app from GET /api/v1/invoices."""
+    from onboarding.appshell import app_shell
+    return app_shell()
+
+
+async def invoices_data(request: Request, status: str = "", q: str = "", vendor: str = "", amin: str = "", amax: str = "", sort: str = "") -> dict:
+    """Every invoice from active vendors, with its status, the amount and the specific next step (for the API)."""
     async with read_sessions()() as s:
         actor = await _actor(request, s)
         full = access.full_view(actor)
@@ -67,10 +73,7 @@ async def invoices(request: Request, status: str = "", q: str = "", vendor: str 
         orders = {"new": lambda x: -x["b"].id, "old": lambda x: x["b"].id, "amount_desc": lambda x: -x["amount"], "amount_asc": lambda x: x["amount"],
                   "vendor": lambda x: (x["name"].lower(), -x["b"].id)}
         rows.sort(key=orders.get(sort) or (lambda x: (STATUS_ORDER.index(x["status"]) if x["status"] in STATUS_ORDER else 99, -x["b"].id)))
-        params = {k: v for k, v in dict(q=q, vendor=vendor, amin=amin, amax=amax, sort=sort).items() if v}
-        return await render(request, s, "ap_invoices.html", rows=rows, counts=counts, sums=sums, status=status, q=q, full=full,
-                            STATUS_ORDER=STATUS_ORDER, B=B, vendors_seen=vendors_seen, f=dict(vendor=vendor, amin=amin, amax=amax, sort=sort),
-                            params=params, total=sum(x["amount"] for x in rows))
+        return dict(rows=rows, counts=counts, sums=sums, full=full, vendors_seen=vendors_seen, total=sum(x["amount"] for x in rows), actor=actor)
 
 
 MISMATCH = {"R-PO-04": "quantity", "R-PO-05": "unit price", "R-PO-06": "total", "R-PO-07": "GST rate",
