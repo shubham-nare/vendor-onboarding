@@ -76,11 +76,10 @@ def test_a_required_rule_that_does_not_apply_is_not_needed():
 
 
 # --- the approval invariant ---------------------------------------------------------------------------
-# CURRENT BEHAVIOUR, pinned on purpose: decision.py checks "every applicable required rule passed" with a bare
-# `assert`, so a required rule that did not pass but recorded no FAIL with a status-changing outcome crashes
-# decide() with AssertionError (the run is then marked failed by the runner). PHASE 3 WILL CHANGE THIS: decide()
-# should return PENDING_REVIEW with an internal-error card instead of raising. When that lands, replace the
-# pytest.raises below with assertions on that status and card. What must never change: such a run is NOT approved.
+# decide() never approves unless every applicable required rule PASSED. A required rule that did not pass but recorded
+# no FAIL with a status-changing outcome is a rule-table bug: the decision becomes PENDING_REVIEW with an "internal
+# error" Why card (reason code INTERNAL-INVARIANT) instead of raising. (Until phase 3 it was a bare `assert`, which
+# crashed the run.) What must never change: such a run is NOT approved.
 INVARIANT_CASES = [
     ("required rule skipped", r("R-XD-02", SKIPPED)),
     ("required rule failed with a non-status outcome", r("R-XD-02", FAIL, "WARN")),
@@ -91,5 +90,15 @@ INVARIANT_CASES = [
 @pytest.mark.parametrize("bad", [c[1] for c in INVARIANT_CASES], ids=[c[0] for c in INVARIANT_CASES])
 def test_approval_invariant_never_approves(bad):
     rules = [x for x in ALL_REQUIRED_PASS if x.rule_id != bad.rule_id] + [bad]
-    with pytest.raises(AssertionError, match="approval invariant broken"):
-        D.decide(rules, ctx(), "X")
+    d = D.decide(rules, ctx(), "X")     # never raises
+    assert d.status == D.PENDING_REVIEW
+    assert d.reason_codes == [D.INVARIANT]
+    card = d.cards[0]
+    assert card["rule"] == D.INVARIANT and card["title"].startswith("Internal error") and bad.rule_id in card["detail"]
+    assert D.INVARIANT in d.internal_note and bad.rule_id in d.internal_note
+    assert d.vendor_state == "sent" and "under review" in d.vendor_subject   # the vendor is told nothing specific
+
+
+def test_approval_invariant_card_only_when_broken():
+    d = D.decide(ALL_REQUIRED_PASS, ctx(), "X")
+    assert d.status == D.APPROVED and D.INVARIANT not in d.reason_codes and not d.cards
