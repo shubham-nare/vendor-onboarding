@@ -18,7 +18,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 CACHE = ROOT / "fixtures" / "read_cache"   # committed saved readings of the fictional demo documents
 DOCS = ROOT / "fixtures" / "documents"
-pytestmark = pytest.mark.skipif(not CACHE.exists() or not any(CACHE.iterdir()), reason="committed saved AI readings (fixtures/read_cache/) missing")
+assert CACHE.exists() and any(CACHE.iterdir()), "fixtures/read_cache/ (committed saved AI readings) is missing: a broken checkout, not a skip"
 PW = "Vn@7" + secrets.token_urlsafe(10)
 
 ORDER = ["happy_nilgiri", "wrongdoc_tejas", "borrowed_gstin_kaveri", "shared_bank_rangoli", "proprietor_shinde"]

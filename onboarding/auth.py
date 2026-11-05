@@ -62,10 +62,19 @@ def verify_password(password: str, stored: str) -> bool:
         return False
 
 
+_LOCAL_KEY = secrets.token_bytes(32)   # only on a developer's machine without SESSION_SECRET: logins end on restart
+
+
 def _key() -> bytes:
+    """SESSION_SECRET; never derived from the database URL. main.py refuses to start without it unless the app runs in
+    demo mode on a local database, where a random per-process key is used instead."""
+    from onboarding.config import dev_keys_allowed
     s = get_settings()
-    base = s.session_secret or ("derived:" + s.database_url)
-    return hashlib.sha256(base.encode()).digest()
+    if s.session_secret:
+        return hashlib.sha256(s.session_secret.encode()).digest()
+    if dev_keys_allowed(s):
+        return _LOCAL_KEY
+    raise RuntimeError("SESSION_SECRET is not set; it is required unless the app runs in demo mode on a local database.")
 
 
 def _sign(payload: str) -> str:
@@ -96,7 +105,40 @@ def read_session(value: str | None, purpose: str = "vendor") -> int | None:
         return None
 
 
-PASSWORD_RULE = f"At least {MIN_PASSWORD} characters, with an uppercase letter, a lowercase letter, a number and a symbol such as @"
+ACTOR_COOKIE = "actor"   # the demo person switcher: who a logged-in employee is acting as
+
+
+def make_actor(employee_id: int, staff_id: int | None) -> str:
+    """A signed actor cookie, bound to the employee who is logged in: it can't be forged, edited, or reused by
+    another login. Purpose "actor" keeps it from ever passing as a session cookie."""
+    return make_session(employee_id, purpose=f"actor:{staff_id or 0}")
+
+
+def read_actor(value: str | None, staff_id: int | None) -> int | None:
+    """The employee id in a valid actor cookie made for this login, else None."""
+    return read_session(value, purpose=f"actor:{staff_id or 0}") if staff_id else None
+
+
+def actor_ids(request) -> tuple[int | None, int | None]:
+    """(staff_id, actor_id) for the audit trail: who is logged in, and who they act as (the same person unless the demo
+    person switcher is in use). No valid actor cookie means the logged-in employee, never anyone else."""
+    staff_id = read_session(request.cookies.get(COMPANY_COOKIE), purpose="company")
+    if not staff_id:
+        return None, None
+    acting = read_actor(request.cookies.get(ACTOR_COOKIE), staff_id) if get_settings().demo_tools else None
+    return staff_id, acting or staff_id
+
+
+def audit_comment(request, comment: str) -> str:
+    """A human action's comment, plus who was really logged in when the demo person switcher was in use, so the
+    audit trail keeps both people (HumanAction.employee_id holds the acted-as employee). Unchanged otherwise."""
+    staff_id, actor_id = actor_ids(request)
+    if staff_id and actor_id != staff_id:
+        return f"{comment} [taken via the person switcher by logged-in employee #{staff_id}]".strip()
+    return comment
+
+
+PASSWORD_RULE =f"At least {MIN_PASSWORD} characters, with an uppercase letter, a lowercase letter, a number and a symbol such as @"
 
 
 def password_problem(password: str) -> str:

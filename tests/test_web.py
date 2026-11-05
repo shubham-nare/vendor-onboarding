@@ -10,9 +10,11 @@ from pathlib import Path
 
 import pytest
 
+from tests.helpers import set_actor
+
 ROOT = Path(__file__).resolve().parent.parent
 CACHE = ROOT / "fixtures" / "read_cache"   # committed saved readings of the fictional demo documents
-pytestmark = pytest.mark.skipif(not CACHE.exists() or not any(CACHE.iterdir()), reason="committed saved AI readings (fixtures/read_cache/) missing")
+assert CACHE.exists() and any(CACHE.iterdir()), "fixtures/read_cache/ (committed saved AI readings) is missing: a broken checkout, not a skip"
 
 from pathlib import Path as _Path  # noqa: E402
 
@@ -58,11 +60,12 @@ def flows(tmp_path_factory):
         cat = web.demo_catalog()
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://t") as c:
-            from onboarding.seeding import DEMO_COMPANY_EMAIL, DEMO_PASSWORD
+            from onboarding.seeding import DEMO_COMPANY_EMAIL, DEMO_PASSWORD, DEMO_VENDOR
             await c.post("/company/login", data={"email": DEMO_COMPANY_EMAIL, "password": DEMO_PASSWORD})
+            await c.post("/vendor/login", data={"email": DEMO_VENDOR["email"], "password": DEMO_PASSWORD})   # demo pre-fill needs a vendor login too
 
             async def as_(who):
-                c.cookies.set("actor", str(emp[who]))
+                set_actor(c, str(emp[who]))
 
             async def submit(key, files=None, token=None, demo=None, extra=None):
                 if token is None:

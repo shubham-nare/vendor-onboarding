@@ -9,9 +9,11 @@ from pathlib import Path
 
 import pytest
 
+from tests.helpers import set_actor
+
 ROOT = Path(__file__).resolve().parent.parent
 CACHE = ROOT / "fixtures" / "read_cache"   # committed saved readings of the fictional demo documents
-pytestmark = pytest.mark.skipif(not CACHE.exists() or not any(CACHE.iterdir()), reason="committed saved AI readings (fixtures/read_cache/) missing")
+assert CACHE.exists() and any(CACHE.iterdir()), "fixtures/read_cache/ (committed saved AI readings) is missing: a broken checkout, not a skip"
 
 KEYS = ["happy_nilgiri", "wrongdoc_tejas", "wrongdoc_tejas_resubmit", "borrowed_gstin_kaveri", "shared_bank_rangoli", "proprietor_shinde",
         "unsolicited_nilgiri"]
@@ -106,7 +108,7 @@ def intel(tmp_path_factory):
         async with httpx.AsyncClient(transport=transport, base_url="http://t") as c:
             await c.post("/company/login", data={"email": DEMO_COMPANY_EMAIL, "password": DEMO_PASSWORD})
             rangoli, deccan = out["vendor_of"]["shared_bank_rangoli"][0], out["deccan"].vendor_id
-            c.cookies.set("actor", str(emp["maker"]))
+            set_actor(c, str(emp["maker"]))
             out["dir"] = (await c.get("/api/v1/vendors")).text
             out["rangoli_page"] = (await c.get(f"/api/v1/vendors/{rangoli}")).text
             out["deccan_page"] = (await c.get(f"/api/v1/vendors/{deccan}")).text
@@ -114,10 +116,10 @@ def intel(tmp_path_factory):
             out["run_page"] = (await c.get(f"/runs/{parents['shared_bank_rangoli']}")).text
             out["missing"] = (await c.get("/api/v1/vendors/VND-9999")).status_code
             out["accounts"] = (await c.get("/supplier-accounts")).status_code
-            c.cookies.set("actor", str(emp["Priya Nair"]))          # didn't request Rangoli
+            set_actor(c, str(emp["Priya Nair"]))          # didn't request Rangoli
             out["priya_rangoli"] = (await c.get(f"/api/v1/vendors/{rangoli}")).status_code
             out["priya_dir"] = (await c.get("/api/v1/vendors")).text
-            c.cookies.set("actor", str(emp["Rahul Desai"]))         # requested Rangoli
+            set_actor(c, str(emp["Rahul Desai"]))         # requested Rangoli
             out["rahul_rangoli"] = (await c.get(f"/api/v1/vendors/{rangoli}")).text
             # counterfactuals: same rules, a copy of the saved input, nothing real touched
             real = (Run, RuleResult, RunFact, Message, HumanAction, RiskEvent, EvidenceItem, DecisionSnapshot, Application, VendorApplication)
@@ -128,7 +130,7 @@ def intel(tmp_path_factory):
                     n["run_status"] = sorted((await s2.execute(select(Run.id, Run.status))).all())
                     return n
             before = await real_counts()
-            c.cookies.set("actor", str(emp["checker"]))
+            set_actor(c, str(emp["checker"]))
             out["sim_policy"] = (await c.post(f"/runs/{parents['happy_nilgiri']}/simulate", data={"scenario": "policy_bank_a4"})).text
             out["sim_clear"] = (await c.post(f"/runs/{parents['shared_bank_rangoli']}/simulate", data={"scenario": "clear_flag", "rule_id": "R-SRC-BANK"})).text
             out["sim_clear_conflict"] = (await c.post(f"/runs/{parents['borrowed_gstin_kaveri']}/simulate", data={"scenario": "clear_flag", "rule_id": "R-XD-03"})).text
@@ -142,14 +144,14 @@ def intel(tmp_path_factory):
                 await s2.commit()
             out["sim_refused"] = (await c.post(f"/runs/{parents['proprietor_shinde']}/simulate", data={"scenario": "policy_bank_a4"})).text
             out["sim_refused_panel"] = (await c.get(f"/runs/{parents['proprietor_shinde']}")).text
-            c.cookies.set("actor", str(emp["Rahul Desai"]))
+            set_actor(c, str(emp["Rahul Desai"]))
             out["sim_requester"] = (await c.post(f"/runs/{parents['shared_bank_rangoli']}/simulate", data={"scenario": "policy_bank_a4"})).status_code
             # a person's decision closes the flags it addressed; activation makes the vendor active
             nil_run = parents["happy_nilgiri"]
-            c.cookies.set("actor", str(emp["maker"]))
+            set_actor(c, str(emp["maker"]))
             out["activate"] = (await c.post(f"/runs/{nil_run}/action", data={"action": "activate"})).status_code
             kav_run = parents["borrowed_gstin_kaveri"]
-            c.cookies.set("actor", str(emp["checker"]))
+            set_actor(c, str(emp["checker"]))
             out["kaveri_page_before"] = (await c.get(f"/runs/{kav_run}")).text
             out["confirm"] = (await c.post(f"/runs/{kav_run}/action", data={"action": "confirm_reject"})).status_code
             out["kaveri_page_after"] = (await c.get(f"/runs/{kav_run}")).text
