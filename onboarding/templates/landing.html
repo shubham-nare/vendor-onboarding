@@ -64,7 +64,7 @@
     const K = 85, DAMP = calm ? 16 : 2.6, COUPLE = 30, MAXPULL = 380, G = 900, ARM = 26;
 
     const CABLES = [
-      { y: 132, sag: 26, posts: [-80, 400, 880, 1360, 1840], secs: 46, dir: 1,  op: .9, parcels: [[0, 'parcel'], [.33, 'parcel-blue'], [.67, 'parcel']] },
+      { y: 178, sag: 26, posts: [-80, 400, 880, 1360, 1840], secs: 46, dir: 1,  op: .9, parcels: [[0, 'parcel'], [.33, 'parcel-blue'], [.67, 'parcel']] },
       { y: 610, sag: 32, posts: [-80, 480, 1040, 1600],       secs: 58, dir: -1, op: .9, parcels: [[.07, 'parcel-blue'], [.41, 'parcel'], [.74, 'parcel-blue']] },
       { y: 812, sag: 22, posts: [-80, 360, 800, 1240, 1680],  secs: 70, dir: 1,  op: .6, parcels: [[.14, 'parcel'], [.64, 'parcel-blue']] },
     ];
@@ -220,7 +220,7 @@
     </svg>
   </div>
   <style>
-    .hello-wrap { max-width: 560px; margin-top: -8px; }
+    .hello-wrap { max-width: 728px; margin-top: -8px; }
     .hello { width: 100%; height: auto; overflow: visible; }
     .hello-text { font-family: 'Sacramento', cursive; font-size: 190px; stroke-width: 5.5; stroke-linejoin: round; stroke-linecap: round; paint-order: stroke; }
     .hello-rim { stroke-width: 1.4; opacity: .75; }
@@ -240,12 +240,6 @@
         <span class="h-11 w-11 rounded-full bg-slate-900 text-white grid place-items-center">{{ icon('shield', 'h-5 w-5') }}</span>
         <h2 class="text-[26px] leading-tight">I work at {{ BUYER.short_name }}</h2>
       </div>
-      {% if staff %}
-        <div class="flex-1"></div>
-        <a href="/console" class="mt-7 inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 text-white font-medium px-5 py-3 hover:bg-slate-800 shadow-sm">{{ 'Open the console' | t }} {{ icon('arrow') }}</a>
-        <form method="post" action="/company/logout" class="mt-2 text-xs text-slate-500 text-center truncate">Logged in as {{ staff.name }} · {{ ROLE_LABEL[staff.role] }} ·
-          <button class="underline decoration-dotted underline-offset-2 hover:text-slate-800">{{ 'Log out' | t }}</button></form>
-      {% else %}
         <form id="home-login" method="post" action="/company/login" class="mt-5 space-y-3 text-[14px] flex-1 flex flex-col">
           <input type="hidden" name="next" value="/console">
           <label class="block text-slate-700">User ID <span class="text-slate-400">(work email)</span>
@@ -268,7 +262,11 @@
           }));
         </script>
         {% endif %}
-      {% endif %}
+        {% if staff %}
+        <form method="post" action="/company/logout" class="mt-3 text-xs text-slate-500 truncate">Already logged in as {{ staff.name }} ·
+          <a href="/console" class="font-medium text-slate-800 hover:underline">{{ 'Open the console' | t }} →</a> ·
+          <button class="underline decoration-dotted underline-offset-2 hover:text-slate-800">{{ 'Log out' | t }}</button></form>
+        {% endif %}
     </section>
 
     <section class="relative bg-white rounded-xl border p-6 sm:p-8 flex flex-col ring-1 ring-indigo-100 hover-lift">
