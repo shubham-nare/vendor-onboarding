@@ -47,8 +47,14 @@ async def review_queue():
     return app_shell()
 
 
-@router.get("/relationships", response_class=HTMLResponse)
-async def relationships(request: Request):
+@router.get("/relationships")
+async def relationships_page():
+    """Drawn by the browser app from GET /api/v1/relationships."""
+    from onboarding.appshell import app_shell
+    return app_shell()
+
+
+async def relationships(request: Request) -> dict:
     """Risk flags raised by the onboarding rules, and every bank account or document shared between vendors."""
     async with read_sessions()() as s:
         actor = await _actor(request, s)
@@ -65,7 +71,7 @@ async def relationships(request: Request):
         shared = [d for d in by_node.values() if len(d["members"]) > 1]
         shared.sort(key=lambda d: (d["node"].kind not in ("BANK_ACCOUNT", "DOCUMENT"), d["node"].kind))
         risks = sorted(r["risks"], key=lambda x: (x.status != "open", x.severity != "fraud"))
-        return await render(request, s, "ws_relationships.html", risks=risks, shared=shared, vendors=vendors)
+        return dict(risks=risks, shared=shared, vendors=vendors)
 
 
 @router.get("/documents")

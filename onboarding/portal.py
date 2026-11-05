@@ -719,14 +719,21 @@ async def bill_action(request: Request, bill_id: int, action: str = Form(...), c
     return RedirectResponse(f"/bills/{bill_id}#actions", status_code=303)
 
 
-@router.get("/supplier-accounts", response_class=HTMLResponse)
-async def vendors_list(request: Request):
+@router.get("/supplier-accounts")
+async def vendors_list_page():
+    """Drawn by the browser app from GET /api/v1/supplier-accounts."""
+    from onboarding.appshell import app_shell
+    return app_shell()
+
+
+async def supplier_accounts(request: Request) -> list[dict]:
+    """Every supplier portal account with its registrations and bills. Reviewers and Finance only (the menu
+    hid it from requesters, but nothing on the server stopped them before)."""
     async with read_sessions()() as s:
+        access.require_full(await _actor(request, s), "Supplier accounts")
         accts = (await s.execute(select(VendorAccount).order_by(VendorAccount.id.desc()))).scalars().all()
         pfs = await asyncio.gather(*(_portfolio(s, a) for a in accts))  # side by side, not one account after another
-        rows = [dict(acct=a, **pf) for a, pf in zip(accts, pfs)]
-        actor = await _actor(request, s)
-        return await render(request, s, "vendors.html", rows=rows, B=B, full=access.full_view(actor))
+        return [dict(acct=a, **pf) for a, pf in zip(accts, pfs)]
 
 
 # --- company profile: one-time onboarding, controlled changes ------------------------------------------------------

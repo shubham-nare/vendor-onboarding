@@ -761,6 +761,43 @@ navigate('/documents' + (p.toString() ? '?' + p : ''));
 });
 },
 };
+const vendorLink = (v, hash = '') => v ? `<a class="text-indigo-700 hover:underline" href="/vendors/${esc(v.id)}${hash}">${esc(v.name)}</a>` : '';
+App.views['/relationships'] = {
+title: 'Relationships',
+async render(view) {
+const d = await api('/relationships');
+const flags = d.flags.map(r => `<li class="px-4 sm:px-5 py-3.5 ${r.status === 'open' && r.severity === 'fraud' ? 'bg-rose-50/40' : ''}">
+<div class="flex flex-wrap items-center gap-2"><span class="tag dot ${r.status === 'open' ? 'text-rose-700' : 'text-emerald-700'}">${esc(r.status)}</span><span class="text-[14px] font-medium">${esc(r.title)}</span></div>
+<div class="mt-1 text-[12.5px] text-slate-500">${vendorLink(r.vendor, '#risk')}${r.related ? ' ↔ ' + vendorLink(r.related) : ''} · rule ${esc(r.rule)} · ${esc(r.opened.label)}</div>
+<p class="mt-1 text-[13px] text-slate-700">${r.action ? `<b class="font-semibold">Reviewer action:</b> ${esc(r.action)}` : esc(r.resolution || '')}</p></li>`).join('');
+const shared = d.shared.map(x => `<li class="px-4 sm:px-5 py-3.5">
+<div class="flex flex-wrap items-center gap-2"><span class="tag ${x.needs_reviewer ? 'text-amber-700' : 'text-slate-500'}">${x.needs_reviewer ? 'needs a reviewer' : 'context'}</span><span class="text-[14px] font-medium">${esc(x.label)}</span><span class="mono text-[12.5px] text-slate-600">${esc(x.value)}</span></div>
+<ul class="mt-1.5 space-y-1 text-[12.5px]">${x.vendors.map(m => `<li>${vendorLink(m.vendor, '#relationships')} · <span class="text-slate-500">${esc(m.status)} · ${esc(m.basis)} · since ${esc(m.since.label)}</span></li>`).join('')}</ul>
+<p class="mt-1.5 text-[12.5px] text-slate-600">${esc(x.why)}</p></li>`).join('');
+view.innerHTML = `<div class="space-y-6"><h1>Relationships</h1>
+<section class="bg-white border rounded-xl overflow-hidden"><div class="px-4 sm:px-5 py-4 border-b border-slate-100"><h2 class="text-[16px]">Flags raised by the rules</h2></div>
+${flags ? `<ul class="divide-y divide-slate-100">${flags}</ul>` : '<p class="px-5 py-4 text-[13px] text-slate-500">No flags.</p>'}</section>
+<section class="bg-white border rounded-xl overflow-hidden"><div class="px-4 sm:px-5 py-4 border-b border-slate-100"><h2 class="text-[16px]">Shared details between vendors</h2></div>
+${shared ? `<ul class="divide-y divide-slate-100">${shared}</ul>` : emptyState('No shared details', 'No two vendors share a bank account, document, address, email or phone.')}</section></div>`;
+},
+};
+App.views['/supplier-accounts'] = {
+title: 'Accounts',
+async render(view) {
+const d = await api('/supplier-accounts');
+const card = a => `<section class="bg-white rounded-xl border p-4 sm:p-5">
+<div class="flex flex-wrap items-start justify-between gap-3"><div class="min-w-0"><div class="flex items-center gap-3 min-w-0">${monogram(a.company, 'h-10 w-10 text-[13px]')}
+<div class="min-w-0"><div class="font-semibold text-[15.5px]">${esc(a.company)}</div><div class="text-xs text-slate-500 mt-0.5 break-all">${esc(a.contact)} · <a class="hover:underline" href="mailto:${esc(a.email)}">${esc(a.email)}</a> · account since ${esc(a.since.label)}</div></div></div></div>
+${a.vendor_id ? `<div class="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5"><span class="text-[11.5px] font-medium text-emerald-700">Vendor ID</span><span class="mono text-[14px] font-medium text-emerald-900">${esc(a.vendor_id)}</span></div>` : ''}</div>
+<div class="mt-3 flex flex-wrap gap-2 text-sm">
+${a.pending_invites.map(n => `<span class="tag text-violet-600">invited by ${esc(n)} · not submitted</span>`).join('')}
+${a.registrations.map(r => `<${r.run_id ? `a href="/runs/${r.run_id}"` : 'span'} class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/60 px-2.5 py-1.5 hover:border-indigo-300 hover:bg-white"><span class="mono text-[12px]">${esc(r.ref)}</span>${statusBadge(r.status)}<span class="text-xs text-slate-500">${esc(r.came_in)}</span></${r.run_id ? 'a' : 'span'}>`).join('')}
+${a.registrations.length || a.pending_invites.length ? '' : '<span class="text-xs text-slate-500">Account created; no registration yet.</span>'}</div>
+${a.bills.length ? `<div class="mt-3 text-xs text-slate-600">Bills: ${a.bills.map(b => `<a href="/bills/${b.id}" class="underline mr-2">${esc(b.ref)} ${inr(b.amount)} · ${esc(b.status)}</a>`).join('')}</div>` : ''}</section>`;
+view.innerHTML = `<div><div class="kicker">Supplier portal accounts</div><h1 class="text-[30px] sm:text-[38px] leading-tight mt-1">Accounts</h1>
+<div class="mt-6 space-y-3">${d.accounts.length ? d.accounts.map(card).join('') : `<section class="bg-white rounded-xl border">${emptyState('No vendor accounts yet', "Vendors create one from the home page (I'm a vendor or supplier).")}</section>`}</div></div>`;
+},
+};
 let leaveView = null;
 async function show(path) {
 const view = qs('#view'), screen = App.views[path];

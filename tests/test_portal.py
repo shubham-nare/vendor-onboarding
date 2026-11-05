@@ -212,7 +212,8 @@ def flows(tmp_path_factory):
                 seen[who] = dict(bills=(await staff.get("/bills")).text, bill=await staff.get(f"/bills/{bid2}"), run=await staff.get(f"/runs/{run_id}"),
                                  events=(await staff.get(f"/runs/{run_id}/events")).status_code, file=(await staff.get(f"/files/{sha}")).status_code,
                                  outbox=(await staff.get("/outbox")).status_code, console=(await staff.get("/api/v1/console/home")).text,
-                                 vendors=(await staff.get("/supplier-accounts")).text)
+                                 vendors=(await staff.get("/api/v1/supplier-accounts")).text,
+                                 accounts_status=(await staff.get("/api/v1/supplier-accounts")).status_code)
             out["seen"] = seen
             staff.cookies.set("actor", "2")
             out["rahul_action"] = (await staff.post(f"/bills/{bid2}/action", data={"action": "confirm_engagement"})).status_code
@@ -237,7 +238,7 @@ def flows(tmp_path_factory):
             await other.post("/vendor/register", data={"company_name": "Someone Else", "contact_name": "A B", "email": "a@else.example.com", "password": PW})
             out["other_bill"] = (await other.get(f"/vendor/bills/{bid}")).status_code
             out["bills_list"] = (await staff.get("/bills")).text
-            out["vendors_list"] = (await staff.get("/supplier-accounts")).text
+            out["vendors_list"] = (await staff.get("/api/v1/supplier-accounts")).text
             v.cookies.set("vendor_session", "1.1.forged")
             out["forged"] = (await v.get("/vendor")).headers.get("location", "")
             v.cookies.clear()
@@ -341,6 +342,7 @@ def test_requester_sees_only_their_own_and_no_evidence(flows):
     assert rahul["bill"].status_code == 403 and rahul["run"].status_code == 403 and rahul["events"] == 403
     assert "BILL-0002" not in rahul["bills"] and "Kesari" not in rahul["console"] and flows["rahul_action"] == 403
     assert "accounts@kesarifacility" not in rahul["vendors"] and '/bills/' not in rahul["vendors"]
+    assert rahul["accounts_status"] == 403 and flows["seen"][3]["accounts_status"] == 200   # requesters can't list supplier accounts
 
 
 def test_reviewers_see_everything_and_only_finance_sees_the_full_account(flows):
