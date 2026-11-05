@@ -6,7 +6,8 @@ constructor(status, message) { super(message); this.status = status; }
 }
 async function api(path, { method = 'GET', body } = {}) {
 const opts = { method, credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } };
-if (body !== undefined) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+if (body instanceof FormData) opts.body = body;
+else if (body !== undefined) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
 let r;
 try { r = await fetch('/api/v1' + path, opts); }
 catch (e) { throw new ApiError(0, 'Could not reach the server. Check your connection and try again.'); }
@@ -966,6 +967,113 @@ requester_id: Number(f.requester_id.value) || null, approver_id: Number(f.approv
 service_from: f.service_from.value, service_to: f.service_to.value, lines } });
 navigate(r.next);
 });
+},
+};
+const STAMP = {
+verified: ['text-emerald-600', 'Signature verified'], broken: ['text-rose-600', 'Signature broken'], edited: ['text-rose-600', 'Likely edited'],
+unsigned_pdf: ['text-amber-600', 'No signature'], image: ['text-slate-500', 'Image · unsigned'],
+};
+const SEVERITY = { info: 'text-slate-500', warn: 'text-amber-700', vendor: 'text-amber-800', review: 'text-amber-700', fraud: 'text-white bg-rose-600 !border-rose-600' };
+function checkCard(r) {
+const s = r.signature, [tone, label] = STAMP[r.stamp];
+const extra = r.stamp === 'verified' ? `<span class="text-[9px] tracking-[.12em] border-l-2 border-current pl-2 leading-tight">GSTN<br>${esc(s.signed_at || '')}</span>`
+: r.stamp === 'edited' ? '<span class="text-[9px] tracking-[.12em] border-l-2 border-current pl-2 leading-tight">no<br>signature</span>' : '';
+const sigRows = [['Signer', s.signer ? s.signer + (s.signer_org ? ` (${s.signer_org})` : '') : ''], ['Signed', s.signed_at], ['Format', s.format],
+['Covers file', s.covers_whole_file === null || s.covers_whole_file === undefined ? '' : s.covers_whole_file ? 'whole file' : 'NO: content was added after signing'],
+['Chain', s.chain.join(' → ')], ['Error', s.error]].filter(([, v]) => v);
+return `<div class="bg-white rounded-xl border p-4 sm:p-5 min-w-0">
+<div class="flex flex-wrap items-start justify-between gap-2"><div class="font-medium text-sm break-all">${esc(r.file)}</div>${proofChip(r.proof)}</div>
+<div class="mono text-[11px] text-slate-500 mt-0.5">${esc(r.mime)} · ${r.size_kb} KB</div>
+<div class="mt-5 mb-1"><span class="stamp stamp-land ${tone} text-[15px] sm:text-[17px] max-w-full">${label}${extra}</span></div>
+<div class="mt-4 rounded-lg p-3 text-sm ${s.verified ? 'bg-emerald-50 border border-emerald-200' : s.present ? 'bg-rose-50 border border-rose-200' : 'bg-slate-50 border'}">
+<div class="font-medium">Digital signature</div>
+${!s.present ? `<div class="text-xs text-slate-600 mt-1">None. ${r.kind === 'pdf' ? 'A certificate downloaded from the GST portal is normally signed; editors like Canva remove the signature.' : 'Images cannot carry one.'}</div>`
+: `<div class="text-xs mt-1">${s.verified ? 'Intact and cryptographically valid: not a byte has changed since it was signed.' : s.intact === false ? 'BROKEN: the file was changed after it was signed.' : 'Present but could not be verified.'}</div>
+<dl class="text-xs mt-2 grid grid-cols-[5.5rem_1fr] gap-x-2 gap-y-0.5">${sigRows.map(([k, v]) => `<dt class="text-slate-500">${k}</dt><dd class="break-words ${k === 'Error' ? 'text-rose-700' : ''}">${esc(v)}</dd>`).join('')}</dl>`}</div>
+<div class="mt-4"><div class="text-sm font-medium">File facts</div><dl class="text-xs mt-1 grid grid-cols-[5.5rem_1fr] gap-x-2 gap-y-0.5">${r.facts.map(f => `<dt class="text-slate-500">${esc(f.label)}</dt><dd class="break-all">${esc(f.value)}</dd>`).join('')}</dl></div>
+<div class="mt-4"><div class="text-sm font-medium">Signals</div><ul class="mt-1 space-y-1.5">${r.signals.length ? r.signals.map(x => `<li class="text-xs flex gap-2"><span class="tag ${SEVERITY[x.severity] || 'text-slate-500'} !text-[9.5px] shrink-0 self-start mt-px">${esc(x.severity)}</span><span>${esc(x.title)}${x.detail ? `<span class="block text-slate-500">${esc(x.detail)}</span>` : ''}</span></li>`).join('') : '<li class="text-xs text-emerald-700">None.</li>'}</ul></div></div>`;
+}
+App.views['/check'] = {
+title: 'Checker',
+async render(view) {
+view.innerHTML = `<div><div class="kicker">Forensics, no AI</div><h1 class="text-[30px] sm:text-[38px] leading-tight mt-1">Checker</h1>
+<form id="check-form" class="mt-5 bg-white rounded-xl border p-4 grid gap-3 sm:flex sm:flex-wrap sm:items-center sm:gap-4 text-sm">
+<label class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 min-w-0">File 1 <input type="file" name="file_a" accept=".pdf,.jpg,.jpeg,.png" class="text-xs max-w-full"></label>
+<label class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 min-w-0">File 2 <input type="file" name="file_b" accept=".pdf,.jpg,.jpeg,.png" class="text-xs max-w-full"></label>
+<label class="flex items-center gap-2 py-1"><input type="checkbox" name="with_sample" value="1"> include the genuine public sample</label>
+<button class="sm:ml-auto w-full sm:w-auto rounded-md bg-indigo-600 text-white px-4 py-2.5 sm:py-2">Check</button>
+<button type="button" id="just-sample" class="text-xs text-indigo-700 underline py-1 text-center sm:text-left">just show the genuine sample</button>
+<p class="basis-full text-[13px] text-rose-700" data-error hidden></p></form>
+<p class="text-xs text-slate-500 mt-2">Sample: a real GST registration certificate published by the Office of the IGR Maharashtra, signed by GSTN (public document). It's used only to show the signature check.</p>
+<div id="results" class="mt-6 grid grid-cols-1 gap-4"></div></div>`;
+const out = qs('#results', view);
+const showResults = list => {
+out.className = `mt-6 grid grid-cols-1 gap-4 ${list.length > 1 ? 'md:grid-cols-2' : ''} ${list.length > 2 ? 'lg:grid-cols-3' : ''}`;
+out.innerHTML = list.map(checkCard).join('');
+};
+wireForm(qs('#check-form', view), async f => showResults((await api('/check', { method: 'POST', body: new FormData(f) })).results));
+qs('#just-sample', view).onclick = async () => showResults((await api('/check/sample')).results);
+if (new URLSearchParams(location.search).get('sample') === 'genuine') showResults((await api('/check/sample')).results);
+},
+};
+const LEVELS = [
+['A0', 'Declared', 'The vendor typed it. Nothing backs it up.', 'A PAN in the form with no readable PAN card'],
+['A1', 'Evidenced', "A document shows the same value, but we can't show the document is genuine.", 'A photo of a PAN card that has warnings, or a hand-written note'],
+['A2', 'Genuine', 'A document shows it and the document looks genuine: no editing traces, a real photo or scan, nothing obscured.', 'A clear phone photo of a real PAN card'],
+['A3', 'Cryptographically proven', 'The document carries a valid digital signature from the issuer, checked cryptographically.', 'A GST certificate downloaded from the portal, signed by GSTN, unchanged'],
+['A4', 'Confirmed at source', 'The issuing authority confirmed it directly.', 'Bank branch via the live IFSC directory; in production also GSTN, NSDL PAN and a penny-drop'],
+];
+const SOURCES = [
+['Reading documents (type, how it was made, fields)', 'Gemini reads every upload, blind to what the vendor typed', 'Google Gemini'],
+['GST certificate digital signature', "Verified cryptographically, including GSTN's older SHA-1 format", 'The file itself'],
+['Editing traces (Canva, Photoshop, PDF editors, re-saves)', 'From the file itself', 'The file itself'],
+['GSTIN / PAN / IFSC structure, check digit, PAN inside GSTIN, state code', 'Calculated', 'Official formats'],
+['Bank branch (IFSC)', "Live lookup, with a saved copy if it's down", 'RBI branch directory (Razorpay IFSC)'],
+['PIN code, district and state', 'Live lookup', 'India Post PIN directory'],
+['Address', 'Compared with the GST certificate; Google Address Validation when connected', 'GST certificate, Google'],
+['Vendor master and blocklist (shared bank account, duplicates)', 'Compared on every check', 'Company vendor master'],
+['GSTIN status and legal name', 'Registry lookup', 'GST registry'],
+['PAN status and name', 'Registry lookup', 'PAN registry'],
+['Bank account holder name (penny-drop)', 'A one-rupee penny-drop returns the holder name', 'Bank account verification'],
+['Company (CIN) and MSME (Udyam) status', 'Registry lookup', 'MCA, Udyam'],
+];
+const DECISION = [
+'<b>Rules decide; the AI only reads documents.</b> Every outcome traces to a named rule with its evidence.',
+'Order: out of scope → <b>reject</b> → <b>internal review</b> → <b>vendor fixes</b> → <b>approved</b>. Approval requires every required rule to pass.',
+'<b>Reject</b> only for an identity conflict (e.g. a GSTIN belonging to a different PAN) or the blocklist, and a person confirms before the vendor is told.',
+'Authenticity heuristics never reject. A suspected fake goes to a person; the vendor gets a neutral "under review" message so a fraudster learns nothing.',
+'"Couldn\'t read clearly" is never treated as "read and different": unclear documents mean "please upload a clearer copy". Misread characters are corrected only where provable (a PAN\'s letter positions, the GSTIN check digit); account numbers are never corrected.',
+'<b>Bill-first registration:</b> a vendor who already did work can register at /bill with its invoice. The bill is checked (issued by this vendor, addressed to us, amount, arithmetic, CGST+SGST vs IGST, date, duplicates), the employee the vendor names must confirm the engagement, and that employee then counts as the requester. Bills of ₹10 lakh or more need the Finance controller. A bill is never paid automatically.',
+"The employee who requested a vendor (the requester) can't approve it. High-risk vendors (≥ ₹50 lakh a year, or any fraud signal) need the Finance controller.",
+'Approval is not payment: invoices are paid only after purchase-order and delivery matching.',
+];
+App.views['/assumptions'] = {
+title: 'Help',
+async render(view) {
+const d = await api('/help');
+view.innerHTML = `<div class="max-w-4xl"><div class="kicker">Honesty page</div>
+<h1 class="text-[30px] sm:text-[38px] leading-tight mt-1">What is verified, and what <em class="text-indigo-600">isn't</em></h1>
+<section id="levels" class="mt-8"><h2 class="text-xl">How well a fact is proven</h2>
+<p class="text-sm text-slate-600 mt-1">Every key fact (GSTIN, legal name, PAN, bank account) gets a level. A valid-looking number is only the start: someone can write a valid PAN on a blank sheet of paper.</p>
+<div class="mt-3 bg-white rounded-xl border divide-y text-sm">${LEVELS.map(([lv, name, what, eg]) => `<div class="p-4 flex flex-col sm:flex-row gap-1.5 sm:gap-4"><div class="sm:w-52 shrink-0">${proofChip({ level: lv, name })}</div><div><div>${what}</div><div class="text-xs text-slate-500 mt-0.5">e.g. ${eg}</div></div></div>`).join('')}</div></section>
+<section class="mt-8"><h2 class="text-xl">Where each answer comes from</h2><div class="mt-3 bg-white rounded-xl border overflow-hidden"><table class="rtable w-full text-sm">
+<thead class="bg-slate-50 text-left text-xs text-slate-500"><tr><th class="px-4 py-2">Check</th><th class="px-2 py-2">How it's checked</th><th class="px-4 py-2">Source</th></tr></thead>
+<tbody class="divide-y">${SOURCES.map(([c, how, src]) => `<tr><td class="px-4 py-2 font-medium sm:font-normal">${c}</td><td data-label="How it's checked" class="px-2 py-2 text-slate-700">${how}</td><td data-label="Source" class="px-4 py-2 text-slate-600">${src}</td></tr>`).join('')}</tbody></table></div></section>
+<section class="mt-8"><h2 class="text-xl">How the decision is made</h2><ul class="mt-2 text-sm text-slate-700 list-disc pl-5 space-y-1">${DECISION.map(x => `<li>${x}</li>`).join('')}</ul></section>
+<section class="mt-8"><h2 class="text-xl">Tested on imperfect real-world inputs</h2><div class="mt-3 grid md:grid-cols-2 gap-4 text-sm">
+<div class="bg-white rounded-xl border p-4"><div class="font-medium">Blurry, compressed, tilted copies of genuine documents</div>
+<p class="text-slate-600 mt-1">30 degraded copies of 6 genuine documents (blur, low-quality JPEG, 40% resolution, 3° tilt, phone-like): <b>60 of 60 fields read exactly, 0 wrong</b>, and no fraud flag on any real genuine document.</p></div>
+<div class="bg-white rounded-xl border p-4"><div class="font-medium">Fakes it catches</div><ul class="text-slate-600 mt-1 list-disc pl-5 space-y-0.5">
+<li>PAN hand-written on paper → vendor asked for the original</li><li>Photo of a screen, screenshot of a certificate → vendor asked for the file</li>
+<li>Certificate edited in Canva → signature gone, editor recorded: fraud class</li><li>AI-generated PAN card and cheque → fraud class</li></ul></div></div></section>
+<section id="access" class="mt-8"><h2 class="text-xl">Who sees what</h2>
+<p class="text-sm text-slate-600 mt-1 max-w-3xl">Need to know. A requester may be the person a fraud check is about, so they don't see the checks, documents or ID numbers, only their own requests. Finance releases payments, so only Finance sees an active vendor's full bank account.</p>
+<div class="mt-3 overflow-x-auto bg-white rounded-xl border"><table class="rtable w-full text-sm"><thead class="text-left text-slate-500 bg-slate-50 border-b border-slate-200"><tr><th class="pl-5 pr-2 py-2.5 font-medium">Information</th><th class="px-2 font-medium">Requester</th><th class="px-2 font-medium">Procurement reviewer</th><th class="pr-5 pl-2 font-medium">Finance controller</th></tr></thead>
+<tbody class="divide-y divide-slate-100">${d.access.map(r => `<tr><td class="pl-5 pr-2 py-2.5 font-medium">${esc(r.information)}</td><td class="px-2 py-2.5" data-label="Requester">${esc(r.requester)}</td><td class="px-2 py-2.5" data-label="Procurement reviewer">${esc(r.reviewer)}</td><td class="pr-5 pl-2 py-2.5" data-label="Finance controller">${esc(r.finance)}</td></tr>`).join('')}</tbody></table></div></section>
+<section class="mt-8 mb-4"><h2 class="text-xl">Assumptions and limits</h2><ul class="mt-2 text-sm text-slate-700 list-disc pl-5 space-y-1">
+<li>Vendors are Indian and GST-registered; others go to a manual path.</li>
+<li>Gemini's free tier allows 15 reads a minute; at most 2 applications run at once. If the AI is down, a saved reading of the same file is used and labelled.</li>
+<li>Employees and vendors log in with email and password. In production employees would use the company's single sign-on.${d.demo ? ' The development person switcher is on in this environment.' : ''}</li></ul></section></div>`;
 },
 };
 let leaveView = null;

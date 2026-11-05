@@ -1230,14 +1230,11 @@ async def outbox(request: Request) -> dict:
         return dict(rows=rows, mails=mails, kind=kind, inbox=inbox, note_to={k: emps.get(v) for k, v in emp_by_note.items()})
 
 
-@router.get("/check", response_class=HTMLResponse)
-async def doc_check(request: Request, sample: str = ""):
-    async with sessions()() as s:
-        access.require_full(await _actor(request, s), "The document check")
-        results = []
-        if sample == "genuine" and PUBLIC_SAMPLE.exists():
-            results.append(_check_one(PUBLIC_SAMPLE.name, PUBLIC_SAMPLE.read_bytes()))
-        return await render(request, s, "check.html", results=results)
+@router.get("/check")
+async def doc_check():
+    """Drawn by the browser app; it posts files to /api/v1/check."""
+    from onboarding.appshell import app_shell
+    return app_shell()
 
 
 def _check_one(filename: str, raw: bytes, label: str = "") -> dict:
@@ -1248,28 +1245,28 @@ def _check_one(filename: str, raw: bytes, label: str = "") -> dict:
     return dict(filename=filename + (f" ({label})" if label else ""), size=len(raw), mime=mime, auth=d)
 
 
-@router.post("/check", response_class=HTMLResponse)
-async def doc_check_post(request: Request, file_a: UploadFile = File(None), file_b: UploadFile = File(None), with_sample: str = Form("")):
+async def check_files(request: Request, files: list, with_sample: bool) -> list[dict]:
+    """Forensic check of up to two files, without the AI (reviewers and Finance only)."""
     async with sessions()() as s:
         access.require_full(await _actor(request, s), "The document check")
     results = []
     if with_sample and PUBLIC_SAMPLE.exists():
         results.append(_check_one(PUBLIC_SAMPLE.name, PUBLIC_SAMPLE.read_bytes(), "genuine sample"))
-    for up in (file_a, file_b):
-        if up is not None and up.filename:
+    for up in files:
+        if up is not None and getattr(up, "filename", ""):
             raw = await up.read()
             if len(raw) > MAX_BYTES:
                 raise HTTPException(413, "File larger than 10 MB")
             security.require_document(raw)
             results.append(_check_one(up.filename, raw))
-    async with sessions()() as s:
-        return await render(request, s, "check.html", results=results)
+    return results
 
 
-@router.get("/assumptions", response_class=HTMLResponse)
-async def assumptions(request: Request):
-    async with sessions()() as s:
-        return await render(request, s, "assumptions.html", access_matrix=access.MATRIX)
+@router.get("/assumptions")
+async def assumptions():
+    """Help: drawn by the browser app (its table comes from GET /api/v1/help)."""
+    from onboarding.appshell import app_shell
+    return app_shell()
 
 
 @router.get("/system")

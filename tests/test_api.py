@@ -42,6 +42,10 @@ def api(tmp_path_factory):
             await c.post("/api/v1/session/actor", json={"employee_id": out["/api/v1/session"].json()["actor"]["id"]})   # back to Arjun
             out["reset default"] = await c.post("/api/v1/system/reset", json={"passcode": "change-me"})
             out["system"] = await c.get("/api/v1/system")
+            pdf = (ROOT / "fixtures" / "documents" / "happy_nilgiri" / "gst_certificate.pdf").read_bytes()
+            out["check ok"] = await c.post("/api/v1/check", files={"file_a": ("gst.pdf", pdf, "application/pdf")})
+            out["check html"] = await c.post("/api/v1/check", files={"file_a": ("gst.pdf", b"<html><script>x</script>", "application/pdf")})
+            out["help"] = await c.get("/api/v1/help")
             from onboarding import auth
             kept = c.cookies.get(auth.COMPANY_COOKIE)                        # someone copied the cookie before log-out
             out["logout"] = await c.post("/api/v1/session/logout")
@@ -90,6 +94,13 @@ def test_reset_is_off_with_the_default_passcode(api):
     r = api["reset default"]
     assert r.status_code == 403 and "ADMIN_PASSCODE" in r.json()["error"]
     assert any(c["name"].startswith("Database") for c in api["system"].json()["checks"])
+
+
+def test_checker_and_help(api):
+    r = api["check ok"].json()["results"][0]
+    assert r["mime"] == "application/pdf" and r["proof"]["level"] and isinstance(r["signals"], list)
+    assert api["check html"].status_code == 415 and "PDF, JPG or PNG" in api["check html"].json()["error"]
+    assert any(row["information"].startswith("PAN") for row in api["help"].json()["access"])
 
 
 def test_the_app_shell_has_no_inline_script_and_a_strict_policy(api):

@@ -40,3 +40,13 @@ async def pending(request: Request):
         await staff_or_401(request, s)
         todo = (await _dashboard_ctx(request, s))["todo"]
         return counts(todo) | {"count": len(todo), "items": [todo_item(t) for t in todo[:4]]}
+
+
+@router.get("/help")
+async def help_page(request: Request):
+    """Who sees what (the same matrix the access rules follow), and whether the demo person switcher is on."""
+    from onboarding import access
+    async with read_sessions()() as s:
+        await staff_or_401(request, s)
+    return {"access": [{"information": a, "requester": b, "reviewer": c, "finance": d} for a, b, c, d in access.MATRIX],
+            "demo": get_settings().demo_tools}

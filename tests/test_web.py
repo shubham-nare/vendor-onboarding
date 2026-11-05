@@ -199,7 +199,7 @@ def flows(tmp_path_factory):
             out["console_chasing"] = (await c.get("/api/v1/console/home")).text
 
             for p in ("/", "/outbox", "/assumptions", "/system", "/check?sample=genuine", "/invites"):
-                out[p] = await c.get("/api/v1" + p if p in ("/outbox", "/system") else p)
+                out[p] = await c.get("/api/v1" + p if p in ("/outbox", "/system") else "/api/v1/check/sample" if p.startswith("/check") else p)
             for who in ("maker", "checker", "Rahul Desai"):  # each person's "Needs your action" queue
                 await as_(who)
                 out[f"todo_{who}"] = json.dumps((await c.get("/api/v1/console/home")).json()["todo"])   # the Waiting for you list
@@ -312,7 +312,8 @@ def test_only_sponsors_send_invites(flows):
 def test_other_pages_render(flows):
     for p in ("/", "/outbox", "/assumptions", "/system", "/check?sample=genuine", "/invites"):
         assert flows[p].status_code == 200, p
-    assert "Intact and cryptographically valid" in flows["/check?sample=genuine"].text
+    sample = flows["/check?sample=genuine"].json()["results"][0]
+    assert sample["signature"]["verified"] and sample["stamp"] == "verified" and "Intact and cryptographically valid" in APP_JS
 
 
 def _rules(events, stage="bill"):
