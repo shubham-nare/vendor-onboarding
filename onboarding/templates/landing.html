@@ -232,18 +232,6 @@
           <div class="flex-1"></div>
           <button class="mt-4 inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 text-white font-medium px-5 py-3 hover:bg-slate-800 shadow-sm">{{ 'Employee log in' | t }} {{ icon('arrow') }}</button>
         </form>
-        {% if team %}
-        <div class="mt-3 flex flex-wrap items-center gap-1 text-[11.5px] text-slate-500">
-          <span>Demo, password <span class="mono">{{ demo.password }}</span>:</span>
-          {% for e in team %}<button type="button" data-email="{{ e.email }}" class="home-fill rounded-full border border-slate-300 bg-white px-2.5 py-0.5 hover:border-slate-500" title="{{ e.name }} · {{ ROLE_LABEL[e.role] }} · {{ e.email }}">{{ e.name.split(' ')[0] }}</button>{% endfor %}
-        </div>
-        <script>
-          document.querySelectorAll('.home-fill').forEach(b => b.addEventListener('click', () => {
-            const f = document.getElementById('home-login');
-            f.email.value = b.dataset.email; f.password.value = {{ demo.password | tojson }}; f.querySelector('button').focus();
-          }));
-        </script>
-        {% endif %}
         {% if staff %}
         <form method="post" action="/company/logout" class="mt-3 text-xs text-slate-500 truncate">Already logged in as {{ staff.name }} ·
           <a href="/console" class="font-medium text-slate-800 hover:underline">{{ 'Open the console' | t }} →</a> ·
