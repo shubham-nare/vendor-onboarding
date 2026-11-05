@@ -12,6 +12,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 
+from onboarding import address as ADDR
 from onboarding import countries as C
 from onboarding import matching as M
 from onboarding import validators as V
@@ -344,6 +345,30 @@ def evaluate(ctx: Context) -> list[R]:
         else:
             where = f" ({ev['district']}, India Post)" if ev.get("district") else ""
             add(R("R-ID-10", "identifiers", PASS, f"PIN code fits the address{where}", evidence=ev))
+
+    # The address: the one typed against the GST certificate's principal place of business, then Google's view of it
+    if gst_doc and (f.get("address") or f.get("pin")):
+        caddr, _ = val(gst_doc, "principal_address")
+        am = ADDR.compare(f, caddr or "")
+        typed = ", ".join(x for x in (f.get("address"), f.get("city"), f.get("state"), f.get("pin")) if x)
+        ev = {"typed": typed, "certificate": caddr or "", "word_match": am.score}
+        if am.status == ADDR.MATCH:
+            add(R("R-ADDR-01", "documents", PASS, "Address matches the GST certificate", ev))
+        elif am.status == ADDR.PARTIAL:
+            add(R("R-ADDR-01", "documents", WARN, "Address partly differs from the GST certificate: " + "; ".join(am.reasons), "WARN", ev,
+                  internal="Small differences are often spelling or a missing landmark. A real difference can mean the vendor works from "
+                           "another place of business; ask for that address's GST registration or proof."))
+        elif am.status == ADDR.MISMATCH:
+            add(R("R-ADDR-01", "documents", FAIL, "Address differs from the GST certificate: " + "; ".join(am.reasons), "VENDOR", ev,
+                  vendor_text=f"The address you gave doesn't match the principal place of business on your GST certificate ({caddr}). "
+                              "Please enter your address exactly as it appears on the certificate."))
+    gv = ctx.sources.get("address")
+    if gv and gv.status == "FOUND":
+        res, title = ADDR.judge(f, gv.data)
+        gev = {k: gv.data.get(k) for k in ("formatted", "granularity", "postal_code", "maps_url") if gv.data.get(k)}
+        add(R("R-ADDR-02", "identifiers", PASS if res == "PASS" else WARN, title, "WARN" if res == "WARN" else "", gev | {"source": gv.source},
+              internal="" if res == "PASS" else "Google's map data for India is still a preview and often stops at street or area level; "
+                                                 "treat this as a prompt to look at the address, not as proof of a problem."))
     if pan:
         okp = V.validate_pan(pan)
         add(R("R-ID-03", "identifiers", PASS if okp else FAIL, "PAN format" + ("" if okp else " is not standard"), "VENDOR", {"pan": pan},

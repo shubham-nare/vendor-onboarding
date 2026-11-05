@@ -13,6 +13,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from onboarding import decision as D
+from onboarding import address as A
 from onboarding import sources as S
 from onboarding.ai.read import DocRead, read_with_cache
 from onboarding.authenticity.assess import assess
@@ -179,7 +180,7 @@ async def run_pipeline(run_id: int, *, prefer_cache: bool = False, pace: float =
             if stage == "authenticity":
                 extra = {"documents": [{"slot": i.slot, "level": i.auth.level, "worst": i.auth.worst, "specimen": i.auth.specimen} for i in infos.values()]}
             if stage == "sources":
-                extra = {"sources": {k: {"source": v.source, "status": v.status, "live": v.live, **({"data": v.data} if k == "pin" else {})}
+                extra = {"sources": {k: {"source": v.source, "status": v.status, "live": v.live, **({"data": v.data} if k in ("pin", "address") else {})}
                                      for k, v in srcs.items()}}
             state = "failed" if fails else "done"
             summary = (f"{len(fails)} problem(s)" if fails else "All checks passed") + (f", {len(warns)} warning(s)" if warns else "") if rs else "Nothing to check"
@@ -237,6 +238,7 @@ async def gather_context(s: AsyncSession, app: Application, form: dict, docs_row
     if sources is None:
         ifsc_task = asyncio.create_task(S.ifsc_lookup(form.get("ifsc", "")))
         pin_task = asyncio.create_task(S.pin_lookup(form.get("pin", ""))) if form.get("pin") else None
+        addr_task = asyncio.create_task(A.validate(form)) if A.configured() else None
         srcs = {"gst": await S.gst_status(s, form.get("gstin", "")), "pan": await S.pan_status(s, form.get("pan", "")),
                 "bank": await S.penny_drop(s, form.get("bank_account", ""), form.get("ifsc", ""))}
         if form.get("cin"):
@@ -244,6 +246,8 @@ async def gather_context(s: AsyncSession, app: Application, form: dict, docs_row
         srcs["ifsc"] = await ifsc_task
         if pin_task:
             srcs["pin"] = await pin_task
+        if addr_task and (got := await addr_task):
+            srcs["address"] = got
     else:
         srcs = sources
     pan, gstin, acct = form.get("pan", "").upper(), form.get("gstin", "").upper(), form.get("bank_account", "")
