@@ -331,7 +331,7 @@
     document.addEventListener('click', e => document.querySelectorAll('details.pub-menu[open]').forEach(d => { if (!d.contains(e.target)) d.open = false; }));
     document.addEventListener('keydown', e => { if (e.key === 'Escape') document.querySelectorAll('details.pub-menu[open]').forEach(d => d.open = false); });
   </script>
-  <main class="{{ 'max-w-5xl' if vendor_page else 'max-w-6xl' }} mx-auto px-4 sm:px-6 py-6 sm:py-10">
+  <main class="{{ 'max-w-5xl' if vendor_page else ('max-w-7xl' if path == '/' else 'max-w-6xl') }} mx-auto px-4 sm:px-6 py-6 sm:py-10">
     {{ self.content() }}
   </main>
 
