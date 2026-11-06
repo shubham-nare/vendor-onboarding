@@ -98,3 +98,12 @@ Render free sleeps after 15 minutes idle, and Neon suspends too. Document-only o
 `python -m onboarding.seeding --reset` from the command line refuses a remote database unless you pass `--production`
 and then type the host back exactly. Tests abort if the database URL is not local. Never point either at the demo
 Neon database by accident.
+
+## 5. Custom domain (vendors.parakh.tech)
+
+The app builds every link from the request's host, so a custom domain needs no code change.
+1. Get the domain `parakh.tech`, for example from get.tech (free for a year with the GitHub Student Developer Pack) or any registrar.
+2. Render → the service → **Settings → Custom Domains → Add** `vendors.parakh.tech`.
+3. At the domain's DNS: a **CNAME** record, name `vendors`, value `vendor-onboarding-c0dm.onrender.com`. Render verifies it and issues the HTTPS certificate itself, usually within minutes (DNS can take up to an hour).
+4. If "Continue with Google" is configured: add `https://vendors.parakh.tech/vendor/google/callback` to the OAuth client's authorised redirect URIs.
+5. The `onrender.com` address keeps working. The keep-alive pinger can stay on it, because it is the same service.

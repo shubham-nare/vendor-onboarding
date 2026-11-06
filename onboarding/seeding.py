@@ -16,10 +16,10 @@ from onboarding.config import database_host, get_settings, local_database
 from onboarding.models import Base, Blocklist, Employee, Invite, SimRegistry, StaffLogin, VendorAccount, VendorMaster, now
 
 EMPLOYEES = [
-    dict(name="Priya Nair", department="Operations, Plant 2", role="sponsor", email="priya.nair@mamoni.in"),
-    dict(name="Rahul Desai", department="Plant Head, Pune", role="sponsor", email="rahul.desai@mamoni.in"),
-    dict(name="Arjun Mehta", department="Procurement", role="maker", email="arjun.mehta@mamoni.in"),
-    dict(name="Kavita Rao", department="Finance", role="checker", email="kavita.rao@mamoni.in"),
+    dict(name="Priya Nair", department="Operations, Plant 2", role="sponsor", email="priya.nair@parakh.tech"),
+    dict(name="Rahul Desai", department="Plant Head, Pune", role="sponsor", email="rahul.desai@parakh.tech"),
+    dict(name="Arjun Mehta", department="Procurement", role="maker", email="arjun.mehta@parakh.tech"),
+    dict(name="Kavita Rao", department="Finance", role="checker", email="kavita.rao@parakh.tech"),
 ]
 
 # Demo logins (fictional people, shown on the login pages so anyone reviewing the demo can sign in): only in demo mode
@@ -27,7 +27,7 @@ EMPLOYEES = [
 # account is ready, with no registration yet.
 DEMO_PASSWORD = get_settings().demo_password
 LEGACY_PUBLIC_PASSWORD = "demo_pass"   # was the default in the public repo: logins still using it are switched off
-DEMO_COMPANY_EMAIL = "arjun.mehta@mamoni.in"
+DEMO_COMPANY_EMAIL = "arjun.mehta@parakh.tech"
 DEMO_VENDOR = dict(email=dd.KESARI["contact"]["email"], company_name=dd.KESARI["legal_name"], contact_name=dd.KESARI["contact"]["name"])
 # The live happy-path beat of the demo video: Nilgiri's own contact person signs in to Nilgiri's invite. Not the
 # invite's accounts@ address, which the golden tests register from the invite link.

@@ -32,7 +32,7 @@ def compact(js: str) -> str:
 
 def build() -> str:
     parts = [compact(p.read_text(encoding="utf-8")) for p in sorted(SRC.glob("*.js"))]
-    return "/* Mamoni Vendor Onboarding */\n(()=>{'use strict';\n" + "\n".join(parts) + "\n})();\n"
+    return "/* Parakh Vendor Onboarding */\n(()=>{'use strict';\n" + "\n".join(parts) + "\n})();\n"
 
 
 if __name__ == "__main__":

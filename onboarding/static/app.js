@@ -1,4 +1,4 @@
-/* Mamoni Vendor Onboarding */
+/* Parakh Vendor Onboarding */
 (()=>{'use strict';
 const App = { session: null, views: {} };
 class ApiError extends Error {
@@ -82,8 +82,8 @@ return `<span class="${size} ${ROLE_TONE[p.role] || 'bg-slate-100 text-slate-700
 let brandSeq = 0;
 const brand = () => {
 const id = 'bw-app-' + (++brandSeq);
-const word = '<tspan class="bw-cap">M</tspan>amoni';
-return `<a href="/" title="Home" aria-label="Mamoni Vendor Onboarding, home" class="brand-word shrink-0" data-full>
+const word = '<tspan class="bw-cap">P</tspan>arakh';
+return `<a href="/" title="Home" aria-label="Parakh Vendor Onboarding, home" class="brand-word shrink-0" data-full>
 <svg viewBox="0 0 170 64" width="118" height="44" aria-hidden="true">
 <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3EDE70"/><stop offset=".45" stop-color="#248B3E"/><stop offset="1" stop-color="#12642F"/></linearGradient></defs>
 <text x="85" y="47" text-anchor="middle" class="bw-text" fill="url(#${id})" stroke="url(#${id})">${word}</text>
@@ -1266,7 +1266,7 @@ const view = qs('#view'), found = route(path);
 if (!found) { location.href = path + location.search + location.hash; return; }
 if (leaveView) { leaveView(); leaveView = null; }
 const { screen, params } = found;
-document.title = `${typeof screen.title === 'function' ? screen.title(params) : screen.title} · Mamoni Vendor Onboarding`;
+document.title = `${typeof screen.title === 'function' ? screen.title(params) : screen.title} · Parakh Vendor Onboarding`;
 qsa('a.side-link, #mainnav a').forEach(a => {
 if (isOn(a.getAttribute('href'), path)) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
 });

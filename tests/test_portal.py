@@ -51,7 +51,7 @@ def test_safe_next_only_allows_local_paths():
 def flows(tmp_path_factory):
     db = tmp_path_factory.mktemp("portaldb") / "portal.db"
     os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{db.as_posix()}"
-    os.environ["SMTP_HOST"], os.environ["MAIL_FROM"] = "smtp.test", "vendors@mamoni.in"   # email on, to a fake server
+    os.environ["SMTP_HOST"], os.environ["MAIL_FROM"] = "smtp.test", "vendors@parakh.tech"   # email on, to a fake server
     import onboarding.config as cfg
     import onboarding.db as dbm
     cfg.get_settings.cache_clear()
