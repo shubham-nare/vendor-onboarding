@@ -575,3 +575,17 @@ def test_applications_show_the_vendor_id_and_run_pages_show_no_none(db, monkeypa
     page, row = asyncio.run(go())
     assert ">None<" not in page and "not_present" not in page
     assert row["status"] == "ACTIVE" and row["vendor"] and row["vendor"]["id"].startswith("V-")
+
+
+def test_console_screens_ignore_the_routers_params_object():
+    """The console router calls every screen as render(view, params) with params an object. A screen whose second
+    argument means something else (Invites: the new invite's link; System: a notice) must ignore non-strings, or it
+    shows '[object Object]': a broken 'Open as the vendor' link, a bogus notice."""
+    import re
+    from pathlib import Path
+    js = (Path(__file__).resolve().parent.parent / "onboarding" / "static" / "app.js").read_text(encoding="utf-8")
+    second = re.findall(r"async render\(view, (\w+)", js)
+    assert second, "expected screens with a second render argument"
+    for name in second:
+        body = js[js.index(f"async render(view, {name}"):][:600]
+        assert f"typeof {name}" in body, f"render(view, {name}) uses its argument without checking it is a string"

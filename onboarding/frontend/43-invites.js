@@ -4,7 +4,8 @@ App.views['/invites'] = {
   title: 'Invites',
   async render(view, created) {
     const made = new URLSearchParams(location.search).get('created');   // after the old form post
-    created = created || (made ? '/apply/' + made : '');
+    // the router passes its params object here; only a link string from the create form counts
+    created = (typeof created === 'string' && created) || (made ? '/apply/' + made : '');
     const d = await api('/invites');
     const bands = d.spend_bands.map(b => `<option>${esc(b)}</option>`).join('');
     const rows = d.invites.map(i => `<tr>

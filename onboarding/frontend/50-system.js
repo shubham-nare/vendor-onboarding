@@ -3,6 +3,7 @@
 App.views['/system'] = {
   title: 'System check',
   async render(view, note = '') {
+    if (typeof note !== 'string') note = '';   // the router passes its params object here
     const d = await api('/system'), f = d.followups;
     view.innerHTML = `<div><div class="kicker">Health</div><h1 class="text-[30px] sm:text-[38px] leading-tight mt-1">System check</h1>
       ${note ? `<div class="mt-4 rounded-md bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-900">${note}</div>` : ''}
