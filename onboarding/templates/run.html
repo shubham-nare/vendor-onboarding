@@ -107,6 +107,8 @@
           <div class="mt-1.5 flex flex-wrap items-center gap-3">{% if full %}{{ tier_chip(run.risk_tier) }}{% endif %}
             {% if summary.fraud and full %}<span class="tag text-white bg-rose-600 !border-rose-600">fraud-class signal</span>{% endif %}
             {% if app.current_status != run.status and latest %}<span class="text-sm text-slate-600">Now: {{ status_badge(app.current_status) }}</span>{% endif %}</div>
+          {% if full and summary.risk_reasons %}<div class="mt-2 text-[13px] text-slate-600"><span class="font-medium text-slate-700">Why {{ run.risk_tier }} risk:</span>
+            <ul class="mt-0.5 list-disc pl-5">{% for why in summary.risk_reasons %}<li>{{ why }}</li>{% endfor %}</ul></div>{% endif %}
           {% if summary.fraud and full %}<p class="mt-2 text-[13px] font-medium text-rose-800">Fraud-class signal. Verify the flagged facts with an independent source (for example, call the bank) before approving. The vendor has only been told the application is under review.</p>{% endif %}
         </div>
       </div>

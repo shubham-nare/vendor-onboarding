@@ -22,7 +22,7 @@ async def applications(request: Request, status: str = "", q: str = ""):
         _, actor = await staff_or_401(request, s)
         full = access.full_view(actor)
         todo = (await _dashboard_ctx(request, s))["todo"]
-        waiting = {t["href"] for t in todo if t["status"] not in ("BILL", "CHANGE")}
+        waiting = {t["href"]: t["verb"] for t in todo if t["status"] not in ("BILL", "CHANGE")}   # what this person must do next
         emps = {e.id: e for e in await _employees(s)}
         rows = await _apps(s, actor)
         from sqlalchemy import select
@@ -41,7 +41,8 @@ async def applications(request: Request, status: str = "", q: str = ""):
             came = (f"Invite from {emps[inv.sponsor_id].name if inv.sponsor_id in emps else 'an employee'}" if inv
                     else "A bill for work done" if x["bill"] else "No invite")
             out.append({"ref": a.ref, "name": a.legal_name, "run_id": run.id if run else None, "status": a.current_status,
-                        "waiting": bool(run and f"/runs/{run.id}" in waiting), "risk": (run.risk_tier if run and full else None),
+                        "waiting": bool(run and f"/runs/{run.id}" in waiting),
+                        "next_step": waiting.get(f"/runs/{run.id}") if run else None, "risk": (run.risk_tier if run and full else None),
                         "vendor": ({"id": x["vendor"].vendor_id, "name": x["vendor"].display_name} if x["vendor"] else
                                    {"id": master[a.id][0], "name": master[a.id][1]} if a.id in master else None) if full else None,
                         "came_in": came, "submitted": when(a.created_at)})

@@ -102,3 +102,16 @@ def test_approval_invariant_never_approves(bad):
 def test_approval_invariant_card_only_when_broken():
     d = D.decide(ALL_REQUIRED_PASS, ctx(), "X")
     assert d.status == D.APPROVED and D.INVARIANT not in d.reason_codes and not d.cards
+
+
+def test_a_non_low_tier_says_why():
+    """'Every required check passed' next to 'medium risk' must explain itself on the decision card."""
+    from onboarding.decision import decide
+    from onboarding.rules import PASS, WARN, Context, R
+    ctx = Context(form={"legal_name": "Shinde Electricals"}, docs={}, invite={"high_spend": False}, master=[], sources={})
+    rules = [R("R-NAME-03", "names", PASS, "Account holder 'RAJESH SHINDE' is the proprietor", "")]
+    d = decide(rules, ctx)
+    assert d.risk_tier == "medium" and any("proprietor" in w for w in d.risk_reasons)
+    d = decide([R("R-AU-5", "authenticity", WARN, "Bank proof: File was created or saved with LibreOffice", "WARN")], ctx)
+    assert d.risk_tier == "medium" and d.risk_reasons == ["Warning: Bank proof: File was created or saved with LibreOffice"]
+    assert decide([], ctx).risk_reasons == []                                          # low: nothing to explain

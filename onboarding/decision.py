@@ -40,6 +40,7 @@ class Decision:
     vendor_body: str = ""
     vendor_state: str = "draft"     # sent (auto) | held (needs a human) | draft
     internal_note: str = ""
+    risk_reasons: list[str] = field(default_factory=list)   # why the tier isn't low, in plain words (shown on the decision card)
 
     def as_dict(self) -> dict:
         d = asdict(self)
@@ -74,7 +75,8 @@ def decide(rules: list[R], ctx: Context, ref: str = "") -> Decision:
 
     fraud = any(r.fraud and r.result == FAIL for r in rules)
     tier = _tier(rules, ctx, fraud)
-    d = Decision(status=status, reason_codes=sorted({r.rule_id for r in winners} | ({INVARIANT} if broken else set())), fraud=fraud, risk_tier=tier)
+    d = Decision(status=status, reason_codes=sorted({r.rule_id for r in winners} | ({INVARIANT} if broken else set())), fraud=fraud, risk_tier=tier,
+                 risk_reasons=_tier_reasons(rules, ctx, fraud) if tier != "low" else [])
     d.cards = [_card(r, status) for r in winners][:6]
     if broken:
         d.cards.insert(0, {"rule": INVARIANT, "title": "Internal error: the checks didn't add up, so this was not approved",
@@ -99,6 +101,22 @@ def _tier(rules: list[R], ctx: Context, fraud: bool) -> str:
     if personal or any(r.result == WARN for r in rules):
         return "medium"
     return "low"
+
+
+def _tier_reasons(rules: list[R], ctx: Context, fraud: bool) -> list[str]:
+    """The same conditions as _tier, said in plain words, so 'medium risk' next to 'every check passed' explains itself."""
+    out: list[str] = []
+    if fraud:
+        out += [f"Fraud-class signal: {r.title}" for r in rules if r.fraud and r.result == FAIL][:2]
+    if ctx.invite and ctx.invite.get("high_spend"):
+        out.append("The requester chose a high spend band on the invite")
+    if ctx.form.get("bill_mode") and (money(ctx.form.get("bill_amount")) or 0) >= BILL_HIGH_RISK:
+        out.append(f"The bill is {inr(money(ctx.form.get('bill_amount')))} or more")
+    by_id = {r.rule_id: r for r in rules}
+    if by_id.get("R-NAME-03") and "proprietor" in by_id["R-NAME-03"].title:
+        out.append("Payments go to the proprietor's personal bank account (a sole proprietorship)")
+    out += [f"Warning: {r.title}" for r in rules if r.result == WARN][:3]
+    return out
 
 
 def _card(r: R, status: str) -> dict:

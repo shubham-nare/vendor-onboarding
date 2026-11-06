@@ -283,7 +283,7 @@ async def run_pipeline(run_id: int, *, prefer_cache: bool | None = None, pace: f
         s.add(Message(run_id=run_id, audience="vendor", subject=dec.vendor_subject, body=dec.vendor_body, state=dec.vendor_state))
         s.add(Message(run_id=run_id, audience="internal", subject="Reviewer note", body=dec.internal_note, state="draft"))
         run.status, run.risk_tier, run.reason_codes = dec.status, dec.risk_tier, dec.reason_codes
-        run.summary = {"cards": dec.cards, "fraud": dec.fraud, "facts": [f.__dict__ for f in dec.facts], "diff": await _diff(s, run, rules)}
+        run.summary = {"cards": dec.cards, "fraud": dec.fraud, "risk_reasons": dec.risk_reasons, "facts": [f.__dict__ for f in dec.facts], "diff": await _diff(s, run, rules)}
         run.state, run.finished_at = "done", now()
         app.current_status, app.legal_name = dec.status, form.get("legal_name", app.legal_name)
         # Vendor Intelligence: the exact decision input, encrypted, so the decision can be replayed later.
