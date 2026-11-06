@@ -357,20 +357,31 @@ def _gst_file_input(html: str) -> str:
     return re.search(r'<input type="file"[^>]*name="gst_certificate"[^>]*>', html).group(0)
 
 
-def test_launcher_forms_do_not_demand_a_gst_file_that_is_already_attached(db):
-    """apply.html's script makes [data-gst] inputs required when the vendor is GST-registered; an attached demo or
-    previous GST certificate must not carry data-gst/data-req, or the browser blocks the submit ("Please select a file")."""
+def test_launcher_forms_can_be_submitted_as_the_browser_sees_them(db):
+    """apply.html's script turns [data-req] (and [data-gst] for GST-registered vendors) into required inputs. On a
+    launcher form the scenario decides the files (Tejas leaves out the Udyam certificate on purpose, for R-DOC-01), so
+    no file input may carry data-req/data-gst, or the browser blocks the submit ("Please select a file") and nothing
+    reaches the server. And every other field the script will require must already hold the scenario's value."""
+    from onboarding.demo_data import SCENARIOS
+
     async def go():
         async with _client() as staff:
             await _staff(staff)
             out = {}
-            for key in ("borrowed_gstin_kaveri", "shared_bank_rangoli", "wrongdoc_tejas"):
+            for key in LAUNCH:
                 loc = (await staff.get(f"/demo/{key}", follow_redirects=False)).headers["location"]
                 async with _client() as guest:
-                    out[key] = _gst_file_input((await guest.get(loc)).text)
+                    out[key] = (await guest.get(loc)).text
             return out
-    for key, tag in asyncio.run(go()).items():
-        assert "data-req" not in tag and "data-gst" not in tag, (key, tag)
+    for key, page in asyncio.run(go()).items():
+        for tag in re.findall(r'<input type="file"[^>]*>', page):
+            assert "data-req" not in tag and "data-gst" not in tag, (key, tag)
+        form = SCENARIOS[key]["form"]
+        for tag in re.findall(r"<input [^>]*data-(?:req|gst)[^>]*>", page):
+            name = re.search(r'name="([^"]+)"', tag).group(1)
+            want = form.get(name)
+            if isinstance(want, str) and want:   # a field this scenario fills: it must be on the page already
+                assert re.search(r'value="[^"]+"', tag), (key, name, tag)
 
 
 def test_a_run_followed_live_is_not_replayed_after_its_reload():
