@@ -5,6 +5,10 @@ import os
 
 import pytest
 
+from tests.flags import flags_on
+
+_features = flags_on("payables", "unsolicited")   # the top bar's "Register for future work" and "Submit a bill" links
+
 
 @pytest.fixture(scope="module")
 def pub(tmp_path_factory):

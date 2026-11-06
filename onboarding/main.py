@@ -65,7 +65,7 @@ async def startup_steps() -> list[str]:
     Returns the names of the steps that failed; /readyz and /system show database problems."""
     from onboarding.config import get_settings
     steps = [("create tables", _create_tables), ("logins", _logins)]
-    if get_settings().demo_tools:
+    if get_settings().demo_tools and get_settings().feature_payables:
         steps.append(("sample purchase orders", _purchase_orders))
     steps.append(("interrupted runs", _sweep))
     failed = []
@@ -97,12 +97,17 @@ async def lifespan(_app: FastAPI):
     await startup_steps()
     loop = asyncio.get_running_loop()
     loop.create_task(db.warm_pool())  # in the background: startup isn't held up
-    from onboarding.intel.project import backfill
-    loop.create_task(_intel_backfill(backfill))  # Vendor Intelligence catches up on older runs
-    from onboarding import followups
-    chase = asyncio.get_running_loop().create_task(followups.loop())  # reminders and escalations, every few hours
+    from onboarding.config import feature
+    if feature("intel"):
+        from onboarding.intel.project import backfill
+        loop.create_task(_intel_backfill(backfill))  # Vendor Intelligence catches up on older runs
+    chase = None
+    if feature("followups"):
+        from onboarding import followups
+        chase = loop.create_task(followups.loop())  # reminders and escalations, every few hours
     yield
-    chase.cancel()
+    if chase:
+        chase.cancel()
 
 
 async def _intel_backfill(fn) -> None:
@@ -121,6 +126,15 @@ app.mount("/static", StaticFiles(directory=__file__.rsplit("main.py", 1)[0] + "s
 
 # Company pages (the console) need an employee login; vendor pages have their own login (portal.py).
 COMPANY_AREAS = {"console", "act-as", "invites", "runs", "files", "outbox", "check", "assumptions", "system", "demo", "bills", "vendors", "supplier-accounts", "invoices", "purchase-orders", "audit", "change-requests", "applications", "review", "relationships"}
+
+
+@app.middleware("http")
+async def hidden_features(request: Request, call_next):
+    """A switched-off feature (FEATURE_* settings, see onboarding/features.py) answers 404 on its pages and API."""
+    from onboarding.features import hidden
+    if hidden(request.url.path):
+        return await friendly_errors(request, HTTPException(404, "Not found"))
+    return await call_next(request)
 
 
 @app.middleware("http")
@@ -216,12 +230,18 @@ async def healthz():
 
 @app.get("/readyz")
 async def readyz():
-    """Readiness: can we reach the database?"""
+    """Readiness: one cheap query (select 1), nothing else, no login. It also wakes a sleeping Neon database."""
     try:
         await db.ping()
-        return {"ok": True, "db": "ok"}
+        return {"ok": True}
     except Exception as e:  # report the failure type, not secrets
         return JSONResponse({"ok": False, "db": type(e).__name__}, status_code=503)
+
+
+@app.get("/history", include_in_schema=False)
+async def history_moved():
+    """Decision history lives in the console; the old /history address goes to the applications list."""
+    return RedirectResponse("/applications", status_code=303)
 
 
 from onboarding.portal import router as portal_router  # noqa: E402

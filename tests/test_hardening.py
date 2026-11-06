@@ -8,7 +8,13 @@ import httpx
 import pytest
 from sqlalchemy import func, select
 
-FAKE_PG = "postgresql://vendor_user:s3cret-pw@ep-demo-123.ap-southeast-1.aws.neon.tech/neondb?sslmode=require"
+from tests.flags import flags_on  # noqa: E402
+
+# these tests drive /apply (no invite) and /bill, which are hidden unless their features are on
+_unsolicited = flags_on("unsolicited", scope="function", autouse=False)
+_payables_and_unsolicited = flags_on("payables", "unsolicited", scope="function", autouse=False)
+
+FAKE_PG ="postgresql://vendor_user:s3cret-pw@ep-demo-123.ap-southeast-1.aws.neon.tech/neondb?sslmode=require"
 
 
 def _use_db(path) -> None:
@@ -56,6 +62,7 @@ async def _invite_token() -> str:
 
 
 # --- S1: the demo parameter never replaces the vendor login ----------------------------------------------------
+@pytest.mark.usefixtures("_payables_and_unsolicited")
 @pytest.mark.parametrize("demo_tools", [False, True])
 def test_demo_parameter_never_skips_the_vendor_login(db, monkeypatch, demo_tools):
     from onboarding.config import get_settings
@@ -80,6 +87,7 @@ def test_demo_parameter_never_skips_the_vendor_login(db, monkeypatch, demo_tools
     assert after == before                                                                   # no anonymous run
 
 
+@pytest.mark.usefixtures("_unsolicited")
 def test_demo_prefill_needs_demo_mode_and_a_known_scenario(db, monkeypatch):
     from onboarding import web
     from onboarding.config import get_settings
@@ -155,6 +163,7 @@ def test_actor_cookie_is_signed_and_bound_to_the_login_and_audit_keeps_both_peop
 
 
 # --- S8: request and upload size caps ---------------------------------------------------------------------------
+@pytest.mark.usefixtures("_unsolicited")
 def test_oversized_bodies_and_files_get_413(db, monkeypatch):
     from onboarding.config import get_settings
 
@@ -328,6 +337,7 @@ def test_scenario_launcher_needs_staff_and_its_invite_opens_without_a_vendor_log
     assert o["submit"][0] == 303 and o["submit"][1].startswith("/runs/") and o["runs"] == 1 and len(started) == 1
 
 
+@pytest.mark.usefixtures("_payables_and_unsolicited")
 def test_a_double_post_with_one_submit_token_makes_one_application_and_one_bill(db, monkeypatch):
     import re
 

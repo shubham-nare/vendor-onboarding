@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 
 from onboarding import auth
 from onboarding.api.common import ApiError, chasing_item, counts, iso, person, staff_or_401, todo_item, when  # noqa: F401
-from onboarding.config import get_settings  # noqa: F401
+from onboarding.config import features, get_settings  # noqa: F401
 from onboarding.pipeline import read_sessions
 
 router = APIRouter()
@@ -25,7 +25,7 @@ async def session(request: Request):
         todo = (await _dashboard_ctx(request, s))["todo"]
         return {"staff": person(staff), "actor": person(actor), "demo": demo,
                 "people": [person(e) for e in await _employees(s)] if demo else [],
-                "counts": counts(todo)}
+                "counts": counts(todo), "features": features()}
 
 
 class ActAs(BaseModel):

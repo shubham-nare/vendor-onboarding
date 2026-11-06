@@ -7,7 +7,12 @@ from pathlib import Path
 
 import pytest
 
+from tests.flags import flags_on
+
 ROOT = Path(__file__).resolve().parent.parent
+
+# the API tests cover every screen's endpoint, including the hidden features'
+_features = flags_on("payables", "intel", "reliability", "followups", "unsolicited")
 
 
 @pytest.fixture(scope="module")

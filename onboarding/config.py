@@ -48,6 +48,14 @@ class Settings(BaseSettings):
     google_client_secret: str = ""
     opensanctions_api_key: str = ""
     google_maps_api_key: str = ""
+    # pacing of the live run view (seconds between rule stages); tests set runner.PACE = 0
+    stage_pace_seconds: float = 0.4
+    # Out-of-scope features: hidden (not deleted) unless switched on. Routes 404, off the menus, background work stops.
+    feature_payables: bool = False      # bills, invoices, purchase orders, change requests, /audit, AP screens
+    feature_intel: bool = False         # Vendor Intelligence, Vendor 360, relationships, simulate
+    feature_reliability: bool = False   # reliability panel and its approval gate
+    feature_followups: bool = False     # reminder and escalation loop
+    feature_unsolicited: bool = False   # /apply without an invite, pre-qualified suppliers
     demo_tools: bool = False  # development only: person switcher, demo scenarios, demo logins and sample files in the UI     # Vendor Intelligence: keys for identifier HMACs and encryption; if empty, derived like session_secret
     # --- reliability (agent E) ---
     read_cache_first: bool = True        # a saved reading for the same file (by SHA-256) is used before asking the AI: same file, same decision
@@ -60,11 +68,28 @@ def get_settings() -> Settings:
     return Settings()
 
 
+def feature(name: str) -> bool:
+    """Is an optional feature switched on? (FEATURE_PAYABLES, _INTEL, _RELIABILITY, _FOLLOWUPS, _UNSOLICITED)"""
+    return bool(getattr(get_settings(), f"feature_{name}"))
+
+
+def features() -> dict[str, bool]:
+    return {n: feature(n) for n in ("payables", "intel", "reliability", "followups", "unsolicited")}
+
+
 def database_host(url: str) -> str:
     """Where a database URL points, without user, password or query: safe to print or log."""
     if url.startswith("sqlite"):
         return "a local SQLite file"
     return urlsplit(url).hostname or "?"
+
+
+def db_label(url: str) -> str:
+    """The health-check name for the database, from the real URL (never claims Neon on SQLite)."""
+    if url.startswith("sqlite"):
+        return "Database (SQLite)"
+    host = urlsplit(url).hostname or ""
+    return "Database (Neon Postgres)" if "neon.tech" in host else "Database (Postgres)"
 
 
 def local_database(s: Settings | None = None) -> bool:

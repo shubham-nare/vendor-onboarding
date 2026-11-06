@@ -197,8 +197,9 @@ def golden(tmp_path_factory):
                 res["page_maker"] = (await staff["Arjun Mehta"].get(f"/runs/{rid}")).text
                 res["maker_approve"] = await action("Arjun Mehta", rid, "review_approve", "Bank letter seen, looks fine")
                 res["after_maker"] = await status_of(rid)
-                res["checker_approve_no_ack"] = await action("Kavita Rao", rid, "review_approve", "Called the bank: account confirmed")
-                res["checker_approve"] = await action("Kavita Rao", rid, "review_approve", "Called the bank: account confirmed", reliability_ack="1")
+                # FEATURE_RELIABILITY is off (the default): no reliability gate, so no separate acknowledgement step.
+                # The gate itself is covered with the flag on in test_web.py::test_a_serious_reliability_finding_must_be_read_before_approving
+                res["checker_approve"] = await action("Kavita Rao", rid, "review_approve", "Called the bank: account confirmed")
                 res["after"] = await status_of(rid)
             await v.aclose()
         for c in staff.values():
@@ -306,9 +307,7 @@ def test_shared_bank_rangoli_needs_the_finance_controller(golden):
     code, body = r["maker_approve"]
     assert code == 403 and "needs the Finance controller" in body                                 # Arjun cannot
     assert r["after_maker"] == "PENDING_REVIEW"
-    code, body = r["checker_approve_no_ack"]
-    assert code == 400 and "reliability check found serious concerns" in body                     # Kavita must read the warning first
-    assert r["checker_approve"][0] == 303 and r["after"] == "ACTIVE"                              # then Kavita can
+    assert r["checker_approve"][0] == 303 and r["after"] == "ACTIVE"                              # Kavita can, with no reliability_ack (gate is off)
 
 
 def test_proprietor_shinde_is_approved_at_medium_risk(golden):

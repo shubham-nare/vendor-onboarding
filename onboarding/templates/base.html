@@ -158,7 +158,7 @@
 
   {% if landing or vendor_page %}
   {% set CHEV %}<svg class="h-3.5 w-3.5 opacity-60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>{% endset %}
-  {% set SUPPLIER_LINKS = [('/apply', 'Register for future work'), ('/bill', 'Submit a bill'), ('/vendor', 'Track your registration')] + ([] if vendor_account else [('/vendor/login', 'Log in')]) %}
+  {% set SUPPLIER_LINKS = ([('/apply', 'Register for future work')] if FEATURES.unsolicited else []) + ([('/bill', 'Submit a bill')] if FEATURES.payables else []) + [('/vendor', 'Track your registration')] + ([] if vendor_account else [('/vendor/login', 'Log in')]) %}
   <header class="pub-bar sticky top-0 z-40">
     <div class="w-full px-4 sm:px-8 lg:px-12 2xl:px-16 h-16 flex items-center gap-2">
       {{ brand(BUYER.legal_name, 'top') }}
@@ -215,8 +215,9 @@
 
 
   {% else %}
-  {% set NAV = [('Approvals', [('/console', 'Home'), ('/applications', 'Applications'), ('/review', 'Review'), ('/invoices', 'Invoices')]),
-                ('In depth', [('/vendors', 'Vendors'), ('/prequalified', 'Pre-qualified'), ('/purchase-orders', 'Orders'), ('/audit', 'History'), ('/documents', 'Documents')]),
+  {% set NAV = [('Approvals', [('/console', 'Home'), ('/applications', 'Applications'), ('/review', 'Review')] + ([('/invoices', 'Invoices')] if FEATURES.payables else [])),
+                ('In depth', (([('/vendors', 'Vendors')] if FEATURES.intel else []) + ([('/prequalified', 'Pre-qualified')] if FEATURES.unsolicited else [])
+                              + ([('/purchase-orders', 'Orders'), ('/audit', 'History')] if FEATURES.payables else []) + [('/documents', 'Documents')])),
                 ('Settings', [('/supplier-accounts', 'Accounts'), ('/outbox', 'Outbox'), ('/check', 'Checker'), ('/system', 'System')])] %}
   {% set REVIEWER_ONLY = ['/relationships', '/purchase-orders', '/audit', '/documents', '/supplier-accounts', '/outbox', '/check', '/system'] %}
   {% set reviewer = actor and actor.role in ('maker', 'checker') %}
@@ -284,7 +285,7 @@
   {% endif %}
   {% if actor and not (landing or vendor_page) %}   {# staff pages only: public and supplier pages have no counts #}
   {# bottom-right reminder: decisions still waiting (amber); nothing shows when the queue is empty #}
-  {% if path != '/console' %}<aside id="pending-note" hidden role="status" aria-live="polite" class="bg-white border border-amber-300 border-l-4 border-l-amber-500 text-[13px]">
+  {% if path != '/console' and not path.startswith('/runs/') %}<aside id="pending-note" hidden role="status" aria-live="polite" class="bg-white border border-amber-300 border-l-4 border-l-amber-500 text-[13px]">
     <div class="flex items-start gap-3 px-4 py-3">
       <div class="flex-1 min-w-0">
         <div class="font-bold text-amber-800"><span id="pending-n" class="tabular-nums"></span> still waiting for you</div>

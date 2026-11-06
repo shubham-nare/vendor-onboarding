@@ -12,15 +12,27 @@ from onboarding.pipeline import mark_failed, run_pipeline
 log = logging.getLogger("onboarding.runner")
 _slots = asyncio.Semaphore(2)
 _tasks: set[asyncio.Task] = set()
-PACE = 0.45  # seconds between rule-stage updates in the live view
+PACE: float | None = None  # seconds between rule-stage updates; None reads settings.stage_pace_seconds (tests set 0)
+
+
+def _pace() -> float:
+    from onboarding.config import get_settings
+    return PACE if PACE is not None else get_settings().stage_pace_seconds
 
 
 async def _after(run_id: int) -> None:
     """Work after the decision is committed. Each step is isolated: its failure is logged, never turns the
-    finished run into a failed one."""
+    finished run into a failed one. Intelligence and reliability run only when their features are switched on."""
     from onboarding import mailer, reliability
+    from onboarding.config import feature
     from onboarding.intel.project import on_run_completed
-    for name, step in (("intelligence", on_run_completed), ("mail", mailer.deliver_for_run), ("reliability", reliability.check_run)):
+    steps = []
+    if feature("intel"):
+        steps.append(("intelligence", on_run_completed))
+    steps.append(("mail", mailer.deliver_for_run))
+    if feature("reliability"):
+        steps.append(("reliability", reliability.check_run))
+    for name, step in steps:
         try:
             await step(run_id)
         except Exception:
@@ -31,7 +43,7 @@ async def _run(run_id: int, prefer_cache: bool | None = None) -> None:
     """prefer_cache None: settings.read_cache_first (saved readings first)."""
     async with _slots:
         try:
-            dec = await run_pipeline(run_id, prefer_cache=prefer_cache, pace=PACE)
+            dec = await run_pipeline(run_id, prefer_cache=prefer_cache, pace=_pace())
         except Exception as e:  # never lose a run silently
             log.exception("run %s failed", run_id)
             await mark_failed(run_id, type(e).__name__)
