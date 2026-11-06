@@ -1,7 +1,7 @@
 # Render Blueprint: one free web service.
 services:
   - type: web
-    name: vendor-onboarding
+    name: parakh-vendors   # https://parakh-vendors.onrender.com
     runtime: python
     plan: free
     region: singapore

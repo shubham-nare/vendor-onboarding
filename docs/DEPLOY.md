@@ -108,3 +108,7 @@ The app builds every link from the request's host, so a custom domain needs no c
 3. At the domain's DNS: a **CNAME** record, name `vendors`, value `vendor-onboarding-c0dm.onrender.com`. Render verifies it and issues the HTTPS certificate itself, usually within minutes (DNS can take up to an hour).
 4. If "Continue with Google" is configured: add `https://vendors.parakh.tech/vendor/google/callback` to the OAuth client's authorised redirect URIs.
 5. The `onrender.com` address keeps working. The keep-alive pinger can stay on it, because it is the same service.
+
+## 6. Site address (2026-11-06)
+
+The site is **https://parakh-vendors.onrender.com**: a Render web service named `parakh-vendors`, on the same repo, branch and database as the original `vendor-onboarding` service (`vendor-onboarding-c0dm.onrender.com`). Render fixes the onrender.com name when a service is created, so the new address meant a new service with the same environment variables (same `DATABASE_URL`, `SESSION_SECRET`, `DEMO_PASSWORD` and `ADMIN_PASSCODE`). Run **only one** service against the database: suspend or delete the old one. Both would run the startup recovery of interrupted runs. The keep-alive workflow pings both addresses until the old service is deleted.
