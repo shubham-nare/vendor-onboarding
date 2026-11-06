@@ -594,7 +594,7 @@ App.views['/invites'] = {
 title: 'Invites',
 async render(view, created) {
 const made = new URLSearchParams(location.search).get('created');
-created = created || (made ? '/apply/' + made : '');
+created = (typeof created === 'string' && created) || (made ? '/apply/' + made : '');
 const d = await api('/invites');
 const bands = d.spend_bands.map(b => `<option>${esc(b)}</option>`).join('');
 const rows = d.invites.map(i => `<tr>
@@ -847,6 +847,7 @@ ${inbox ? `<section class="mt-6 bg-white border rounded-xl overflow-hidden"><div
 App.views['/system'] = {
 title: 'System check',
 async render(view, note = '') {
+if (typeof note !== 'string') note = '';
 const d = await api('/system'), f = d.followups;
 view.innerHTML = `<div><div class="kicker">Health</div><h1 class="text-[30px] sm:text-[38px] leading-tight mt-1">System check</h1>
 ${note ? `<div class="mt-4 rounded-md bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-900">${note}</div>` : ''}
