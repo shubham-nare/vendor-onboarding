@@ -55,6 +55,7 @@ def sim_records() -> list[dict]:
         (dd.KESARI, dd.KESARI["legal_name"], ""),
         (dd.BRINDAVAN, dd.BRINDAVAN["legal_name"], ""),
         (dd.IITBHU, "INDIAN INSTITUTE OF TECHNOLOGY (BANARAS HINDU UNIVERSITY)", dd.IITBHU["trade_name"]),
+        (dd.NITRR, dd.NITRR["legal_name"], dd.NITRR["trade_name"]),   # a real institute's public GST record
     ]
     for b, legal, trade in gst:
         recs.append(dict(kind="gst", key=b["gstin"], data=dict(
@@ -69,10 +70,11 @@ def sim_records() -> list[dict]:
         (dd.RANGOLI["pan"], dd.RANGOLI["legal_name"]), (dd.SHINDE["pan"], dd.SHINDE["proprietor"]),
         (dd.KESARI["pan"], dd.KESARI["legal_name"]), (dd.BRINDAVAN["pan"], dd.BRINDAVAN["legal_name"]),
         (dd.IITBHU["pan"], "INDIAN INSTITUTE OF TECHNOLOGY BANARAS HINDU UNIVERSITY"),
+        (dd.NITRR["pan"], dd.NITRR["legal_name"]),
     ]
     for pan, name in pans:
         recs.append(dict(kind="pan", key=pan, data=dict(name=name.upper(), status="VALID", aadhaar_linked=True)))
-    banks = [dd.NILGIRI, dd.TEJAS, dd.KAVERI_TRADERS, dd.SHINDE, dd.KESARI, dd.BRINDAVAN, dd.IITBHU]
+    banks = [dd.NILGIRI, dd.TEJAS, dd.KAVERI_TRADERS, dd.SHINDE, dd.KESARI, dd.BRINDAVAN, dd.IITBHU, dd.NITRR]
     for b in banks:
         recs.append(dict(kind="bank", key=f"{b['bank']['account']}@{b['bank']['ifsc']}",
                          data=dict(holder_name=b["bank"]["holder"], status="VALID")))
@@ -84,6 +86,19 @@ def sim_records() -> list[dict]:
     recs.append(dict(kind="udyam", key=dd.TEJAS["udyam"]["number"], data=dict(
         name=dd.TEJAS["legal_name"].upper(), type=dd.TEJAS["udyam"]["type"], status="Active")))
     return recs
+
+
+async def ensure_sim_registry(s) -> int:
+    """Demo mode: add any simulated-registry record that is missing (an older database seeded before a record was added).
+    Never changes or removes existing rows. Returns how many were added."""
+    have = {(k, key) for k, key in (await s.execute(select(SimRegistry.kind, SimRegistry.key))).all()}
+    added = 0
+    for r in sim_records():
+        if (r["kind"], r["key"]) not in have:
+            s.add(SimRegistry(**r))
+            have.add((r["kind"], r["key"]))
+            added += 1
+    return added
 
 
 async def seed(reset: bool = False, dispose: bool = True, allow_remote: bool = False) -> dict:

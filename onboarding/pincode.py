@@ -79,7 +79,7 @@ def pin_problem(pin: str, state: str) -> str:
         return f"'{pin}' isn't a valid PIN code: it has 6 digits and starts with 1 to 8."
     if not states:
         return f"PIN code {pin} isn't used by any Indian state's postal region."
-    if state and state not in states:
+    if state and _state(state) not in {_state(s) for s in states}:
         return f"PIN code {pin} is in {' / '.join(states)}, not {state}."
     return ""
 
@@ -99,6 +99,18 @@ def _norm(x: str) -> str:
     return re.sub(r"[^a-z ]", "", (x or "").lower().replace("&", "and")).strip()
 
 
+# Old or alternative state spellings (India Post's directory still uses several) -> the current name
+STATE_ALIASES = {"chattisgarh": "chhattisgarh", "chhatisgarh": "chhattisgarh", "orissa": "odisha", "pondicherry": "puducherry",
+                 "uttaranchal": "uttarakhand", "jammu kashmir": "jammu and kashmir", "andaman nicobar islands": "andaman and nicobar islands",
+                 "andaman and nicobar": "andaman and nicobar islands", "dadra and nagar haveli": "dadra and nagar haveli and daman and diu",
+                 "daman and diu": "dadra and nagar haveli and daman and diu", "nct of delhi": "delhi", "new delhi": "delhi"}
+
+
+def _state(x: str) -> str:
+    n = " ".join(_norm(x).split())
+    return STATE_ALIASES.get(n, n)
+
+
 def _names(city: str) -> set[str]:
     c = _norm(city)
     out = {c}
@@ -112,8 +124,8 @@ def live_pin_problem(pin: str, state: str, city: str, data: dict) -> tuple[str, 
     """Compare the address with India Post's own record of the PIN code.
     Returns (problem, note): a problem means the state is wrong (the vendor must fix it); a note means only the
     city name differs from the district (often a suburb or an old name), shown as a warning."""
-    states = {_norm(s) for s in data.get("states", [])}
-    if state and states and _norm(state) not in states:
+    states = {_state(s) for s in data.get("states", [])}
+    if state and states and _state(state) not in states:
         where = ", ".join(data.get("districts", [])[:2])
         return (f"India Post lists PIN code {pin} in {where + ', ' if where else ''}{' / '.join(data.get('states', []))}, not {state}.", "")
     places = {_norm(x) for x in data.get("districts", []) + data.get("offices", []) + data.get("blocks", [])}

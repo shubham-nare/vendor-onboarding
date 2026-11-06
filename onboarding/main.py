@@ -52,6 +52,17 @@ async def _purchase_orders() -> None:
         await s.commit()
 
 
+async def _sim_registry() -> None:
+    """Demo mode: simulated-registry records added in a newer version reach an existing database without a reset."""
+    from onboarding.pipeline import sessions
+    from onboarding.seeding import ensure_sim_registry
+    async with sessions()() as s:
+        n = await ensure_sim_registry(s)
+        await s.commit()
+    if n:
+        log.info("simulated registry: added %s record(s)", n)
+
+
 async def _sweep() -> None:
     """Runs a restart cut short: recent ones are re-queued once as a new linked run, the rest go to review."""
     from onboarding import pipeline
@@ -65,6 +76,8 @@ async def startup_steps() -> list[str]:
     Returns the names of the steps that failed; /readyz and /system show database problems."""
     from onboarding.config import get_settings
     steps = [("create tables", _create_tables), ("logins", _logins)]
+    if get_settings().demo_tools:
+        steps.append(("simulated registry", _sim_registry))
     if get_settings().demo_tools and get_settings().feature_payables:
         steps.append(("sample purchase orders", _purchase_orders))
     steps.append(("interrupted runs", _sweep))
@@ -125,7 +138,7 @@ app.mount("/static", StaticFiles(directory=__file__.rsplit("main.py", 1)[0] + "s
 
 
 # Company pages (the console) need an employee login; vendor pages have their own login (portal.py).
-COMPANY_AREAS = {"console", "act-as", "invites", "runs", "files", "outbox", "check", "assumptions", "system", "demo", "bills", "vendors", "supplier-accounts", "invoices", "purchase-orders", "audit", "change-requests", "applications", "review", "relationships"}
+COMPANY_AREAS = {"console", "act-as", "invites", "runs", "files", "outbox", "check", "assumptions", "system", "demo", "bills", "vendors", "supplier-accounts", "invoices", "purchase-orders", "audit", "change-requests", "applications", "review", "relationships", "documents"}
 
 
 @app.middleware("http")

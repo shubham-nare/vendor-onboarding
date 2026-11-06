@@ -687,6 +687,14 @@ async def _collect_form(request: Request, rate_limit: bool = True) -> tuple[dict
     return f, files, demo_key(str(data.get("demo") or ""))
 
 
+def _require_basics(form: dict) -> None:
+    """The fields every registration needs, checked on the server too: a direct POST can skip the browser's check."""
+    missing = [label for key, label in (("legal_name", "the legal name"), ("contact_email", "a contact email"))
+               if not str(form.get(key) or "").strip()]
+    if missing:
+        raise HTTPException(400, f"Please enter {' and '.join(missing)}, then submit again.")
+
+
 def _submit_token(form: dict) -> str | None:
     """The form's one-time submit token (apply.html sets a random one per page load): a double submit makes one run."""
     return form.pop("_submit_token", "") or None
@@ -816,6 +824,7 @@ async def apply_read(request: Request, slot: str = Form(...), file: UploadFile =
 async def apply_submit(request: Request, token: str):
     form, files, demo = await _collect_form(request, rate_limit=False)
     submit_token = _submit_token(form)
+    _require_basics(form)
     async with sessions()() as s:
         inv, bill, app = await _vendor_link(s, token)
         guest = _launcher_guest(inv, demo)
@@ -862,6 +871,7 @@ def _after_submit(request: Request, run: Run, acct: VendorAccount | None, demo: 
 async def bill_submit(request: Request):
     form, files, demo = await _collect_form(request)
     submit_token = _submit_token(form)
+    _require_basics(form)
     form["bill_mode"] = True
     for k in BILL_FIELDS:
         form.setdefault(k, "")
@@ -887,6 +897,7 @@ async def bill_submit(request: Request):
 async def apply_unsolicited_submit(request: Request):
     form, files, demo = await _collect_form(request)
     submit_token = _submit_token(form)
+    _require_basics(form)
     files = _fill_files(files, demo, {}, form)
     async with sessions()() as s:
         acct = await vendor_account(request, s)
