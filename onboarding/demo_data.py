@@ -364,7 +364,33 @@ IITBHU = {
     "contact": {"name": "Dean (Research & Development) office", "email": "rnd.office@iitbhu-vendor.example.com", "phone": "0542 670 1808"},
 }
 
+# NIT Raipur publishes its GST certificate, PAN and bank details for vendors and donors (nitrr.ac.in). The values below are
+# copied from those public documents; the files themselves are not in the repo (private_inputs/published locally).
+NITRR = {
+    "legal_name": "National Institute of Technology Raipur",
+    "trade_name": "National Institute of Technology Raipur",
+    "pan": "AAAJN0643G",
+    "gstin": "22AAAJN0643G1ZN",
+    "address": "1st Floor, NIT Campus, G E Road",
+    "city": "Raipur",
+    "state": "Chhattisgarh",
+    "pin": "492010",
+    "constitution": "Statutory Body",
+    "liability_date": "01/07/2017",
+    "bank": {"ifsc": "ICIC0005533", "bank": "ICICI Bank", "branch": "Kota, Raipur",
+             "account": "553301000043", "holder": "NATIONAL INSTITUTE OF TECHNOLOGY RAIPUR CSR", "type": "Savings"},
+    "contact": {"name": "Accounts Officer", "email": "accounts@nitrr-demo.example.com", "phone": "+91 77100 00000"},
+}
+
 PUBLISHED_SCENARIOS: dict[str, dict] = {
+    "real_nitrr": {
+        "title": "Real documents: NIT Raipur registers (happy path with real, self-published documents)",
+        "expected": "APPROVED",
+        "form": form(NITRR, "INSTITUTION"),
+        "files": {"gst_certificate": "nitrr_gst_certificate.pdf", "pan_card": "nitrr_pan.pdf", "bank_proof": "nitrr_bank_details.pdf"},
+        "note": "NIT Raipur publishes these on nitrr.ac.in. Its public registry record is in the simulated registry, so the "
+                "registry checks find it as the real GST lookup would.",
+    },
     "real_iitbhu": {
         "title": "Real documents: IIT (BHU) registers for an R&D consultancy",
         "expected": "PENDING_REVIEW",

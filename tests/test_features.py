@@ -486,3 +486,92 @@ def test_the_run_page_offers_a_replay_of_the_recorded_checks(db, monkeypatch):
     ago = float(re.search(r"const FINISHED_AGO = ([0-9.]+);", page).group(1))
     assert 0 <= ago < 120                                       # just finished: the page auto-plays the replay
     assert re.search(r'const TOOK = "\d+\.\d";', page)           # the real duration, from started_at/finished_at
+
+
+# --- PR 2: real-document happy path, PIN state spellings, display and validation fixes ----------------------------
+def test_india_post_old_state_spellings_still_fit():
+    from onboarding.pincode import live_pin_problem
+    raipur = {"states": ["Chattisgarh"], "districts": ["Raipur"], "offices": ["N.I.T. Raipur"], "blocks": []}
+    assert live_pin_problem("492010", "Chhattisgarh", "Raipur", raipur) == ("", "")       # same state, old spelling
+    assert live_pin_problem("751001", "Odisha", "Bhubaneswar", {"states": ["Orissa"], "districts": ["Khurda"], "offices": [], "blocks": []})[0] == ""
+    why, _ = live_pin_problem("492010", "Maharashtra", "Raipur", raipur)
+    assert "not Maharashtra" in why                                                           # a real mismatch still fails
+
+
+def test_nit_raipur_is_in_the_simulated_registry_and_reaches_an_older_database(db):
+    from onboarding.demo_data import NITRR
+    from onboarding.models import SimRegistry
+    from onboarding.pipeline import sessions
+    from sqlalchemy import select
+
+    from onboarding.seeding import ensure_sim_registry, sim_records
+    keys = {(r["kind"], r["key"]) for r in sim_records()}
+    assert {("gst", NITRR["gstin"]), ("pan", NITRR["pan"]), ("bank", f"{NITRR['bank']['account']}@{NITRR['bank']['ifsc']}")} <= keys
+
+    async def go():
+        async with sessions()() as s:   # a database seeded before NIT Raipur was added
+            await s.execute(SimRegistry.__table__.delete().where(SimRegistry.key == NITRR["gstin"]))
+            await s.commit()
+            added = await ensure_sim_registry(s)
+            await s.commit()
+            again = await ensure_sim_registry(s)
+            row = (await s.execute(select(SimRegistry).where(SimRegistry.key == NITRR["gstin"]))).scalar_one()
+            return added, again, row.data
+    added, again, data = asyncio.run(go())
+    assert added == 1 and again == 0 and data["status"] == "Active" and data["legal_name"] == "NATIONAL INSTITUTE OF TECHNOLOGY RAIPUR"
+
+
+def test_the_nit_raipur_identifiers_are_well_formed():
+    """The real-document happy path: NIT Raipur's GSTIN and PAN, as on its published documents, pass the format,
+    check-digit and PAN-inside-GSTIN rules (the registry part is covered above)."""
+    from onboarding import validators as V
+    from onboarding.demo_data import NITRR, form
+    f = form(NITRR, "INSTITUTION")
+    assert f["gstin"][2:12] == f["pan"] and V.gstin_checksum_ok(f["gstin"]) and f["gstin"][:2] == "22"   # 22 = Chhattisgarh
+
+
+def test_the_server_refuses_a_registration_without_a_legal_name(db):
+    async def go():
+        async with _client() as staff:
+            await _staff(staff)
+            loc = (await staff.get("/demo/proprietor_shinde", follow_redirects=False)).headers["location"]
+        async with _client() as guest:
+            r = await guest.post(loc.split("?")[0], data=_guest_form("proprietor_shinde") | {"legal_name": "  "})
+            return r.status_code, r.text
+    code, text = asyncio.run(go())
+    assert code == 400 and "legal name" in text
+
+
+def test_documents_sends_anonymous_visitors_to_the_staff_login(db):
+    async def go():
+        async with _client() as c:
+            return await c.get("/documents", follow_redirects=False)
+    r = asyncio.run(go())
+    assert r.status_code == 303 and r.headers["location"].startswith("/company/login")
+
+
+def test_applications_show_the_vendor_id_and_run_pages_show_no_none(db, monkeypatch):
+    from onboarding import mailer, runner
+    pending: list[asyncio.Task] = []
+    monkeypatch.setattr(runner, "PACE", 0)
+    monkeypatch.setattr(runner, "start", lambda run_id, prefer_cache=False: pending.append(asyncio.create_task(runner._run(run_id, True))))
+    monkeypatch.setattr(mailer, "start", lambda run_id: pending.append(asyncio.create_task(mailer.deliver_for_run(run_id))))
+
+    async def go():
+        async with _client() as staff:
+            await _staff(staff)                                      # Arjun
+            loc = (await staff.get("/demo/happy_nilgiri", follow_redirects=False)).headers["location"]
+            async with _client() as guest:
+                r = await guest.post(loc.split("?")[0], data=_guest_form("happy_nilgiri"))
+            rid = int(re.search(r"/runs/(\d+)", r.headers["location"]).group(1))
+            while pending:
+                batch = list(pending)
+                pending.clear()
+                await asyncio.gather(*batch)
+            page = (await staff.get(f"/runs/{rid}")).text
+            await staff.post(f"/runs/{rid}/action", data={"action": "activate"})
+            apps = (await staff.get("/api/v1/applications")).json()["applications"]
+            return page, next(a for a in apps if a["run_id"] == rid)
+    page, row = asyncio.run(go())
+    assert ">None<" not in page and "not_present" not in page
+    assert row["status"] == "ACTIVE" and row["vendor"] and row["vendor"]["id"].startswith("V-")

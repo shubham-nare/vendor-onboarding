@@ -21,6 +21,24 @@ Nilgiri's registration looks wrong on camera. Fallback: register a new vendor ac
 | shared_bank_rangoli | PENDING_REVIEW, fraud, high (R-RISK-02) | Finance only |
 | proprietor_shinde | APPROVED, medium | backup beat |
 
+## Revision (2026-11-06): real documents for the happy path
+
+Beat 1 now uses **NIT Raipur's real, self-published documents** (GST REG-06, PAN, bank details; nitrr.ac.in). They are kept in the local demo kit (`Desktop/Mamoni demo kit/8_real_institution_nit_raipur/`), **not in this repo**. Its README has the exact form values. NIT Raipur's public registry record is in the simulated registry (`demo_data.NITRR`), so the registry checks find it as the real GST lookup would.
+
+**Order matters** (anti-fraud rules see re-used documents): reset → **NIT Raipur happy path first** → then the variants.
+
+| Case (real documents, unedited) | Result (local run, live Gemini) | Key rule |
+|---|---|---|
+| NIT Raipur, all 3 documents | **APPROVED** → activate → **V-1001** | all pass; R-AU-5 warns that the bank letter was typed in LibreOffice |
+| Country "United Kingdom" with an Indian GSTIN as the tax ID | PENDING_VENDOR | R-ID-11 "looks like a GSTIN from India", R-ID-12 SWIFT country |
+| NIT Raipur's PAN with IIT BHU's GST certificate (borrowed GSTIN) | **REJECTED** | R-XD-03 (plus R-RISK-03/04: already registered, documents re-used) |
+| IIT BHU giving NIT Raipur's bank account | PENDING_REVIEW, fraud, high | R-RISK-02 |
+| Bank letter uploaded as the GST certificate | back to the vendor (before NIT Raipur is activated) | R-DOC-01 |
+| Bank proof missing | PENDING_VENDOR | R-COMP-02 |
+| A screenshot of the real GST PDF | PENDING_REVIEW | R-AU-1 "uploaded as an image, not the original PDF" |
+
+Tejas (resubmission with a diff), Kaveri (held rejection) and Rangoli (Finance only) keep their designed synthetic documents: they isolate one behaviour each. Forgeries (AI-made cheque, Canva-edited certificate) are in the kit's folder 6.
+
 ## Beats
 
 ### 0. Intro (window A, Priya, dashboard)  0:15

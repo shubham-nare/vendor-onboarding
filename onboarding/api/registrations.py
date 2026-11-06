@@ -25,6 +25,12 @@ async def applications(request: Request, status: str = "", q: str = ""):
         waiting = {t["href"] for t in todo if t["status"] not in ("BILL", "CHANGE")}
         emps = {e.id: e for e in await _employees(s)}
         rows = await _apps(s, actor)
+        from sqlalchemy import select
+
+        from onboarding.models import Run, VendorMaster
+        master = {app_id: (vid, name) for app_id, vid, name in (await s.execute(
+            select(Run.application_id, VendorMaster.vendor_id, VendorMaster.legal_name)
+            .join(VendorMaster, VendorMaster.source_run_id == Run.id))).all()}
         if status:
             rows = [x for x in rows if x["app"].current_status == status]
         if q:
@@ -36,7 +42,8 @@ async def applications(request: Request, status: str = "", q: str = ""):
                     else "A bill for work done" if x["bill"] else "No invite")
             out.append({"ref": a.ref, "name": a.legal_name, "run_id": run.id if run else None, "status": a.current_status,
                         "waiting": bool(run and f"/runs/{run.id}" in waiting), "risk": (run.risk_tier if run and full else None),
-                        "vendor": {"id": x["vendor"].vendor_id, "name": x["vendor"].display_name} if x["vendor"] and full else None,
+                        "vendor": ({"id": x["vendor"].vendor_id, "name": x["vendor"].display_name} if x["vendor"] else
+                                   {"id": master[a.id][0], "name": master[a.id][1]} if a.id in master else None) if full else None,
                         "came_in": came, "submitted": when(a.created_at)})
         out.sort(key=lambda r: not r["waiting"])   # stable: otherwise newest first
         return {"applications": out, "filters": {"status": status, "q": q}, "counts": counts(todo)}

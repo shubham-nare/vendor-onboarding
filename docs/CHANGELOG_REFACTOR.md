@@ -83,3 +83,12 @@ This records what changed, why, and any behaviour a user would notice. The basel
   - **Launcher runs played twice.** A run followed live, then reloaded on finish, was replayed again. Following a run live now marks it seen, so only pages opened after the run auto-replay.
   - **Run times:** DEMO_SCRIPT now gives 5–10 s per run.
   - **The Udyam certificate blocked the first Tejas submit** in the browser ("Please select a file"): Tejas leaves the certificate out on purpose, so that R-DOC-01 catches it. Now, when a demo scenario is loaded, the scenario decides which files are sent and file inputs carry no client-side `data-req`/`data-gst`. Real vendors keep the check. The launcher-form test covers all five scenarios as the browser sees them: no required file input, and every required field already filled.
+
+## PR 2: real-document happy path and fixes from the live checks
+- **Real documents:** NIT Raipur (`demo_data.NITRR`) is a real institute's public GST/PAN/bank record, in the simulated registry. Its self-published documents now go through the real flow → APPROVED (local run with live Gemini). The `real_nitrr` launcher entry appears only where the files exist locally.
+- **Registry at startup:** `seeding.ensure_sim_registry`, a demo-mode startup step, adds registry records that are missing from an existing database. It never changes or removes rows.
+- **PIN state spellings:** R-ID-10 compares states by their current name (Chattisgarh/Chhattisgarh, Orissa/Odisha, Pondicherry/Puducherry, Uttaranchal/Uttarakhand…). India Post still uses some old spellings, so every real Chhattisgarh vendor failed.
+- **Reading table:** the run page shows "—" and "not on the document" instead of `None` and `not_present`.
+- **Required fields on the server:** a registration without a legal name or contact email is refused (400), not only by the browser.
+- **Staff-only /documents:** `/documents` is in `COMPANY_AREAS`, so anonymous visitors go to the staff login.
+- **Vendor IDs in Applications:** the list shows the vendor ID from the vendor master when Vendor Intelligence is off.
