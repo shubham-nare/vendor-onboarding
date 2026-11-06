@@ -82,6 +82,7 @@ master directly and is unaffected), and again before every recording take.
 Render free sleeps after 15 minutes idle, and Neon suspends too. Document-only options:
 - Switch the service to **Starter** for the review window; or
 - point an external pinger (for example UptimeRobot) at `/readyz` every 10 minutes. `/readyz` touches the DB once, so it wakes Neon as well (`/healthz` would not).
+- **Set up (2026-11-06):** `.github/workflows/keepalive.yml` pings `/healthz` and `/readyz` every 10 minutes from GitHub Actions (it can start a few minutes late). Add cron-job.org on `/healthz` every 5 minutes for reliability. Disable both after the review window.
 
 ## 5. Warm-up before recording
 1. Open the site early (and `/readyz`) until it answers 200.
