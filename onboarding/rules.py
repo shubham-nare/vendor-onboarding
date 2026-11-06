@@ -280,7 +280,8 @@ def evaluate(ctx: Context) -> list[R]:
             for s in d.auth.signals:
                 if s.severity in ("info",):
                     continue
-                outcome = {"vendor": "VENDOR", "review": "REVIEW", "fraud": "REVIEW", "warn": "WARN"}[s.severity]
+                # a specimen / fictional document is rejected outright (held until a person confirms); other fraud signals go to review
+                outcome = "REJECT" if s.code == "AU-15" else {"vendor": "VENDOR", "review": "REVIEW", "fraud": "REVIEW", "warn": "WARN"}[s.severity]
                 add(R(f"R-{s.code}", "authenticity", WARN if outcome == "WARN" else FAIL, f"{SLOT_TITLE.get(slot, slot)}: {s.title}",
                       outcome, {"file": d.filename, "detail": s.detail}, vendor_text=s.vendor_text, internal=s.detail, fraud=s.severity == "fraud"))
 

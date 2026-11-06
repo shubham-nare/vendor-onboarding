@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     google_maps_api_key: str = ""
     # pacing of the live run view (seconds between rule stages); tests set runner.PACE = 0
     stage_pace_seconds: float = 0.4
+    # A document marked SPECIMEN / fictional test data (our demo fixtures, or any sample) is a fraud signal that rejects the
+    # application. True only in the automated tests, which use the fixtures to exercise the other rules. Never set it on the site.
+    accept_specimen_documents: bool = False
     # Out-of-scope features: hidden (not deleted) unless switched on. Routes 404, off the menus, background work stops.
     feature_payables: bool = False      # bills, invoices, purchase orders, change requests, /audit, AP screens
     feature_intel: bool = False         # Vendor Intelligence, Vendor 360, relationships, simulate
