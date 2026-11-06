@@ -29,6 +29,10 @@ DEMO_PASSWORD = get_settings().demo_password
 LEGACY_PUBLIC_PASSWORD = "demo_pass"   # was the default in the public repo: logins still using it are switched off
 DEMO_COMPANY_EMAIL = "arjun.mehta@mamoni.in"
 DEMO_VENDOR = dict(email=dd.KESARI["contact"]["email"], company_name=dd.KESARI["legal_name"], contact_name=dd.KESARI["contact"]["name"])
+# The live happy-path beat of the demo video: Nilgiri's own contact person signs in to Nilgiri's invite. Not the
+# invite's accounts@ address, which the golden tests register from the invite link.
+DEMO_VENDOR_NILGIRI = dict(email="anitha@nilgiripack.example.com", company_name=dd.NILGIRI["legal_name"], contact_name=dd.NILGIRI["contact"]["name"])
+DEMO_VENDORS = (DEMO_VENDOR, DEMO_VENDOR_NILGIRI)
 
 INVITES = {  # scenario_key -> (sponsor, company, reason, category, band, high)
     "happy_nilgiri": ("Priya Nair", dd.NILGIRI["legal_name"], "Corrugated boxes and protective packaging for Plant 2, replacing a supplier with late deliveries", "Packaging", "10-25 lakh", False),
@@ -212,11 +216,12 @@ async def ensure_demo_logins(s: AsyncSession) -> None:
             s.add(StaffLogin(employee_id=e.id, password_hash=await _hash(pw)))
         elif sl is not None and e.name in seeded_email:
             await _refresh(sl, pw, retired)
-    acct = (await s.execute(select(VendorAccount).where(VendorAccount.email == DEMO_VENDOR["email"]))).scalar_one_or_none()
-    if acct is None and pw:
-        s.add(VendorAccount(password_hash=await _hash(pw), **DEMO_VENDOR))
-    elif acct is not None:
-        await _refresh(acct, pw, retired)
+    for vendor in DEMO_VENDORS:
+        acct = (await s.execute(select(VendorAccount).where(VendorAccount.email == vendor["email"]))).scalar_one_or_none()
+        if acct is None and pw:
+            s.add(VendorAccount(password_hash=await _hash(pw), **vendor))
+        elif acct is not None:
+            await _refresh(acct, pw, retired)
     await s.flush()
 
 

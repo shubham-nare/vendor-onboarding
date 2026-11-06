@@ -39,6 +39,10 @@
       {% if done and run.finished_at and run.started_at %}
       <span class="text-[13px] text-slate-500"><b class="tabular-nums text-slate-900">{{ '%.1f' % (run.finished_at - run.started_at).total_seconds() }} s</b> · <b class="tabular-nums text-slate-900">{{ docs | length }}</b> document{{ 's' if docs | length != 1 }} · <b class="tabular-nums text-slate-900">{{ rules | length }}</b> checks</span>
       {% endif %}
+      <span id="replay-note" class="hidden text-[13px] font-medium text-indigo-700" aria-live="polite"></span>
+      {% if done and events %}
+      <button type="button" id="replay-btn" class="ml-auto rounded-full border border-slate-300 bg-white px-3.5 py-1 text-[12.5px] font-medium hover:border-slate-500">&#9654; Replay the checks</button>
+      {% endif %}
     </div>
     <ol id="stages" class="flex overflow-x-auto no-scrollbar">
       {% for key, label in stages %}
@@ -62,7 +66,7 @@
     </div>
   </section>
 
-  <div class="min-w-0">
+  <div id="run-result" class="min-w-0">
   {% if not done %}
     <section id="waiting" class="bg-white rounded-xl border px-5 sm:px-8 py-10 sm:py-14 text-center">
       {% if run.state in ('failed', 'interrupted') %}
@@ -144,7 +148,7 @@
     <div class="space-y-6 min-w-0">
 
     {% if full and FEATURES.reliability %}
-    {% set rel_high =reliab and reliab.level == 'high' %}
+    {% set rel_high = reliab and reliab.level == 'high' %}
     <!-- reliability -->
     <section id="reliability" class="bg-white rounded-xl border overflow-hidden">
       <div class="px-4 sm:px-6 py-4 border-b border-slate-200 flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -532,6 +536,7 @@ function finish() {
   setTimeout(() => location.reload(), 900);
 }
 
+function bindStageButtons() {
 document.querySelectorAll('#stages li.step > button').forEach(btn => btn.addEventListener('click', () => {
   const li = btn.parentElement, panel = document.getElementById('stage-detail');
   const open = btn.getAttribute('aria-expanded') === 'true';
@@ -543,12 +548,59 @@ document.querySelectorAll('#stages li.step > button').forEach(btn => btn.addEven
   document.getElementById('stage-detail-body').innerHTML = (log || '') + (rules || '<p class="text-[12.5px] text-slate-500">No individual checks in this step.</p>');
   panel.classList.remove('hidden');
 }));
+}
+bindStageButtons();
 document.getElementById('stage-detail-x').addEventListener('click', () => {
   document.getElementById('stage-detail').classList.add('hidden');
   document.querySelectorAll('#stages li.step > button').forEach(b => { b.setAttribute('aria-expanded', 'false'); b.classList.remove('bg-indigo-50'); });
 });
-INITIAL.forEach(apply);
-if (!FINISHED) {
+// --- replay: the stored stage events, in order, at a readable pace. Read-only: no requests, no writes. ---------
+// A run with saved readings finishes in a few seconds, so someone who opens it mid-run or just after it finished
+// would see every stage at once. Instead the recorded events play back step by step (labelled as a replay), then
+// the result appears, as in the live view. Once per run per browser tab session; a reload shows the static view.
+const FINISHED_AGO = {{ finished_ago | tojson }};
+const TOOK = {{ ('%.1f' % (run.finished_at - run.started_at).total_seconds()) | tojson if run.finished_at and run.started_at else 'null' }};
+const REPLAY_KEY = `replayed:${RUN_ID}`;
+const STEP_MS = 500, SUB_MS = 150;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const PRISTINE = new Map([...document.querySelectorAll('#stages li.step')].map(li => [li, li.innerHTML]));
+let replaying = false;
+function seen() { try { return sessionStorage.getItem(REPLAY_KEY) === '1'; } catch (e) { return true; } }
+function markSeen() { try { sessionStorage.setItem(REPLAY_KEY, '1'); } catch (e) {} }
+async function play(events) {
+  for (const ev of events) {
+    apply(ev);
+    await sleep(ev.state === 'running' ? SUB_MS : STEP_MS);
+  }
+}
+async function replay(label) {
+  if (replaying) return;
+  replaying = true; markSeen();
+  const note = document.getElementById('replay-note'), btn = document.getElementById('replay-btn'), result = document.getElementById('run-result');
+  note.textContent = label; note.classList.remove('hidden');
+  if (btn) btn.disabled = true;
+  result.classList.add('hidden');
+  PRISTINE.forEach((html, li) => { li.innerHTML = html; });
+  bindStageButtons();
+  await play([...INITIAL].sort((a, b) => a.seq - b.seq));
+  result.classList.remove('hidden');
+  note.textContent = 'Replayed the recorded checks' + (TOOK ? ` (the run took ${TOOK} s)` : '') + '.';
+  if (btn) btn.disabled = false;
+  replaying = false;
+}
+const replayBtn = document.getElementById('replay-btn');
+if (replayBtn) replayBtn.addEventListener('click', () => replay('Replaying the recorded checks' + (TOOK ? ` (the run took ${TOOK} s)` : '') + '…'));
+if (FINISHED && {{ 'true' if done else 'false' }} && FINISHED_AGO !== null && FINISHED_AGO <= 120 && !seen()) {
+  replay('Just finished: replaying the recorded checks' + (TOOK ? ` (the run took ${TOOK} s)` : '') + '…');
+} else if (!FINISHED && INITIAL.length && !seen()) {
+  // opened mid-run: catch up step by step, then follow live
+  markSeen();
+  (async () => { await play([...INITIAL].sort((a, b) => a.seq - b.seq)); startLive(); })();
+} else {
+  INITIAL.forEach(apply);
+  if (!FINISHED) startLive();
+}
+function startLive() {
   let es;
   try {
     es = new EventSource(`/runs/${RUN_ID}/stream?after=${last}`);

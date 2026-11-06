@@ -112,7 +112,14 @@ def flows(tmp_path_factory):
             f = SCENARIOS["bill_kesari"]["form"]
             data = {k: str(x) for k, x in f.items() if not isinstance(x, bool)} | {"bill_mode": "1", "gst_registered": "on", "demo": "bill_kesari"}
             r = await v.post("/bill", data=data)
-            run_id = int(re.search(r"/runs/(\d+)", r.headers["location"]).group(1))
+            out["bill_landing"] = r.headers["location"]   # a vendor-only browser: the thank-you page, never the staff live view
+            from sqlalchemy import select as _select
+
+            from onboarding.models import Application as _App, Run as _Run
+            from onboarding.pipeline import sessions as _sessions
+            ref = re.search(r"ref=([^&]+)", r.headers["location"]).group(1)
+            async with _sessions()() as s:
+                run_id = (await s.execute(_select(_Run.id).join(_App, _App.id == _Run.application_id).where(_App.ref == ref))).scalar_one()
             out["home_submitted"] = (await v.get(f"/vendor?submitted={run_id}")).text
             await drain()
             out["home_reg"] = (await v.get("/vendor")).text
@@ -466,6 +473,7 @@ def test_weak_passwords_are_refused(flows):
 
 
 def test_after_submitting_the_vendor_sees_under_review_not_thank_you(flows):
+    assert flows["bill_landing"].startswith("/thanks?for=bill")       # vendor-only browser: thank-you page, not the staff view
     page = html.unescape(flows["home_submitted"])
     assert "Submitted · under review" in page and "Thank you" not in page and "bg-amber-50" in page
     assert "isn't final until our team confirms it" in page

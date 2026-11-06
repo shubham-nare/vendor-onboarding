@@ -235,7 +235,11 @@ def _launcher_guest(inv: Invite | None, demo: str) -> bool:
     """A scenario-launcher invite opened for its own scenario: the demo vendor may fill it in without a vendor login.
     Needs demo mode and a known scenario (demo_key), and the invite must have been made by the launcher for that same
     scenario. A real invite with ?demo= still needs the vendor login (S1)."""
-    return bool(demo and demo_key(demo) == demo and inv is not None and inv.scenario_key == f"{LAUNCHER}{demo}")
+    if not (demo and demo_key(demo) == demo and inv is not None and inv.scenario_key.startswith(LAUNCHER)):
+        return False
+    launched = inv.scenario_key[len(LAUNCHER):]
+    # ... or the scenario that resubmits it (wrongdoc_tejas_resubmit on a wrongdoc_tejas launcher invite)
+    return demo == launched or SCENARIOS.get(demo, {}).get("resubmission_of") == launched
 
 
 async def _latest_run(s, app_id: int) -> Run | None:
@@ -841,12 +845,15 @@ async def apply_submit(request: Request, token: str):
         ref = (await s.get(Application, run.application_id)).ref
         await s.commit()
     runner.start(run.id)
-    return _after_submit(run, acct, demo, ref, "update" if parent else "registration")
+    return _after_submit(request, run, acct, demo, ref, "update" if parent else "registration")
 
 
-def _after_submit(run: Run, acct: VendorAccount | None, demo: str, ref: str = "", kind: str = "registration") -> RedirectResponse:
-    """Portal vendors see the thank-you page; demo shortcuts open the internal live view."""
-    if acct and not demo:
+def _after_submit(request: Request, run: Run, acct: VendorAccount | None, demo: str, ref: str = "",
+                  kind: str = "registration") -> RedirectResponse:
+    """A vendor sees the thank-you page. The internal live view only for a demo shortcut taken by someone who is also
+    logged in to the company console (the staff scenario launcher); a vendor-only browser never lands on a staff page."""
+    staff = auth.read_session(request.cookies.get(auth.COMPANY_COOKIE), purpose="company") is not None
+    if acct and not (demo and staff):
         return RedirectResponse(f"/thanks?for={kind}&ref={ref}", status_code=303)
     return RedirectResponse(f"/runs/{run.id}?from=vendor", status_code=303)
 
@@ -873,7 +880,7 @@ async def bill_submit(request: Request):
         ref = (await s.get(Application, run.application_id)).ref
         await s.commit()
     runner.start(run.id)
-    return _after_submit(run, acct, demo, ref, "bill")
+    return _after_submit(request, run, acct, demo, ref, "bill")
 
 
 @router.post("/apply")
@@ -891,7 +898,7 @@ async def apply_unsolicited_submit(request: Request):
             await claim(s, acct, app=await s.get(Application, run.application_id))
             await s.commit()
     runner.start(run.id)
-    return _after_submit(run, acct, demo, ref, "future")
+    return _after_submit(request, run, acct, demo, ref, "future")
 
 
 @router.get("/status/{token}", response_class=HTMLResponse)
@@ -962,6 +969,7 @@ async def run_view(request: Request, run_id: int):
                             fact_issues=_fact_issues(r["rules"]) if full else {}, profile_id=(r["profile"] or [[None]])[0][0] if feature("intel") else None, snap=(r["snap"] or [None])[0],
                             rights=_decision_rights(run, app, inv, bill, bill_emp, list(emps.values())) if latest else [],
                             vendor_token=inv.token if inv else (bill.token if bill else ""), events=events, stages=stages_for(run.form), docs=docs,
+                            finished_ago=(now() - _utc(run.finished_at)).total_seconds() if run.finished_at else None,
                             rules=r["rules"], facts=r["facts"], vendor_msg=msgs.get("vendor"),
                             all_vendor_msgs=[m for m in r["msgs"] if m.audience == "vendor"], internal=msgs.get("internal"),
                             actions=r["actions"], history=history, latest=latest, vendor=(r["vendor"] or [None])[0],
@@ -1346,7 +1354,7 @@ async def system(request: Request) -> dict:
         async def db_counts():
             try:  # one query for all the counts, sent while the bank lookup is in flight
                 row = (await s.execute(select(*(select(func.count()).select_from(m).scalar_subquery() for m in models)))).one()
-                return (db_label(st.database_url), True,f"connected in {round((time.monotonic() - t) * 1000)} ms; "
+                return (db_label(st.database_url), True, f"connected in {round((time.monotonic() - t) * 1000)} ms; "
                         + ", ".join(f"{m.__tablename__}: {v}" for m, v in zip(models, row)))
             except Exception as e:
                 return ("Database", False, type(e).__name__)

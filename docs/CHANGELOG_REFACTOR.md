@@ -61,3 +61,20 @@ This records what changed, why, and any behaviour a user would notice. The basel
 - **Visitor-address log:** one WARNING per process with the X-Forwarded-For entry count and the hop used (no addresses), so `TRUSTED_PROXY_HOPS` can be checked after a deploy.
 - **Clean-ups:** `main._sweep` calls `recover_interrupted` directly, and two formatting nits are fixed.
 - **Parked, not merged:** PAN/account encryption with a blind index, on branch `parked/s9-encryption`.
+
+## Lean phase (merges b2535f9 docs, 99c9499 code) and demo fixes
+- **Docs:** `docs/DEMO_SCRIPT.md` (5-minute recording plan), `docs/DEPLOY.md` (every env var, the submission settings, cold start), `docs/ARCHITECTURE.md` (Mermaid flow, invariants).
+- **Code:**
+  - The `FEATURE_PAYABLES/INTEL/RELIABILITY/FOLLOWUPS/UNSOLICITED` flags (all off by default) hide the out-of-scope features. Their routes return 404, they leave the navigation, and their background work stops. Nothing is deleted.
+  - `STAGE_PACE_SECONDS`, default 0.4.
+  - `/readyz` (`select 1`).
+  - `/history` redirects to `/applications`.
+  - The "waiting for you" toast no longer covers run pages or phone screens.
+  - Why cards lead with the problem.
+  - The `/system` database label comes from the URL.
+- **Golden change (own commit ce903c4):** with `FEATURE_RELIABILITY` off there is no reliability gate, so Kavita's Rangoli approval no longer needs `reliability_ack`. Every other Rangoli assertion stays: fraud, high risk, the neutral vendor message, Arjun's 403 ("needs the Finance controller") and Kavita's approval. The gate itself stays covered with the flag on (`test_web.py::test_a_serious_reliability_finding_must_be_read_before_approving`).
+- **Demo fixes (after review):**
+  - A second demo vendor login is seeded in demo mode, `anitha@nilgiripack.example.com` (Nilgiri's contact person), for beat 1 of the video. It is not the invite's `accounts@` address, which the golden tests register.
+  - A launcher invite also accepts its scenario's own resubmission (`wrongdoc_tejas_resubmit` on a `demo:wrongdoc_tejas` invite).
+  - After submitting, a vendor-only browser always lands on `/thanks`. Only someone who is also logged in as staff (the scenario launcher) goes to the live view. `test_portal` now finds the run from the ref and asserts the `/thanks` landing.
+  - **Run page replay:** the stored stage events play back in order, about 0.5 s per stage. It starts automatically when the page is opened mid-run or within 2 minutes of the run finishing, labelled with the real run duration. A "▶ Replay the checks" button is always available. The result appears only when the replay reaches the decision. It plays once per tab session and writes nothing.

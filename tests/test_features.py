@@ -341,3 +341,104 @@ def test_the_intel_and_reliability_tables_are_not_read_by_the_cross_checks():
     assert "ctx.master" in src   # R-RISK-02's input, loaded by the pipeline from VendorMaster
     pipe = (Path(__file__).resolve().parent.parent / "onboarding" / "pipeline.py").read_text(encoding="utf-8")
     assert "master=" in pipe and "select(VendorMaster)" in pipe
+
+
+# --- the demo video: Tejas resubmits on the launcher link as a guest; the vendor lands on /thanks; replay -----------
+def _guest_form(key: str) -> dict:
+    from onboarding.demo_data import SCENARIOS
+    form = {k: ("" if v is None else str(v)) for k, v in SCENARIOS[key]["form"].items() if not isinstance(v, bool)}
+    form["demo"], form["gst_registered"] = key, "on"
+    if SCENARIOS[key]["form"].get("msme"):
+        form["msme"] = "on"
+    return form
+
+
+def test_launcher_tejas_then_the_guest_resubmission_is_approved_with_the_diff(db, monkeypatch):
+    from onboarding import mailer, runner
+    from onboarding.models import Run
+    from onboarding.pipeline import sessions
+    pending: list[asyncio.Task] = []
+    monkeypatch.setattr(runner, "PACE", 0)
+    monkeypatch.setattr(runner, "start", lambda run_id, prefer_cache=False: pending.append(asyncio.create_task(runner._run(run_id, True))))
+    monkeypatch.setattr(mailer, "start", lambda run_id: pending.append(asyncio.create_task(mailer.deliver_for_run(run_id))))
+
+    async def drain():
+        while pending:
+            batch = list(pending)
+            pending.clear()
+            await asyncio.gather(*batch)
+
+    async def go():
+        out = {}
+        async with _client() as staff:
+            await _staff(staff)
+            loc = (await staff.get("/demo/wrongdoc_tejas", follow_redirects=False)).headers["location"]
+        link = loc.split("?")[0]
+        async with _client() as guest:
+            r = await guest.post(link, data=_guest_form("wrongdoc_tejas"))
+            first = int(re.search(r"/runs/(\d+)", r.headers["location"]).group(1))
+            await drain()
+            out["page"] = (await guest.get(f"{link}?demo=wrongdoc_tejas_resubmit")).status_code
+            r = await guest.post(link, data=_guest_form("wrongdoc_tejas_resubmit"))
+            out["resubmit"] = (r.status_code, r.headers.get("location", ""))
+            second = int(re.search(r"/runs/(\d+)", r.headers["location"]).group(1))
+            await drain()
+        async with sessions()() as s:
+            a, b = await s.get(Run, first), await s.get(Run, second)
+            out["first"], out["second"] = a.status, (b.status, b.parent_run_id == a.id, (b.summary or {}).get("diff"))
+        return out
+
+    o = asyncio.run(go())
+    assert o["first"] == "PENDING_VENDOR" and o["page"] == 200 and o["resubmit"][0] == 303
+    assert o["second"] == ("APPROVED", True, {"resolved": ["R-COMP-02", "R-DOC-01"], "still_open": [], "new": []})
+
+
+def test_a_vendor_only_browser_lands_on_thanks_and_the_nilgiri_demo_vendor_can_sign_in(db, monkeypatch):
+    from onboarding import runner
+    from onboarding.models import Invite
+    from onboarding.pipeline import sessions
+    from sqlalchemy import select
+
+    from onboarding.seeding import DEMO_PASSWORD, DEMO_VENDOR_NILGIRI
+    monkeypatch.setattr(runner, "start", lambda run_id, **kw: None)
+
+    async def go():
+        async with sessions()() as s:
+            token = (await s.execute(select(Invite.token).where(Invite.scenario_key == "happy_nilgiri"))).scalars().first()
+        async with _client() as v:   # the incognito window of beat 1: a vendor, not staff
+            r = await v.post("/vendor/login", data={"email": DEMO_VENDOR_NILGIRI["email"], "password": DEMO_PASSWORD})
+            login = r.status_code
+            page = await v.get(f"/apply/{token}?demo=happy_nilgiri")
+            r = await v.post(f"/apply/{token}", data=_guest_form("happy_nilgiri"))
+            return login, page.status_code, r.headers.get("location", ""), (await v.get("/vendor")).text
+
+    login, page, loc, home = asyncio.run(go())
+    assert login == 303 and page == 200
+    assert loc.startswith("/thanks?for=registration")          # never the staff live view in a vendor-only browser
+    assert "Nilgiri Packaging" in home
+
+
+def test_the_run_page_offers_a_replay_of_the_recorded_checks(db, monkeypatch):
+    from onboarding import mailer, runner
+    pending: list[asyncio.Task] = []
+    monkeypatch.setattr(runner, "PACE", 0)
+    monkeypatch.setattr(runner, "start", lambda run_id, prefer_cache=False: pending.append(asyncio.create_task(runner._run(run_id, True))))
+    monkeypatch.setattr(mailer, "start", lambda run_id: pending.append(asyncio.create_task(mailer.deliver_for_run(run_id))))
+
+    async def go():
+        async with _client() as staff:
+            await _staff(staff)
+            loc = (await staff.get("/demo/happy_nilgiri", follow_redirects=False)).headers["location"]
+            async with _client() as guest:
+                r = await guest.post(loc.split("?")[0], data=_guest_form("happy_nilgiri"))
+            while pending:
+                batch = list(pending)
+                pending.clear()
+                await asyncio.gather(*batch)
+            return (await staff.get(r.headers["location"].split("?")[0])).text
+
+    page = asyncio.run(go())
+    assert 'id="replay-btn"' in page and 'id="run-result"' in page and 'id="replay-note"' in page
+    ago = float(re.search(r"const FINISHED_AGO = ([0-9.]+);", page).group(1))
+    assert 0 <= ago < 120                                       # just finished: the page auto-plays the replay
+    assert re.search(r'const TOOK = "\d+\.\d";', page)           # the real duration, from started_at/finished_at
