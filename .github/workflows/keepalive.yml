@@ -1,0 +1,27 @@
+# Keeps the Render free instance awake (it sleeps after 15 minutes without traffic) during the review window.
+# GitHub may start scheduled runs a few minutes late; cron-job.org on /healthz every 5 minutes is the reliable
+# companion (docs/DEPLOY.md). Remove this file, or disable the workflow in the Actions tab, after the review.
+name: keep the site awake
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"   # every 10 minutes (UTC)
+  workflow_dispatch: {}       # "Run workflow" button in the Actions tab
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping /healthz (wakes the app) and /readyz (wakes the database)
+        run: |
+          for path in /healthz /readyz; do
+            for attempt in 1 2 3; do
+              code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 90 "https://vendor-onboarding-c0dm.onrender.com$path" || true)
+              echo "$path attempt $attempt: $code"
+              [ "$code" = "200" ] && break
+              sleep 20
+            done
+          done
