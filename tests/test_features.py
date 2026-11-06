@@ -634,3 +634,27 @@ def test_a_registration_with_specimen_documents_is_rejected(db, monkeypatch):
             return row, {x["rule_id"] for e in ev for x in ((e.get("evidence") or {}).get("rules") or []) if x["result"] == "FAIL"}
     row, fails = asyncio.run(go())
     assert row["status"] == "REJECTED" and "R-AU-15" in fails       # the clean-looking Nilgiri specimens never pass
+
+
+def test_the_applications_list_says_what_the_next_step_is(db, monkeypatch):
+    """'Waiting for you' on an Approved row meant 'activate it' but didn't say so: the list names the step."""
+    from onboarding import mailer, runner
+    pending: list[asyncio.Task] = []
+    monkeypatch.setattr(runner, "PACE", 0)
+    monkeypatch.setattr(runner, "start", lambda run_id, prefer_cache=False: pending.append(asyncio.create_task(runner._run(run_id, True))))
+    monkeypatch.setattr(mailer, "start", lambda run_id: pending.append(asyncio.create_task(mailer.deliver_for_run(run_id))))
+
+    async def go():
+        async with _client() as staff:
+            await _staff(staff)                                                  # Arjun (Procurement)
+            for key in ("proprietor_shinde", "borrowed_gstin_kaveri"):
+                loc = (await staff.get(f"/demo/{key}", follow_redirects=False)).headers["location"]
+                async with _client() as guest:
+                    await guest.post(loc.split("?")[0], data=_guest_form(key))
+            while pending:
+                batch = list(pending)
+                pending.clear()
+                await asyncio.gather(*batch)
+            return {a["status"]: a.get("next_step") for a in (await staff.get("/api/v1/applications")).json()["applications"]}
+    steps = asyncio.run(go())
+    assert steps.get("APPROVED") == "Activate vendor" and steps.get("REJECTED") == "Confirm the rejection"

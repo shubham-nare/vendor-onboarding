@@ -21,7 +21,7 @@ App.views['/applications'] = {
     paintCounts(d.counts);
     const rows = d.applications.map(x => `<tr class="group hover:bg-slate-50/80 ${x.run_id ? 'cursor-pointer' : ''} ${x.waiting ? 'bg-rose-50/40' : ''}"${x.run_id ? ` data-href="/runs/${x.run_id}"` : ''}>
       <td class="pl-5 pr-2 py-3">${x.run_id ? `<a href="/runs/${x.run_id}" class="mono font-medium group-hover:text-indigo-700">${esc(x.ref)}</a>` : `<span class="mono font-medium">${esc(x.ref)}</span>`}
-        ${x.waiting ? '<span class="ml-1 inline-flex items-center rounded-full bg-[#FF3B30] text-white text-[10.5px] font-semibold px-2 py-0.5 align-middle">Waiting for you</span>' : ''}
+        ${x.waiting ? `<span class="ml-1 inline-flex items-center rounded-full bg-[#FF3B30] text-white text-[10.5px] font-semibold px-2 py-0.5 align-middle" title="Waiting for you">${esc(x.next_step || 'Waiting for you')}</span>` : ''}
         <div class="text-[11.5px] text-slate-500">${esc(x.name)}</div></td>
       <td class="px-2 py-3" data-label="Vendor">${x.vendor ? `<a class="hover:text-indigo-700" href="/vendors/${esc(x.vendor.id)}">${esc(x.vendor.name)}</a><div class="text-[11.5px] text-slate-500 mono">${esc(x.vendor.id)}</div>` : '—'}</td>
       <td class="px-2 py-3" data-label="Status">${statusBadge(x.status)}</td>
