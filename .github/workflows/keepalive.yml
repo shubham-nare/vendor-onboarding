@@ -16,9 +16,9 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Ping /healthz (wakes the app) and /readyz (wakes the database)
-        # The new address first; the old service stays in the list until it is deleted (a suspended one just fails).
+        # The site: https://parakh-vendors.onrender.com
         run: |
-          for site in https://parakh-vendors.onrender.com https://vendor-onboarding-c0dm.onrender.com; do
+          for site in https://parakh-vendors.onrender.com; do
             for path in /healthz /readyz; do
               for attempt in 1 2 3; do
                 code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 90 "$site$path" || true)
