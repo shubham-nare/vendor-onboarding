@@ -29,7 +29,7 @@ Say: invite-first onboarding; the vendor submits GST, PAN and bank proof; **rule
 ### 1. Nilgiri happy path, fully live  1:55
 1. **Window A, Priya:** Invites -> new invite: company "Nilgiri Packaging Solutions Private Limited", contact email `anitha@nilgiripack.example.com`, business reason (packaging for Plant 2), category Packaging, band 10-25 lakh -> create. Copy the link shown after creation. Point at: the invite ties the vendor to a real business need; the spend band feeds risk. (0:20)
 2. **Window B, incognito:** paste the link (append `?demo=happy_nilgiri` to get the pre-filled form and the sample-file list). You are sent to vendor login: sign in as Anitha (`anitha@nilgiripack.example.com`), and the form opens. Attach the three files from `fixtures/documents/happy_nilgiri/`: `gst_certificate.pdf`, `pan_card.pdf`, `bank_proof.pdf`. Submit. The vendor lands on the thank-you page (a vendor never sees the internal view). (0:25)
-3. **Live run view, window A** (this is what graders grade; never cut it). Switch to window A -> Applications -> Nilgiri -> open the run. With saved readings the run itself takes about 4 s, so it is usually finished by the time the page opens: for 2 minutes after a run finishes, the page **auto-plays a replay of the recorded checks**, labelled "Just finished: replaying the recorded checks (the run took X s)", and the decision card appears only when the replay reaches the decision. Opened mid-run, it catches up step by step and then follows live. Any later time: press **"▶ Replay the checks"**. Say: *"the checks ran in about 4 seconds; here they are step by step."* Stages: invite, intake, completeness, read (AI), authenticity, identifiers, consistency, sources, risk, decision. Narrate: the AI reads each document without seeing what was typed; authenticity = file fingerprints, editor traces, signature; GSTIN check digit, PAN inside the GSTIN, live IFSC lookup; cross-document names; registry checks are simulated and labelled; the decision comes from rules. (0:40)
+3. **Live run view, window A** (this is what graders grade; never cut it). Switch to window A -> Applications -> Nilgiri -> open the run. With saved readings the run itself takes about 5 s (measured 4.5-5.2 s locally; expect a little more on Render), so it is usually finished by the time the page opens: for 2 minutes after a run finishes, the page **auto-plays a replay of the recorded checks**, labelled "Just finished: replaying the recorded checks (the run took X s)", and the decision card appears only when the replay reaches the decision. Opened mid-run, it catches up step by step and then follows live. Any later time: press **"▶ Replay the checks"**. Say: *"the checks ran in about five seconds; here they are step by step."* (The label shows the real duration.) Stages: invite, intake, completeness, read (AI), authenticity, identifiers, consistency, sources, risk, decision. Narrate: the AI reads each document without seeing what was typed; authenticity = file fingerprints, editor traces, signature; GSTIN check digit, PAN inside the GSTIN, live IFSC lookup; cross-document names; registry checks are simulated and labelled; the decision comes from rules. (0:40)
 4. **Decision card:** APPROVED, low risk. Point at the facts table with proof levels A0-A4 (declared, evidenced, genuine, cryptographically proven, confirmed at source) and that simulated registries never reach A4. **Window A as Priya:** Activate is blocked ("Segregation of duties"). Switch to **Arjun** -> Activate -> vendor ID V-1001. (0:30)
 
 ### 2. Tejas wrong document (launcher)  0:55
@@ -49,8 +49,12 @@ Dashboard: every run, status, risk. Say what is simulated (GST, PAN, penny-drop,
 ## Timing budget
 
 An invite run has 10 stages (the 11th, "bill", exists only for bill-first registrations). At 0.4 s per stage:
-10 x 0.4 = **4.0 s of animation per run**, plus the reading (saved copies, near instant). Five runs (Nilgiri,
-Tejas, Tejas resubmit, Kaveri, Rangoli) = about 20 s of pure stage time; the rest is clicking and narration.
+10 x 0.4 = **4.0 s of animation per run**, plus the reading (saved copies, near instant) and the checks themselves.
+
+**Measured in the rehearsal (2026-11-06, local server, saved readings, STAGE_PACE_SECONDS=0.4):** Nilgiri 5.2 s,
+Tejas 4.5 s, Tejas resubmission 4.6 s, Kaveri 4.8 s, Rangoli 4.5 s, Shinde 4.8 s per run. The whole scripted flow
+(every request of the five beats, including the backup) ran in 38 s of machine time, so the 5-minute budget is
+narration and clicking. On Render, add the cold start (see DEPLOY.md: wake it first) and network latency.
 
 | Beat | Time | Running total |
 |---|---|---|
