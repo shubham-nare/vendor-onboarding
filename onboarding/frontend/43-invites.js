@@ -15,7 +15,7 @@ App.views['/invites'] = {
       <td class="inline-sm px-2 py-2 text-right pr-4 whitespace-nowrap">${i.link ? `<a class="text-xs text-indigo-700 underline" href="${esc(i.link)}">${esc(i.link_label)}</a>` : ''}</td></tr>`).join('');
     const link = created ? location.origin + created : '';
     view.innerHTML = `<div><div class="kicker">Requesters</div><h1 class="text-[30px] sm:text-[38px] leading-tight mt-1">Invites</h1>
-      <a href="/prequalified" class="mt-3 flex items-center justify-between gap-3 rounded-[14px] border border-slate-200 bg-white px-4 py-3 hover:border-[#0071E3]">
+      <a href="/prequalified" data-optional class="mt-3 flex items-center justify-between gap-3 rounded-[14px] border border-slate-200 bg-white px-4 py-3 hover:border-[#0071E3]">
         <span class="text-[14px]"><b>Before inviting someone new,</b> look at the pre-qualified suppliers: already checked, ready when you need them.</span><span class="text-[#0066CC] text-[14px] font-medium shrink-0">Pre-qualified ›</span></a>
       ${link ? `<div class="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4"><div class="text-sm font-medium text-emerald-900">Invite created. In production this link is emailed to the vendor's contact.</div>
         <div class="mt-2 flex flex-wrap items-center gap-2"><input id="link" readonly class="w-full sm:w-auto sm:flex-1 min-w-0 mono text-xs rounded-md border px-2 py-1.5 bg-white" value="${esc(link)}">

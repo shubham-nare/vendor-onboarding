@@ -86,7 +86,7 @@ App.views['/review'] = {
         <ul class="divide-y divide-slate-100">${d.changes.map(changeItem).join('')}</ul></section>` : ''}
       <section class="bg-white border rounded-xl overflow-hidden">
         <div class="px-4 sm:px-5 py-4 border-b border-slate-100 flex items-baseline justify-between gap-3"><h2 class="text-[16px]">Invoices <span class="text-slate-400 font-normal">${d.invoices.length}</span></h2>
-          <a href="/invoices" class="text-[13px] text-indigo-700 hover:underline">All invoices ›</a></div>
+          <a href="/invoices" data-optional class="text-[13px] text-indigo-700 hover:underline">All invoices ›</a></div>
         ${list(d.invoices, 'No invoices need you right now.')}</section>
       <section class="bg-white border rounded-xl overflow-hidden">
         <div class="px-4 sm:px-5 py-4 border-b border-slate-100 flex items-baseline justify-between gap-3"><h2 class="text-[16px]">Vendor decisions <span class="text-slate-400 font-normal">${d.apps.length}</span></h2>

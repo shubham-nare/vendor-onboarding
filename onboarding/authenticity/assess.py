@@ -12,6 +12,7 @@ Never "reject": authenticity signals route; they never decide alone (principle 3
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import re
@@ -87,6 +88,12 @@ def _parse_date(s: str) -> datetime | None:
         except (ValueError, AttributeError):
             continue
     return None
+
+
+async def assess_async(raw: bytes, mime: str, read: DocRead | None) -> Authenticity:
+    """assess() on a worker thread: PIL, pypdf and the signature check are CPU-bound and would stall every other
+    request (and the live run view) while they work."""
+    return await asyncio.to_thread(assess, raw, mime, read)
 
 
 def assess(raw: bytes, mime: str, read: DocRead | None) -> Authenticity:

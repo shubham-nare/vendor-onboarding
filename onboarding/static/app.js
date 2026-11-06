@@ -6,7 +6,8 @@ constructor(status, message) { super(message); this.status = status; }
 }
 async function api(path, { method = 'GET', body } = {}) {
 const opts = { method, credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } };
-if (body !== undefined) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+if (body instanceof FormData) opts.body = body;
+else if (body !== undefined) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
 let r;
 try { r = await fetch('/api/v1' + path, opts); }
 catch (e) { throw new ApiError(0, 'Could not reach the server. Check your connection and try again.'); }
@@ -121,9 +122,29 @@ const REVIEWER_ONLY = ['/relationships', '/purchase-orders', '/audit', '/documen
 const isOn = (href, path) => path === href || (href !== '/console' && path.startsWith(href + '/')) ||
 (href === '/console' && path.startsWith('/invites')) || (href === '/applications' && path.startsWith('/runs/'));
 const badge = (kind, n) => `<span class="review-count${kind === 'apps' ? ' apps-count' : ''}" data-count="${kind}"${n ? '' : ' hidden'} aria-label="${n} ${kind === 'apps' ? 'applications waiting' : 'waiting'}">${n > 99 ? '99+' : n}</span>`;
+const FEATURE_PATHS = {
+payables: /^\/(bill|bills|invoices|purchase-orders|change-requests|audit)(\/|$)/,
+intel: /^\/(vendors|relationships)(\/|$)/,
+unsolicited: /^\/(apply|prequalified)$|^\/prequalified\//,
+};
+function featureOff(href) {
+const f = (App.session && App.session.features) || {};
+const path = new URL(href, location.href).pathname;
+return Object.entries(FEATURE_PATHS).some(([name, rx]) => !f[name] && rx.test(path));
+}
+function dropDeadLinks(root) {
+qsa('a[href^="/"]', root).forEach(a => {
+if (!featureOff(a.getAttribute('href'))) return;
+if (a.hasAttribute('data-optional')) { a.remove(); return; }
+const span = document.createElement('span');
+span.className = a.className.split(/\s+/).filter(c => !c.startsWith('hover:') && c !== 'underline').join(' ');
+span.innerHTML = a.innerHTML;
+a.replaceWith(span);
+});
+}
 function navItems(session) {
 const reviewer = ['maker', 'checker'].includes(session.actor.role);
-return NAV.map(([group, items]) => [group, items.filter(([href]) => reviewer || !REVIEWER_ONLY.includes(href))]).filter(([, items]) => items.length);
+return NAV.map(([group, items]) => [group, items.filter(([href]) => !featureOff(href) &&(reviewer || !REVIEWER_ONLY.includes(href)))]).filter(([, items]) => items.length);
 }
 function personaMenu(session, where, compact) {
 const a = session.actor;
@@ -189,7 +210,7 @@ b.setAttribute('aria-label', `${n} ${b.dataset.count === 'apps' ? 'applications 
 let reminded = false;
 function remind(d, path) {
 const box = qs('#pending-note');
-if (reminded || !box || !d.count || path === '/console' || store.get('pending-hidden')) return;
+if (reminded || !box || !d.count || path === '/console' || path.startsWith('/runs/') || store.get('pending-hidden')) return;
 reminded = true;
 qs('#pending-n').textContent = d.count;
 qs('#pending-list').innerHTML = d.items.map(t => `<li><a class="hover:underline" href="${esc(t.href)}">${esc(t.verb)}: ${esc(t.name)} (${esc(t.ref)})</a></li>`).join('')
@@ -447,7 +468,7 @@ ${d.full && d.changes.length ? `<section id="changes" class="bg-white border rou
 <ul class="divide-y divide-slate-100">${d.changes.map(changeItem).join('')}</ul></section>` : ''}
 <section class="bg-white border rounded-xl overflow-hidden">
 <div class="px-4 sm:px-5 py-4 border-b border-slate-100 flex items-baseline justify-between gap-3"><h2 class="text-[16px]">Invoices <span class="text-slate-400 font-normal">${d.invoices.length}</span></h2>
-<a href="/invoices" class="text-[13px] text-indigo-700 hover:underline">All invoices ›</a></div>
+<a href="/invoices" data-optional class="text-[13px] text-indigo-700 hover:underline">All invoices ›</a></div>
 ${list(d.invoices, 'No invoices need you right now.')}</section>
 <section class="bg-white border rounded-xl overflow-hidden">
 <div class="px-4 sm:px-5 py-4 border-b border-slate-100 flex items-baseline justify-between gap-3"><h2 class="text-[16px]">Vendor decisions <span class="text-slate-400 font-normal">${d.apps.length}</span></h2>
@@ -584,7 +605,7 @@ const rows = d.invites.map(i => `<tr>
 <td class="inline-sm px-2 py-2 text-right pr-4 whitespace-nowrap">${i.link ? `<a class="text-xs text-indigo-700 underline" href="${esc(i.link)}">${esc(i.link_label)}</a>` : ''}</td></tr>`).join('');
 const link = created ? location.origin + created : '';
 view.innerHTML = `<div><div class="kicker">Requesters</div><h1 class="text-[30px] sm:text-[38px] leading-tight mt-1">Invites</h1>
-<a href="/prequalified" class="mt-3 flex items-center justify-between gap-3 rounded-[14px] border border-slate-200 bg-white px-4 py-3 hover:border-[#0071E3]">
+<a href="/prequalified" data-optional class="mt-3 flex items-center justify-between gap-3 rounded-[14px] border border-slate-200 bg-white px-4 py-3 hover:border-[#0071E3]">
 <span class="text-[14px]"><b>Before inviting someone new,</b> look at the pre-qualified suppliers: already checked, ready when you need them.</span><span class="text-[#0066CC] text-[14px] font-medium shrink-0">Pre-qualified ›</span></a>
 ${link ? `<div class="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4"><div class="text-sm font-medium text-emerald-900">Invite created. In production this link is emailed to the vendor's contact.</div>
 <div class="mt-2 flex flex-wrap items-center gap-2"><input id="link" readonly class="w-full sm:w-auto sm:flex-1 min-w-0 mono text-xs rounded-md border px-2 py-1.5 bg-white" value="${esc(link)}">
@@ -832,19 +853,19 @@ ${note ? `<div class="mt-4 rounded-md bg-emerald-50 border border-emerald-200 p-
 <div class="mt-6 bg-white rounded-xl border divide-y divide-slate-100 max-w-3xl">${d.checks.map(c => `<div class="p-4 flex gap-3 min-w-0">
 <span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-white ${c.ok ? 'bg-emerald-600' : 'bg-rose-600'}">${icon(c.ok ? 'check' : 'x', 'h-3.5 w-3.5')}</span>
 <div><div class="text-sm font-medium">${esc(c.name)}</div><div class="text-xs text-slate-500 break-words">${esc(c.detail)}</div></div></div>`).join('')}</div>
-<section class="mt-8 max-w-3xl bg-white border p-4 text-sm"><div class="flex flex-wrap items-start gap-3"><div class="flex-1 min-w-0">
+${f.enabled ? `<section class="mt-8 max-w-3xl bg-white border p-4 text-sm"><div class="flex flex-wrap items-start gap-3"><div class="flex-1 min-w-0">
 <div class="font-medium">Vendor follow-ups</div>
 <div class="text-xs text-slate-500 mt-0.5">Runs by itself every ${f.every_hours} hours. Reminder after ${f.remind_after_days} days without an answer; after ${f.escalate_after_days} days a second reminder and a note to the employee who asked for the vendor.
 ${f.waiting} vendor${f.waiting === 1 ? '' : 's'} waiting now.${f.last ? ` Last follow-up sent ${esc(f.last.label)}.` : ''}</div></div>
 <button type="button" id="fu-now" class="bg-indigo-600 text-white px-4 py-2 sm:py-1.5 font-semibold">Run follow-ups now</button></div>
-<div id="fu-result" class="mt-3 border-l-4 border-l-slate-300 bg-slate-50 px-3 py-2 text-[12.5px]" hidden></div></section>
+<div id="fu-result" class="mt-3 border-l-4 border-l-slate-300 bg-slate-50 px-3 py-2 text-[12.5px]" hidden></div></section>` : ''}
 <form id="reset-form" class="mt-8 max-w-3xl bg-white rounded-xl border p-4 flex flex-wrap items-center gap-3 text-sm">
 <div class="flex-1 basis-full sm:basis-0 min-w-0"><div class="font-medium">Reset data</div><div class="text-xs text-slate-500">Deletes every run and reloads employees, invites, vendor master, blocklist and registry records.</div></div>
 <input type="password" name="passcode" required placeholder="Passcode" aria-label="Passcode" autocomplete="off" class="flex-1 sm:flex-none min-w-0 rounded-md border px-3 py-2 sm:py-1.5">
 <button class="rounded-md bg-rose-600 text-white px-4 py-2 sm:py-1.5">Reset</button>
 <p class="basis-full text-[13px] text-rose-700" data-error hidden></p></form></div>`;
 const btn = qs('#fu-now', view), out = qs('#fu-result', view);
-btn.onclick = async () => {
+if (btn) btn.onclick = async () => {
 btn.disabled = true;
 try {
 const r = await api('/system/followups', { method: 'POST' });
@@ -863,18 +884,399 @@ await App.views['/system'].render(view, 'Reset done: all runs cleared, reference
 });
 },
 };
+const crumb = (href, label, here) => `<div class="text-[13px] font-medium text-slate-500 flex items-center gap-1.5"><a href="${href}" class="hover:text-slate-900">${label}</a> ${icon('chev', 'h-3.5 w-3.5 text-slate-400')} <span class="text-slate-800">${here}</span></div>`;
+const PO_STATE = { open: ['Open', 'text-amber-700 bg-amber-50'], closed: ['Closed', 'text-emerald-700 bg-emerald-50'], cancelled: ['Cancelled', 'text-rose-700 bg-rose-50'] };
+const num = n => Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+function wireForm(form, send) {
+form.addEventListener('submit', async e => {
+e.preventDefault();
+const err = qs('[data-error]', form), btns = qsa('button:not([type=button])', form);
+btns.forEach(b => { b.disabled = true; });
+if (err) err.hidden = true;
+try { await send(form, e.submitter); }
+catch (x) { if (err) { err.textContent = x.message; err.hidden = false; } }
+finally { btns.forEach(b => { b.disabled = false; }); }
+});
+}
+App.views['/purchase-orders/:id'] = {
+title: p => `Order ${p.id}`,
+async render(view, { id }) {
+const d = await api(`/purchase-orders/${encodeURIComponent(id)}`), t = d.totals;
+const st = PO_STATE[d.status] || [d.status, 'text-slate-600 bg-slate-50'];
+const facts = [['Cost centre', d.cost_centre || '—'], ['Requested by', d.requested_by || '—'], ['Approved by', d.approved_by || '—'],
+['Service period', d.service_period || '—'], ['Pays into', d.pays_into], ['Deliveries', `${d.deliveries.length} recorded`]];
+const lineState = l => l.delivered >= l.quantity ? '<span class="tag dot text-emerald-700 bg-emerald-50">Delivered</span>'
+: l.delivered > 0 ? '<span class="tag dot text-amber-700 bg-amber-50">Partly delivered</span>' : '<span class="tag dot text-rose-700 bg-rose-50">Not delivered</span>';
+view.innerHTML = `<div class="space-y-6"><div>${crumb('/purchase-orders', 'Orders', `<span class="mono">${esc(d.number)}</span>`)}
+<div class="mt-1.5 flex flex-wrap items-start justify-between gap-4"><div>
+<h1 class="flex flex-wrap items-center gap-3">${esc(d.number)} <span class="tag dot ${st[1]} !text-[12px]">${esc(st[0])}</span></h1>
+<p class="mt-1 text-[13.5px] text-slate-600">${d.vendor.id ? `<a class="font-medium text-indigo-700 hover:underline" href="/vendors/${esc(d.vendor.id)}">${esc(d.vendor.name)}</a>` : esc(d.vendor.name)} · <span class="mono">${esc(d.vendor.gstin)}</span></p></div>
+<dl class="grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-2 text-right">
+<div><dt class="text-[12px] font-medium text-slate-500">Order value</dt><dd class="text-[22px] font-semibold tabular-nums">${inr(t.order)}</dd></div>
+<div><dt class="text-[12px] font-medium text-slate-500">Delivered</dt><dd class="text-[22px] font-semibold tabular-nums ${t.delivered >= t.order - 0.5 ? 'text-emerald-700' : 'text-amber-700'}">${inr(t.delivered)}</dd></div>
+<div><dt class="text-[12px] font-medium text-slate-500">Invoiced</dt><dd class="text-[22px] font-semibold tabular-nums ${t.invoiced > t.delivered + 0.5 ? 'text-rose-700' : ''}">${inr(t.invoiced)}</dd></div>
+<div><dt class="text-[12px] font-medium text-slate-500">Paid</dt><dd class="text-[22px] font-semibold tabular-nums ${t.paid ? 'text-emerald-700' : ''}">${inr(t.paid)}</dd></div></dl></div></div>
+<dl class="bg-white border rounded-xl px-4 sm:px-6 py-3 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-x-6 gap-y-3 text-[13px]">${facts.map(([k, v]) => `<div class="min-w-0"><dt class="text-slate-500 text-[12px]">${k}</dt><dd class="mt-0.5 font-medium truncate">${esc(v)}</dd></div>`).join('')}</dl>
+<section class="bg-white border rounded-xl overflow-hidden"><div class="px-4 sm:px-6 py-4 border-b border-slate-100"><h2 class="text-[16px]">Lines and delivery</h2></div>
+<div class="overflow-x-auto"><table class="w-full text-[13px]"><thead class="text-left text-slate-500 bg-slate-50/70"><tr><th class="pl-4 sm:pl-6 pr-2 py-2">Line</th><th class="px-2">Delivery</th><th class="px-2 text-right">Ordered</th><th class="px-2 text-right">Delivered</th><th class="px-2 text-right">Unit price</th><th class="px-2 text-right">GST</th><th class="pr-4 sm:pr-6 pl-2 text-right">Value incl. GST</th></tr></thead>
+<tbody class="divide-y divide-slate-100">${d.lines.map(l => `<tr><td class="pl-4 sm:pl-6 pr-2 py-2.5">${esc(l.description)}</td><td class="px-2 py-2.5 whitespace-nowrap">${lineState(l)}</td>
+<td class="px-2 text-right tabular-nums">${num(l.quantity)} ${esc(l.unit)}</td>
+<td class="px-2 text-right tabular-nums font-semibold ${l.delivered >= l.quantity ? 'text-emerald-700' : l.delivered > 0 ? 'text-amber-700' : 'text-rose-700'}">${num(l.delivered)}</td>
+<td class="px-2 text-right tabular-nums">${inr(l.unit_price)}</td><td class="px-2 text-right">${num(l.tax_rate)}%</td><td class="pr-4 sm:pr-6 pl-2 text-right tabular-nums">${inr(l.value)}</td></tr>`).join('')}</tbody></table></div></section>
+<div class="grid lg:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
+<section class="bg-white border rounded-xl overflow-hidden"><div class="px-4 sm:px-6 py-4 border-b border-slate-100"><h2 class="text-[16px]">Deliveries</h2></div>
+<ul class="divide-y divide-slate-100">${d.deliveries.length ? d.deliveries.map(g => `<li class="px-4 sm:px-6 py-2.5 text-[13px]"><span class="mono font-medium">${esc(g.number)}</span> · ${g.kind === 'goods' ? 'goods received' : 'service confirmed'} on ${esc(g.on)} by ${esc(g.by || '—')}${g.note ? `<div class="text-slate-500">${esc(g.note)}</div>` : ''}</li>`).join('')
+: '<li class="px-6 py-4 text-[13px] text-amber-700">Nothing recorded yet: invoices against this order will wait for review.</li>'}</ul></section>
+<section class="bg-white border rounded-xl overflow-hidden"><div class="px-4 sm:px-6 py-4 border-b border-slate-100"><h2 class="text-[16px]">Record a delivery</h2><p class="text-[12.5px] text-slate-500 mt-0.5">By the person who requested the order, or a reviewer.</p></div>
+<form id="delivery" class="p-4 sm:p-6 space-y-3 text-[13px]">
+<div class="grid sm:grid-cols-2 gap-3"><label class="block">Type<select name="kind" class="mt-1 w-full rounded-md border px-2 py-1.5"><option value="service">Service confirmation</option><option value="goods">Goods receipt</option></select></label>
+<label class="block">Date<input type="date" name="received_on" class="mt-1 w-full rounded-md border px-2 py-1.5"></label></div>
+${d.lines.map(l => `<label class="flex items-center justify-between gap-3"><span class="text-slate-600">${esc(l.description.slice(0, 70))}</span><input name="qty_${l.id}" data-line="${l.id}" inputmode="decimal" placeholder="qty" class="w-24 rounded-md border px-2 py-1.5 text-right"></label>`).join('')}
+<input name="note" placeholder="Note (optional)" class="w-full rounded-md border px-2 py-1.5">
+<p class="text-[13px] text-rose-700" data-error hidden></p>
+<div class="flex justify-end"><button class="rounded-lg border border-indigo-300 bg-white px-4 py-2 font-semibold text-indigo-700 hover:bg-indigo-50">Record delivery</button></div></form></section>
+<section class="bg-white border rounded-xl overflow-hidden"><div class="px-4 sm:px-6 py-4 border-b border-slate-100"><h2 class="text-[16px]">Invoices</h2></div>
+<ul class="divide-y divide-slate-100">${d.invoices.length ? d.invoices.map(b => `<li><a href="/bills/${b.id}" class="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-2.5 text-[13px] hover:bg-slate-50"><span class="mono font-medium">${esc(b.number)}</span><span class="ml-auto tabular-nums">${b.amount !== null ? inr(b.amount) : '—'}</span><span class="tag dot ${TONE_TEXT[b.tone] || ''}">${esc(b.status)}</span></a></li>`).join('')
+: '<li class="px-6 py-4 text-[13px] text-slate-500">No invoices yet.</li>'}</ul>
+${d.history.length ? `<div class="border-t border-slate-100 px-4 sm:px-6 py-3"><div class="text-[12px] font-semibold text-slate-600">History</div><ol class="mt-1.5 space-y-1 text-[12.5px] text-slate-600">${d.history.map(e => `<li>${esc(e.when.label)} · ${esc(e.who)} · ${esc(e.what)} ${esc(e.record)}</li>`).join('')}</ol></div>` : ''}</section>
+</div></div>`;
+wireForm(qs('#delivery', view), async f => {
+const quantities = {};
+qsa('[data-line]', f).forEach(i => { if (i.value.trim()) quantities[i.dataset.line] = Number(i.value.replace(/,/g, '')); });
+await api(`/purchase-orders/${d.id}/deliveries`, { method: 'POST', body: { kind: f.kind.value, received_on: f.received_on.value, note: f.note.value, quantities } });
+await reload();
+});
+},
+};
+App.views['/purchase-orders/new'] = {
+title: 'New purchase order',
+async render(view) {
+const d = await api('/purchase-orders/options'), me = App.session.actor.id;
+const people = sel => d.employees.map(e => `<option value="${e.id}"${sel === e.id ? ' selected' : ''}>${esc(e.name)} · ${esc(e.department)}</option>`).join('');
+const row = i => `<tr class="${i > 2 ? 'hidden' : ''}" data-row="${i}">
+<td class="py-1 pr-2"><input name="desc" class="w-full rounded-md border px-2 py-1.5"${i === 1 ? ' required' : ''}></td>
+<td class="py-1 px-1"><input name="qty" inputmode="decimal" class="w-full rounded-md border px-2 py-1.5"></td>
+<td class="py-1 px-1"><input name="unit" class="w-full rounded-md border px-2 py-1.5" placeholder="job"></td>
+<td class="py-1 px-1"><input name="price" inputmode="decimal" class="w-full rounded-md border px-2 py-1.5"></td>
+<td class="py-1 pl-1"><input name="tax" value="18" inputmode="decimal" class="w-full rounded-md border px-2 py-1.5"></td></tr>`;
+view.innerHTML = `<div class="space-y-6 max-w-4xl"><div>${crumb('/purchase-orders', 'Orders', 'New')}<h1 class="mt-1">New purchase order</h1>
+<p class="text-slate-500 text-[14px] mt-1.5">Only active vendors can receive orders. The payee account is the one verified at onboarding; it can't be changed here.</p></div>
+<form id="new-po" class="bg-white border rounded-xl p-4 sm:p-6 space-y-5 text-sm">
+<div class="grid sm:grid-cols-2 gap-4">
+<label class="block">PO number<input name="po_number" required class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase" placeholder="PO-2026-0170"></label>
+<label class="block">Vendor<select name="vendor_id" required class="mt-1 w-full rounded-md border px-3 py-2">${d.vendors.length ? d.vendors.map(v => `<option value="${esc(v.id)}">${esc(v.name)} · ${esc(v.id)}</option>`).join('') : '<option value="">No active vendors</option>'}</select></label>
+<label class="block">Cost centre<input name="cost_centre" class="mt-1 w-full rounded-md border px-3 py-2 mono uppercase" placeholder="PL2-FACILITIES"></label>
+<div class="grid grid-cols-2 gap-3"><label class="block">Service from<input type="date" name="service_from" class="mt-1 w-full rounded-md border px-3 py-2"></label>
+<label class="block">Service to<input type="date" name="service_to" class="mt-1 w-full rounded-md border px-3 py-2"></label></div>
+<label class="block">Requested by<select name="requester_id" class="mt-1 w-full rounded-md border px-3 py-2">${people(null)}</select></label>
+<label class="block">Approved by<select name="approver_id" class="mt-1 w-full rounded-md border px-3 py-2">${people(me)}</select></label></div>
+<div><div class="font-semibold">Lines</div><div class="mt-2 overflow-x-auto"><table class="w-full text-[13px]" id="polines">
+<thead class="text-left text-slate-500"><tr><th class="py-1 pr-2 font-medium">Description</th><th class="py-1 px-1 font-medium w-20">Qty</th><th class="py-1 px-1 font-medium w-24">Unit</th><th class="py-1 px-1 font-medium w-32">Unit price (₹)</th><th class="py-1 pl-1 font-medium w-20">GST %</th></tr></thead>
+<tbody>${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(row).join('')}</tbody></table></div>
+<button type="button" id="addline" class="mt-2 text-[12.5px] font-medium text-indigo-700 hover:underline">+ Add a line</button></div>
+<p class="text-[13px] text-rose-700" data-error hidden></p>
+<div class="flex justify-end"><button class="rounded-lg bg-indigo-600 text-white font-semibold px-5 py-2.5 hover:bg-indigo-700">Create purchase order</button></div></form></div>`;
+qs('#addline', view).onclick = () => { const next = qs('#polines tr.hidden', view); if (next) { next.classList.remove('hidden'); qs('input', next).focus(); } };
+wireForm(qs('#new-po', view), async f => {
+const n = v => Number(String(v).replace(/,/g, ''));
+const lines = qsa('tr[data-row]', f).map(r => Object.fromEntries(qsa('input', r).map(i => [i.name, i.value.trim()])))
+.filter(l => l.desc).map(l => ({ description: l.desc, quantity: n(l.qty), unit: l.unit, unit_price: n(l.price), tax_rate: n(l.tax || 18) }));
+const r = await api('/purchase-orders', { method: 'POST', body: {
+po_number: f.po_number.value.trim().toUpperCase(), vendor_id: f.vendor_id.value, cost_centre: f.cost_centre.value.trim().toUpperCase(),
+requester_id: Number(f.requester_id.value) || null, approver_id: Number(f.approver_id.value) || null,
+service_from: f.service_from.value, service_to: f.service_to.value, lines } });
+navigate(r.next);
+});
+},
+};
+const STAMP = {
+verified: ['text-emerald-600', 'Signature verified'], broken: ['text-rose-600', 'Signature broken'], edited: ['text-rose-600', 'Likely edited'],
+unsigned_pdf: ['text-amber-600', 'No signature'], image: ['text-slate-500', 'Image · unsigned'],
+};
+const SEVERITY = { info: 'text-slate-500', warn: 'text-amber-700', vendor: 'text-amber-800', review: 'text-amber-700', fraud: 'text-white bg-rose-600 !border-rose-600' };
+function checkCard(r) {
+const s = r.signature, [tone, label] = STAMP[r.stamp];
+const extra = r.stamp === 'verified' ? `<span class="text-[9px] tracking-[.12em] border-l-2 border-current pl-2 leading-tight">GSTN<br>${esc(s.signed_at || '')}</span>`
+: r.stamp === 'edited' ? '<span class="text-[9px] tracking-[.12em] border-l-2 border-current pl-2 leading-tight">no<br>signature</span>' : '';
+const sigRows = [['Signer', s.signer ? s.signer + (s.signer_org ? ` (${s.signer_org})` : '') : ''], ['Signed', s.signed_at], ['Format', s.format],
+['Covers file', s.covers_whole_file === null || s.covers_whole_file === undefined ? '' : s.covers_whole_file ? 'whole file' : 'NO: content was added after signing'],
+['Chain', s.chain.join(' → ')], ['Error', s.error]].filter(([, v]) => v);
+return `<div class="bg-white rounded-xl border p-4 sm:p-5 min-w-0">
+<div class="flex flex-wrap items-start justify-between gap-2"><div class="font-medium text-sm break-all">${esc(r.file)}</div>${proofChip(r.proof)}</div>
+<div class="mono text-[11px] text-slate-500 mt-0.5">${esc(r.mime)} · ${r.size_kb} KB</div>
+<div class="mt-5 mb-1"><span class="stamp stamp-land ${tone} text-[15px] sm:text-[17px] max-w-full">${label}${extra}</span></div>
+<div class="mt-4 rounded-lg p-3 text-sm ${s.verified ? 'bg-emerald-50 border border-emerald-200' : s.present ? 'bg-rose-50 border border-rose-200' : 'bg-slate-50 border'}">
+<div class="font-medium">Digital signature</div>
+${!s.present ? `<div class="text-xs text-slate-600 mt-1">None. ${r.kind === 'pdf' ? 'A certificate downloaded from the GST portal is normally signed; editors like Canva remove the signature.' : 'Images cannot carry one.'}</div>`
+: `<div class="text-xs mt-1">${s.verified ? 'Intact and cryptographically valid: not a byte has changed since it was signed.' : s.intact === false ? 'BROKEN: the file was changed after it was signed.' : 'Present but could not be verified.'}</div>
+<dl class="text-xs mt-2 grid grid-cols-[5.5rem_1fr] gap-x-2 gap-y-0.5">${sigRows.map(([k, v]) => `<dt class="text-slate-500">${k}</dt><dd class="break-words ${k === 'Error' ? 'text-rose-700' : ''}">${esc(v)}</dd>`).join('')}</dl>`}</div>
+<div class="mt-4"><div class="text-sm font-medium">File facts</div><dl class="text-xs mt-1 grid grid-cols-[5.5rem_1fr] gap-x-2 gap-y-0.5">${r.facts.map(f => `<dt class="text-slate-500">${esc(f.label)}</dt><dd class="break-all">${esc(f.value)}</dd>`).join('')}</dl></div>
+<div class="mt-4"><div class="text-sm font-medium">Signals</div><ul class="mt-1 space-y-1.5">${r.signals.length ? r.signals.map(x => `<li class="text-xs flex gap-2"><span class="tag ${SEVERITY[x.severity] || 'text-slate-500'} !text-[9.5px] shrink-0 self-start mt-px">${esc(x.severity)}</span><span>${esc(x.title)}${x.detail ? `<span class="block text-slate-500">${esc(x.detail)}</span>` : ''}</span></li>`).join('') : '<li class="text-xs text-emerald-700">None.</li>'}</ul></div></div>`;
+}
+App.views['/check'] = {
+title: 'Checker',
+async render(view) {
+view.innerHTML = `<div><div class="kicker">Forensics, no AI</div><h1 class="text-[30px] sm:text-[38px] leading-tight mt-1">Checker</h1>
+<form id="check-form" class="mt-5 bg-white rounded-xl border p-4 grid gap-3 sm:flex sm:flex-wrap sm:items-center sm:gap-4 text-sm">
+<label class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 min-w-0">File 1 <input type="file" name="file_a" accept=".pdf,.jpg,.jpeg,.png" class="text-xs max-w-full"></label>
+<label class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 min-w-0">File 2 <input type="file" name="file_b" accept=".pdf,.jpg,.jpeg,.png" class="text-xs max-w-full"></label>
+<label class="flex items-center gap-2 py-1"><input type="checkbox" name="with_sample" value="1"> include the genuine public sample</label>
+<button class="sm:ml-auto w-full sm:w-auto rounded-md bg-indigo-600 text-white px-4 py-2.5 sm:py-2">Check</button>
+<button type="button" id="just-sample" class="text-xs text-indigo-700 underline py-1 text-center sm:text-left">just show the genuine sample</button>
+<p class="basis-full text-[13px] text-rose-700" data-error hidden></p></form>
+<p class="text-xs text-slate-500 mt-2">Sample: a real GST registration certificate published by the Office of the IGR Maharashtra, signed by GSTN (public document). It's used only to show the signature check.</p>
+<div id="results" class="mt-6 grid grid-cols-1 gap-4"></div></div>`;
+const out = qs('#results', view);
+const showResults = list => {
+out.className = `mt-6 grid grid-cols-1 gap-4 ${list.length > 1 ? 'md:grid-cols-2' : ''} ${list.length > 2 ? 'lg:grid-cols-3' : ''}`;
+out.innerHTML = list.map(checkCard).join('');
+};
+wireForm(qs('#check-form', view), async f => showResults((await api('/check', { method: 'POST', body: new FormData(f) })).results));
+qs('#just-sample', view).onclick = async () => showResults((await api('/check/sample')).results);
+if (new URLSearchParams(location.search).get('sample') === 'genuine') showResults((await api('/check/sample')).results);
+},
+};
+const LEVELS = [
+['A0', 'Declared', 'The vendor typed it. Nothing backs it up.', 'A PAN in the form with no readable PAN card'],
+['A1', 'Evidenced', "A document shows the same value, but we can't show the document is genuine.", 'A photo of a PAN card that has warnings, or a hand-written note'],
+['A2', 'Genuine', 'A document shows it and the document looks genuine: no editing traces, a real photo or scan, nothing obscured.', 'A clear phone photo of a real PAN card'],
+['A3', 'Cryptographically proven', 'The document carries a valid digital signature from the issuer, checked cryptographically.', 'A GST certificate downloaded from the portal, signed by GSTN, unchanged'],
+['A4', 'Confirmed at source', 'The issuing authority confirmed it directly.', 'Bank branch via the live IFSC directory; in production also GSTN, NSDL PAN and a penny-drop'],
+];
+const SOURCES = [
+['Reading documents (type, how it was made, fields)', 'Gemini reads every upload, blind to what the vendor typed', 'Google Gemini'],
+['GST certificate digital signature', "Verified cryptographically, including GSTN's older SHA-1 format", 'The file itself'],
+['Editing traces (Canva, Photoshop, PDF editors, re-saves)', 'From the file itself', 'The file itself'],
+['GSTIN / PAN / IFSC structure, check digit, PAN inside GSTIN, state code', 'Calculated', 'Official formats'],
+['Bank branch (IFSC)', "Live lookup, with a saved copy if it's down", 'RBI branch directory (Razorpay IFSC)'],
+['PIN code, district and state', 'Live lookup', 'India Post PIN directory'],
+['Address', 'Compared with the GST certificate; Google Address Validation when connected', 'GST certificate, Google'],
+['Vendor master and blocklist (shared bank account, duplicates)', 'Compared on every check', 'Company vendor master'],
+['GSTIN status and legal name', 'Registry lookup', 'GST registry'],
+['PAN status and name', 'Registry lookup', 'PAN registry'],
+['Bank account holder name (penny-drop)', 'A one-rupee penny-drop returns the holder name', 'Bank account verification'],
+['Company (CIN) and MSME (Udyam) status', 'Registry lookup', 'MCA, Udyam'],
+];
+const DECISION = [
+'<b>Rules decide; the AI only reads documents.</b> Every outcome traces to a named rule with its evidence.',
+'Order: out of scope → <b>reject</b> → <b>internal review</b> → <b>vendor fixes</b> → <b>approved</b>. Approval requires every required rule to pass.',
+'<b>Reject</b> only for an identity conflict (e.g. a GSTIN belonging to a different PAN) or the blocklist, and a person confirms before the vendor is told.',
+'Authenticity heuristics never reject. A suspected fake goes to a person; the vendor gets a neutral "under review" message so a fraudster learns nothing.',
+'"Couldn\'t read clearly" is never treated as "read and different": unclear documents mean "please upload a clearer copy". Misread characters are corrected only where provable (a PAN\'s letter positions, the GSTIN check digit); account numbers are never corrected.',
+'<b>Bill-first registration:</b> a vendor who already did work can register at /bill with its invoice. The bill is checked (issued by this vendor, addressed to us, amount, arithmetic, CGST+SGST vs IGST, date, duplicates), the employee the vendor names must confirm the engagement, and that employee then counts as the requester. Bills of ₹10 lakh or more need the Finance controller. A bill is never paid automatically.',
+"The employee who requested a vendor (the requester) can't approve it. High-risk vendors (≥ ₹50 lakh a year, or any fraud signal) need the Finance controller.",
+'Approval is not payment: invoices are paid only after purchase-order and delivery matching.',
+];
+App.views['/assumptions'] = {
+title: 'Help',
+async render(view) {
+const d = await api('/help');
+view.innerHTML = `<div class="max-w-4xl"><div class="kicker">Honesty page</div>
+<h1 class="text-[30px] sm:text-[38px] leading-tight mt-1">What is verified, and what <em class="text-indigo-600">isn't</em></h1>
+<section id="levels" class="mt-8"><h2 class="text-xl">How well a fact is proven</h2>
+<p class="text-sm text-slate-600 mt-1">Every key fact (GSTIN, legal name, PAN, bank account) gets a level. A valid-looking number is only the start: someone can write a valid PAN on a blank sheet of paper.</p>
+<div class="mt-3 bg-white rounded-xl border divide-y text-sm">${LEVELS.map(([lv, name, what, eg]) => `<div class="p-4 flex flex-col sm:flex-row gap-1.5 sm:gap-4"><div class="sm:w-52 shrink-0">${proofChip({ level: lv, name })}</div><div><div>${what}</div><div class="text-xs text-slate-500 mt-0.5">e.g. ${eg}</div></div></div>`).join('')}</div></section>
+<section class="mt-8"><h2 class="text-xl">Where each answer comes from</h2><div class="mt-3 bg-white rounded-xl border overflow-hidden"><table class="rtable w-full text-sm">
+<thead class="bg-slate-50 text-left text-xs text-slate-500"><tr><th class="px-4 py-2">Check</th><th class="px-2 py-2">How it's checked</th><th class="px-4 py-2">Source</th></tr></thead>
+<tbody class="divide-y">${SOURCES.map(([c, how, src]) => `<tr><td class="px-4 py-2 font-medium sm:font-normal">${c}</td><td data-label="How it's checked" class="px-2 py-2 text-slate-700">${how}</td><td data-label="Source" class="px-4 py-2 text-slate-600">${src}</td></tr>`).join('')}</tbody></table></div></section>
+<section class="mt-8"><h2 class="text-xl">How the decision is made</h2><ul class="mt-2 text-sm text-slate-700 list-disc pl-5 space-y-1">${DECISION.map(x => `<li>${x}</li>`).join('')}</ul></section>
+<section class="mt-8"><h2 class="text-xl">Tested on imperfect real-world inputs</h2><div class="mt-3 grid md:grid-cols-2 gap-4 text-sm">
+<div class="bg-white rounded-xl border p-4"><div class="font-medium">Blurry, compressed, tilted copies of genuine documents</div>
+<p class="text-slate-600 mt-1">30 degraded copies of 6 genuine documents (blur, low-quality JPEG, 40% resolution, 3° tilt, phone-like): <b>60 of 60 fields read exactly, 0 wrong</b>, and no fraud flag on any real genuine document.</p></div>
+<div class="bg-white rounded-xl border p-4"><div class="font-medium">Fakes it catches</div><ul class="text-slate-600 mt-1 list-disc pl-5 space-y-0.5">
+<li>PAN hand-written on paper → vendor asked for the original</li><li>Photo of a screen, screenshot of a certificate → vendor asked for the file</li>
+<li>Certificate edited in Canva → signature gone, editor recorded: fraud class</li><li>AI-generated PAN card and cheque → fraud class</li></ul></div></div></section>
+<section id="access" class="mt-8"><h2 class="text-xl">Who sees what</h2>
+<p class="text-sm text-slate-600 mt-1 max-w-3xl">Need to know. A requester may be the person a fraud check is about, so they don't see the checks, documents or ID numbers, only their own requests. Finance releases payments, so only Finance sees an active vendor's full bank account.</p>
+<div class="mt-3 overflow-x-auto bg-white rounded-xl border"><table class="rtable w-full text-sm"><thead class="text-left text-slate-500 bg-slate-50 border-b border-slate-200"><tr><th class="pl-5 pr-2 py-2.5 font-medium">Information</th><th class="px-2 font-medium">Requester</th><th class="px-2 font-medium">Procurement reviewer</th><th class="pr-5 pl-2 font-medium">Finance controller</th></tr></thead>
+<tbody class="divide-y divide-slate-100">${d.access.map(r => `<tr><td class="pl-5 pr-2 py-2.5 font-medium">${esc(r.information)}</td><td class="px-2 py-2.5" data-label="Requester">${esc(r.requester)}</td><td class="px-2 py-2.5" data-label="Procurement reviewer">${esc(r.reviewer)}</td><td class="pr-5 pl-2 py-2.5" data-label="Finance controller">${esc(r.finance)}</td></tr>`).join('')}</tbody></table></div></section>
+<section class="mt-8 mb-4"><h2 class="text-xl">Assumptions and limits</h2><ul class="mt-2 text-sm text-slate-700 list-disc pl-5 space-y-1">
+<li>Vendors are Indian and GST-registered; others go to a manual path.</li>
+<li>Gemini's free tier allows 15 reads a minute; at most 2 applications run at once. If the AI is down, a saved reading of the same file is used and labelled.</li>
+<li>Employees and vendors log in with email and password. In production employees would use the company's single sign-on.${d.demo ? ' The development person switcher is on in this environment.' : ''}</li></ul></section></div>`;
+},
+};
+const BILL_TONE = { approved: 'text-emerald-700', rejected: 'text-rose-600', vendor_fix: 'text-amber-700', for_review: 'text-amber-700',
+awaiting_confirmation: 'text-amber-700', ready_for_approval: 'text-emerald-700', checking: 'text-slate-500', failed: 'text-rose-600' };
+App.views['/bills'] = {
+title: 'Bills',
+async render(view) {
+const d = await api('/bills');
+const conf = b => b.confirmation === 'confirmed' ? ' ✓' : b.confirmation === 'denied' ? ' <span class="text-rose-600">denies</span>' : '';
+const rows = d.bills.map(b => `<tr class="hover:bg-slate-50 cursor-pointer" data-href="/bills/${b.id}">
+<td class="pl-5 pr-2 py-3 whitespace-nowrap"><a href="/bills/${b.id}" class="mono text-[12.5px] hover:text-indigo-700">${esc(b.ref)}</a></td>
+<td class="px-2 py-3 font-medium" data-label="Vendor"><span class="inline-flex items-center gap-2.5">${monogram(b.vendor.name, 'h-7 w-7 text-[10.5px]')}${esc(b.vendor.name)}</span> <span class="mono text-[11px] text-slate-500 font-normal">${esc(b.vendor.id)}</span>${b.fraud ? ' <span class="tag text-indigo-600 !text-[9px]">fraud class</span>' : ''}</td>
+<td class="px-2 py-3 mono text-[12px]" data-label="Invoice">${esc(b.invoice_number || 'being read…')}</td>
+<td class="px-2 py-3 text-right whitespace-nowrap" data-label="Amount">${inr(b.amount)}</td>
+<td class="inline-sm px-2 py-3"><span class="tag ${BILL_TONE[b.status] || ''}">${esc(b.status_label)}</span></td>
+<td class="inline-sm px-2 py-3">${tierChip(b.risk)}</td>
+<td class="pr-5 pl-2 py-3 text-[13px] text-slate-600" data-label="Asked for by">${esc(b.asked_for_by || '')}${conf(b)}</td></tr>`).join('');
+const regs = d.with_registration.map(r => `<li><a href="/runs/${r.run_id || ''}#bill" class="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 sm:px-5 py-3 hover:bg-slate-50 text-sm">
+${monogram(r.name, 'h-8 w-8 text-[11px]')}<span class="mono text-[12px] text-slate-500 w-20">${esc(r.ref)}</span>
+<span class="flex-1 min-w-[12rem] font-medium">${esc(r.name)} <span class="mono text-[11.5px] text-slate-500 font-normal">${esc(r.invoice_number || '')}</span></span>
+<span class="font-semibold tabular-nums">${inr(r.amount)}</span><span class="text-xs text-slate-500">${esc(r.asked_for_by || '')} · ${esc(r.confirmation)}</span></a></li>`).join('');
+view.innerHTML = `<div><div class="kicker">Accounts payable</div><h1 class="text-[30px] sm:text-[38px] leading-tight mt-1">${d.full ? 'Bills' : 'Bills that name you'}</h1>
+<section class="mt-6 bg-white rounded-xl border"><div class="px-4 sm:px-5 py-4 border-b border-slate-200"><h2 class="text-xl">From active vendors</h2></div>
+${rows ? `<div class="overflow-x-auto"><table class="rtable w-full text-sm"><thead class="text-left text-slate-500 bg-slate-50 border-b border-slate-200"><tr><th class="pl-5 pr-2 py-2.5 font-medium">Ref</th><th class="px-2 font-medium">Vendor</th><th class="px-2 font-medium">Invoice</th><th class="px-2 font-medium text-right">Amount</th><th class="px-2 font-medium">Status</th><th class="px-2 font-medium">Risk</th><th class="pr-5 pl-2 font-medium">Asked for by</th></tr></thead>
+<tbody class="divide-y divide-slate-100">${rows}</tbody></table></div>` : emptyState('No bills from active vendors yet', 'An active vendor sends them from the supplier portal; each is checked, then confirmed and approved here.')}</section>
+<section class="mt-6 bg-white rounded-xl border"><div class="px-4 sm:px-5 py-4 border-b border-slate-200"><h2 class="text-xl">Sent with a registration</h2><p class="text-xs text-slate-500 mt-1">Vendors with no invite who registered with a bill for work already done. They're checked inside the registration run.</p></div>
+${regs ? `<ul class="divide-y divide-slate-100">${regs}</ul>` : emptyState('None yet', 'Vendors who did work before registering send their bill with the registration.')}</section></div>`;
+},
+};
+const VSTATE = { active: 'text-emerald-700', onboarding: 'text-indigo-600', rejected: 'text-rose-600', on_record: 'text-slate-600', inactive: 'text-slate-500' };
+const EDGE_TONE = { verified: 'text-emerald-700', declared: 'text-slate-500', inferred: 'text-amber-700', unresolved: 'text-rose-700' };
+const CARD_TONE = { green: 'text-emerald-700', red: 'text-rose-700', amber: 'text-amber-700', slate: 'text-slate-600' };
+const PRIORITY = { urgent: ['bg-rose-600'], high: ['bg-amber-500'], normal: ['bg-indigo-500'], none: ['bg-emerald-500'] };
+const LINE_COL = { verified: '#10B981', declared: '#94A3B8', unresolved: '#E11D48', inferred: '#D97706', context: '#CBD5E1' };
+const basisTag = (b, label) => b === 'live' ? '<span class="tag dot text-emerald-700">Live source</span>'
+: b === 'simulated' ? '<span class="tag dot text-indigo-700">Registry</span>' : `<span class="tag text-slate-500">${esc(label)}</span>`;
+const edgeTag = st => `<span class="tag dot ${EDGE_TONE[st] || 'text-slate-500'}">${esc(st)}</span>`;
+const evLink = e => e ? `<a href="#ev-${e.id}" class="text-indigo-700 hover:underline" title="${esc(e.label)}">evidence #${e.id}</a>` : '';
+const section = (id, title, body, right = '') => `<section class="bg-white border rounded-xl overflow-hidden min-w-0" id="${id}">
+<div class="px-4 sm:px-6 py-4 border-b border-slate-100 flex flex-wrap items-start justify-between gap-3"><h2 class="text-[16px]">${title}</h2>${right}</div>${body}</section>`;
+function relationshipMap(m, v) {
+if (!m) return emptyState('No relationships recorded', 'Relationships appear once a check has run for this vendor.');
+const dash = st => st === 'context' ? ' stroke-dasharray="2 4"' : ['declared', 'inferred'].includes(st) ? ' stroke-dasharray="5 4"' : '';
+return `<svg viewBox="0 0 ${m.w} ${m.h}" class="w-full h-auto" role="img" aria-label="Relationship map of ${esc(v.name)}">
+${m.lines.map(l => `<line x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}" stroke="${LINE_COL[l.status] || '#CBD5E1'}" stroke-width="${['unresolved', 'inferred'].includes(l.status) ? 2.2 : 1.5}"${dash(l.status)}/>`).join('')}
+${m.ring.map(n => `<g><circle cx="${n.x}" cy="${n.y}" r="7" fill="#fff" stroke="${LINE_COL[n.status] || '#94A3B8'}" stroke-width="2"/>
+<text x="${n.x}" y="${(n.y - 12).toFixed(1)}" text-anchor="middle" font-size="10.5" font-weight="600" fill="#475569" font-family="Verdana, sans-serif">${esc(n.kind)}</text>
+<text x="${n.x}" y="${(n.y + 20).toFixed(1)}" text-anchor="middle" font-size="9.5" fill="#64748B" font-family="Verdana, sans-serif">${esc(n.value)}</text></g>`).join('')}
+${m.outer.map(o => `<g><a href="/vendors/${esc(o.vendor.id)}"><rect x="${(o.x - 78).toFixed(1)}" y="${(o.y - 15).toFixed(1)}" width="156" height="30" rx="8" fill="${o.actionable ? '#FFF1F2' : '#F8FAFC'}" stroke="${o.actionable ? '#FDA4AF' : '#CBD5E1'}"/>
+<text x="${o.x}" y="${(o.y + 4).toFixed(1)}" text-anchor="middle" font-size="10.5" font-weight="600" fill="${o.actionable ? '#9F1239' : '#475569'}" font-family="Verdana, sans-serif">${esc(o.vendor.name.slice(0, 24))}</text></a></g>`).join('')}
+<circle cx="${m.cx}" cy="${m.cy}" r="30" fill="#2950D3"/><text x="${m.cx}" y="${m.cy + 4}" text-anchor="middle" font-size="11" font-weight="700" fill="#fff" font-family="Verdana, sans-serif">${esc(v.id)}</text></svg>`;
+}
+const edgeLine = (who, e) => `<span>${who}: ${esc(e.type)} · ${edgeTag(e.status)} · ${esc(e.basis_label)}${e.rule ? ` · rule ${esc(e.rule)}` : ''}${e.evidence ? ` · ${who === 'This vendor' ? evLink(e.evidence) : esc(e.evidence.label)}` : ''}${who === 'This vendor' ? '' : ` · since ${esc(e.since.label)}`}</span>`;
+App.views['/vendors/:id'] = {
+title: p => p.id,
+async render(view, { id }) {
+const v = await api(`/vendors/${encodeURIComponent(id)}`);
+const parts = [];
+parts.push(`<div>${crumb('/vendors', 'Vendors', `<span class="mono">${esc(v.id)}</span>`)}
+<div class="mt-2 flex flex-wrap items-start gap-4">${monogram(v.name, 'h-14 w-14 text-[18px]')}<div class="min-w-0 flex-1"><h1 class="break-words">${esc(v.name)}</h1>
+<div class="mt-1.5 flex flex-wrap items-center gap-2 text-[12.5px] text-slate-500"><span class="tag dot ${VSTATE[v.status] || 'text-slate-500'}">${esc(v.status_label)}</span><span class="mono">${esc(v.id)}</span>
+${v.erp_id ? `<span>· vendor master <span class="mono">${esc(v.erp_id)}</span></span>` : ''}${v.entity_type ? `<span>· ${esc(v.entity_type)}</span>` : ''}<span>· ${esc(v.country)}</span>
+${v.open_flags ? `<span class="tag dot text-rose-600">${v.open_flags} open flag${v.open_flags === 1 ? '' : 's'}</span>` : ''}</div>
+<p class="mt-2 text-[12.5px] text-slate-500 max-w-3xl">The vendor ID is ours and never changes. Applications are matched to it by PAN; shared bank accounts, addresses or files never merge two vendors, they appear below as relationships to check.</p></div></div></div>`);
+if (v.cards) parts.push(`<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 text-[13px]">${v.cards.map(c => `<div class="bg-white border rounded-xl px-4 py-3 min-w-0"><div class="text-[12px] font-medium text-slate-500">${esc(c.label)}</div><div class="mt-0.5 font-semibold ${CARD_TONE[c.tone]}">${esc(c.value)}</div><div class="mt-0.5 text-[11.5px] text-slate-500 line-clamp-2">${esc(c.note)}</div></div>`).join('')}</div>`);
+parts.push(section('next', 'What to do next', `<ol class="divide-y divide-slate-100">${v.next.map(a => `<li class="px-4 sm:px-6 py-3.5 flex gap-3"><span class="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${(PRIORITY[a.priority] || PRIORITY.normal)[0]}"></span>
+<div class="flex-1 min-w-0"><div class="flex flex-wrap items-baseline gap-x-2 gap-y-1"><span class="text-[14.5px] font-semibold text-slate-900">${esc(a.title)}</span>${a.needs_integration ? '<span class="tag text-amber-700">needs a real provider</span>' : ''}</div>
+${a.detail ? `<p class="mt-0.5 text-[13px] text-slate-600">${esc(a.detail)}</p>` : ''}
+<p class="mt-1 text-[12px] text-slate-500"><b class="font-medium text-slate-600">Why:</b> ${esc(a.why)}${a.evidence.map(e => ' · ' + evLink(e)).join('')}${a.who.length ? ` · <b class="font-medium text-slate-600">Who:</b> ${a.who.map(esc).join(', ')}` : a.nobody ? ' · <b class="font-medium text-slate-600">Who:</b> nobody you can switch to right now' : ''}</p></div>
+${a.href ? `<a href="${esc(a.href)}" class="self-center shrink-0 inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-slate-700 hover:border-indigo-300 hover:text-indigo-700">Open ${icon('chev', 'h-3.5 w-3.5')}</a>` : ''}</li>`).join('')}</ol>`));
+const inv = v.invoices;
+if (inv.show) {
+const money = inv.money ? `<dl class="grid grid-cols-3 gap-4 text-right text-[12px]"><div><dt class="text-slate-500">Approved, unpaid</dt><dd class="text-[15px] font-semibold tabular-nums">${inr(inv.money.approved_unpaid)}</dd></div>
+<div><dt class="text-slate-500">On hold</dt><dd class="text-[15px] font-semibold tabular-nums ${inv.money.on_hold ? 'text-amber-700' : ''}">${inr(inv.money.on_hold)}</dd></div><div><dt class="text-slate-500">Paid</dt><dd class="text-[15px] font-semibold tabular-nums text-emerald-700">${inr(inv.money.paid)}</dd></div></dl>` : '';
+const rb = inv.registration_bills;
+const body = inv.rows.length ? `<div class="overflow-x-auto"><table class="rtable w-full text-[13px]"><thead class="text-left text-slate-500 bg-slate-50/70"><tr><th class="pl-4 sm:pl-6 pr-2 py-2">Invoice</th><th class="px-2">PO</th><th class="px-2 text-right">Amount</th><th class="px-2">Status</th><th class="pr-4 sm:pr-6 pl-2">Payment</th></tr></thead>
+<tbody class="divide-y divide-slate-100">${inv.rows.map(b => `<tr class="hover:bg-slate-50/80 cursor-pointer" data-href="/bills/${b.id}"><td class="pl-4 sm:pl-6 pr-2 py-2.5"><a class="mono font-medium hover:text-indigo-700" href="/bills/${b.id}">${esc(b.number)}</a><div class="text-[11.5px] text-slate-500">${esc(b.date)} · ${esc(b.ref)}</div></td>
+<td class="px-2 py-2.5 mono text-[12px]" data-label="PO">${esc(b.po || '—')}</td><td class="px-2 py-2.5 text-right tabular-nums" data-label="Amount">${b.amount !== null ? inr(b.amount) : '—'}</td>
+<td class="px-2 py-2.5" data-label="Status"><span class="tag dot ${TONE_TEXT[b.tone] || 'text-slate-600'}">${esc(b.status)}</span></td>
+<td class="pr-4 sm:pr-6 pl-2 py-2.5 text-[12px] text-slate-600" data-label="Payment">${b.payment ? (b.payment.kind === 'hold' ? `<span class="text-amber-700">${esc(b.payment.text)}</span>` : esc(b.payment.text)) : '—'}</td></tr>`).join('')}</tbody></table></div>`
+: `<p class="px-4 sm:px-6 py-4 text-[13px] text-slate-500">No payable invoices yet. The vendor submits them from their portal against a purchase order.${rb ? ` The ${rb === 1 ? 'bill' : rb + ' bills'} sent with a registration ${rb === 1 ? 'is' : 'are'} kept under <a class="text-indigo-700 hover:underline" href="#documents">Documents</a> as registration evidence, not as payable invoices.` : ''}</p>`;
+parts.push(section('invoices', 'Invoices and payments', body + (inv.orders.length ? `<div class="border-t border-slate-100 px-4 sm:px-6 py-3 text-[12.5px]"><span class="font-semibold text-slate-700">Purchase orders:</span>${inv.orders.map(o => `<a class="ml-2 mono text-indigo-700 hover:underline" href="/purchase-orders/${o.id}">${esc(o.number)}</a>`).join('')}</div>` : ''), money));
+}
+if (v.full) {
+const idRows = v.identity.identifiers.map(i => `<tr class="${i.previous ? 'opacity-60' : ''}"><td class="pl-4 sm:pl-6 pr-2 py-2.5 w-28 text-slate-500 whitespace-nowrap">${esc(i.kind)}</td>
+<td class="px-2 py-2.5 mono text-[12.5px] break-words">${esc(i.value)}${i.full_bank ? ' <span class="tag text-emerald-700 ml-1 font-sans">full · Finance</span>' : ''}</td>
+<td class="pr-4 sm:pr-6 pl-2 py-2.5 text-right text-[11.5px] text-slate-500 whitespace-nowrap">${i.previous ? '<span class="tag text-slate-500">previous</span>' : 'since ' + esc(i.since.label)}</td></tr>`).join('')
+|| '<tr><td class="px-6 py-6 text-[13px] text-slate-500">No identifiers recorded yet.</td></tr>';
+const contact = (label, val) => val ? `<tr><td class="pl-4 sm:pl-6 pr-2 py-2.5 w-28 text-slate-500 whitespace-nowrap">${label}</td><td class="px-2 py-2.5 text-[12.5px]" colspan="2">${esc(val)}</td></tr>` : '';
+const facts = v.facts.map(f => `<li class="px-4 sm:px-6 py-3 ${f.doubts.length ? 'bg-rose-50/50' : ''}">
+<div class="flex flex-wrap items-center gap-x-3 gap-y-1.5"><span class="w-28 text-[13px] font-medium text-slate-700">${esc(f.label)}</span><span class="mono text-[12.5px] break-words">${esc(f.value)}</span><span class="ml-auto">${proofChip({ level: f.level, name: f.level_name })}</span></div>
+<div class="mt-1.5 pl-0 sm:pl-[7.75rem] flex flex-wrap items-center gap-2 text-[12px] text-slate-500">${basisTag(f.basis, f.basis_label)} <span>${esc(f.source)}</span> · <span>${esc(f.where)}</span> · ${evLink(f.evidence)}
+${f.note ? `<span class="w-full text-amber-700">${esc(f.note)}</span>` : ''}${f.recheck ? `<span class="w-full">Re-check due ${esc(f.recheck)}</span>` : ''}</div>
+${f.doubts.map(d => `<div class="mt-1.5 sm:pl-[7.75rem] flex items-start gap-1.5 text-[12.5px] text-rose-700"><span><b class="font-semibold">In doubt despite its level:</b> ${esc(d)}</span></div>`).join('')}
+${f.history.length ? `<details class="mt-1.5 sm:pl-[7.75rem] group"><summary class="text-[12px] text-indigo-700">${f.changed ? 'Changed value · ' : ''}${f.history.length} earlier observation${f.history.length === 1 ? '' : 's'}</summary>
+<ol class="mt-1.5 space-y-1 border-l-2 border-slate-200 pl-3">${f.history.map(o => `<li class="text-[12px] text-slate-600"><span class="mono">${esc(o.value)}</span> · ${esc(o.level)} · ${esc(o.basis)} · ${esc(o.where)} · ${esc(o.when)}</li>`).join('')}</ol></details>` : ''}</li>`).join('')
+|| `<li class="px-6 py-6 text-[13px] text-slate-500">${v.origin === 'vendor_master' ? 'Known from the vendor master only: no checked evidence yet.' : 'No facts recorded yet.'}</li>`;
+parts.push(`<div class="grid xl:grid-cols-[1fr_1fr] gap-4 sm:gap-6">${section('identity', 'Identity', `<table class="w-full text-sm"><tbody class="divide-y divide-slate-100">${idRows}${contact('Contact', v.identity.contact)}${contact('Alternate contact', v.identity.alt_contact)}</tbody></table>`)}
+${section('facts', 'Evidence and fact history', `<ul class="divide-y divide-slate-100">${facts}</ul>`)}</div>`);
+const act = v.connections.filter(c => c.actionable), ctx = v.connections.filter(c => !c.actionable);
+const actHtml = act.map(c => `<div class="mx-4 sm:mx-5 mb-3 rounded-lg border ${c.flagged ? 'border-rose-200 bg-rose-50/50' : 'border-amber-200 bg-amber-50/40'} p-3">
+<div class="flex flex-wrap items-center gap-2">${monogram(c.vendor.name, 'h-7 w-7 text-[10.5px]')}<a href="/vendors/${esc(c.vendor.id)}" class="font-semibold text-slate-900 hover:text-indigo-700">${esc(c.vendor.name)}</a>
+<span class="mono text-[11.5px] text-slate-500">${esc(c.vendor.id)}${c.vendor.erp_id ? ' · ' + esc(c.vendor.erp_id) : ''}</span>${c.flagged ? '<span class="tag dot text-rose-600">rule raised a flag</span>' : ''}</div>
+${c.shared.filter(i => i.actionable).map(i => `<div class="mt-2 text-[12.5px] text-slate-700"><b class="font-semibold">${esc(i.what)}</b> <span class="mono text-slate-600">${esc(i.value)}</span>
+<div class="mt-1 grid gap-1 text-[12px] text-slate-500">${edgeLine('This vendor', i.mine)}${edgeLine(esc(c.vendor.name), i.theirs)}</div></div>`).join('')}</div>`).join('')
+|| '<p class="px-4 sm:px-5 pb-4 text-[13px] text-slate-500">Nothing actionable: no other vendor shares this vendor\'s bank account or document files, and there is no identity conflict.</p>';
+const ctxHtml = ctx.map(c => `<div class="px-4 sm:px-5 pb-2.5 text-[12.5px] text-slate-600 flex flex-wrap items-center gap-x-2 gap-y-1"><a href="/vendors/${esc(c.vendor.id)}" class="font-medium text-slate-800 hover:text-indigo-700">${esc(c.vendor.name)}</a>
+${c.shared.map(i => `<span class="tag text-slate-500" title="${esc(i.value)}">${esc(i.what)}</span>`).join('')}<span class="text-[11.5px] text-slate-400">ordinary overlap · not a risk by itself</span></div>`).join('')
+|| '<p class="px-4 sm:px-5 pb-4 text-[13px] text-slate-500">No shared addresses, emails or phones.</p>';
+const edges = v.edges.map(e => `<tr class="${e.ended ? 'opacity-60' : ''}"><td class="pl-4 sm:pl-6 pr-2 py-2 whitespace-nowrap">${esc(e.type)}</td><td class="px-2 py-2"><span class="text-slate-500">${esc(e.kind)}</span> <span class="mono">${esc(e.value)}</span></td>
+<td class="px-2 py-2">${edgeTag(e.status)}</td><td class="px-2 py-2 whitespace-nowrap">${esc(e.basis_label)}</td><td class="px-2 py-2">${e.rule ? `rule ${esc(e.rule)} · ` : ''}${evLink(e.evidence)}${e.note ? `<div class="text-slate-500">${esc(e.note)}</div>` : ''}</td>
+<td class="pr-4 sm:pr-6 pl-2 py-2 whitespace-nowrap text-slate-500">from ${esc(e.since.label)}${e.until ? `<br>until ${esc(e.until.label)}` : ''}${e.checks ? `<br>checks ${esc(e.checks)}` : ''}</td></tr>`).join('');
+parts.push(section('relationships', 'Relationships', `<div class="grid lg:grid-cols-[1.1fr_1fr]"><div class="p-3 sm:p-4 border-b lg:border-b-0 lg:border-r border-slate-100 min-w-0">${relationshipMap(v.map, v)}</div>
+<div class="min-w-0"><div class="px-4 sm:px-5 pt-4 pb-2 text-[12px] font-semibold uppercase tracking-[.05em] text-slate-500">Needs a reviewer (${act.length})</div>${actHtml}
+<div class="px-4 sm:px-5 pt-2 pb-2 text-[12px] font-semibold uppercase tracking-[.05em] text-slate-500 border-t border-slate-100">For context (${ctx.length})</div>${ctxHtml}</div></div>
+<details class="border-t border-slate-100 group"><summary class="px-4 sm:px-6 py-3 text-[13px] font-medium text-indigo-700">All of this vendor's relationships, with provenance (${v.edges.length})</summary>
+<div class="overflow-x-auto"><table class="w-full text-[12.5px]"><thead class="text-left text-slate-500 bg-slate-50/70"><tr><th class="pl-4 sm:pl-6 pr-2 py-2">Relationship</th><th class="px-2">To</th><th class="px-2">Status</th><th class="px-2">Basis</th><th class="px-2">Provenance</th><th class="pr-4 sm:pr-6 pl-2">When</th></tr></thead>
+<tbody class="divide-y divide-slate-100">${edges}</tbody></table></div></details>`,
+`<div class="flex flex-wrap gap-1.5 text-[11.5px]">${['verified', 'declared', 'inferred', 'unresolved'].map(edgeTag).join('')}</div>`));
+parts.push(section('risk', 'Risk flags', `<ul class="divide-y divide-slate-100">${v.risks.map(r => `<li class="px-4 sm:px-6 py-3.5 ${r.status === 'open' && r.fraud ? 'bg-rose-50/40' : ''}">
+<div class="flex flex-wrap items-center gap-2"><span class="tag dot ${r.status === 'open' ? 'text-rose-600' : 'text-emerald-700'}">${esc(r.status)}</span>${r.fraud ? '<span class="tag text-rose-600">fraud class</span>' : ''}<span class="text-[14px] font-semibold text-slate-900">${esc(r.title)}</span></div>
+<div class="mt-1 text-[12.5px] text-slate-500">${!r.mine && r.other ? `Raised on <a class="text-indigo-700 hover:underline" href="/vendors/${esc(r.other.id)}">${esc(r.other.name)}</a>, involving this vendor · ` : r.other ? `Involves <a class="text-indigo-700 hover:underline" href="/vendors/${esc(r.other.id)}">${esc(r.other.name)}</a> · ` : ''}rule ${esc(r.rule)} · check #${r.run_id} · opened ${esc(r.opened)}${r.evidence ? ' · ' + evLink(r.evidence) : ''}</div>
+${r.action ? `<p class="mt-1.5 text-[13px] text-slate-700"><b class="font-semibold">Reviewer action:</b> ${esc(r.action)} <a class="ml-1 font-medium text-indigo-700 hover:underline" href="/runs/${r.run_id}#actions">Open the check</a></p>` : `<p class="mt-1.5 text-[13px] text-emerald-800">${icon('check', 'h-3.5 w-3.5 inline -mt-0.5')} ${esc(r.resolution || '')}</p>`}</li>`).join('') || '<li class="px-6 py-6 text-[13px] text-slate-500">No risk flags.</li>'}</ul>`));
+const DSTATE = { current: 'text-emerald-700', superseded: 'text-slate-500', reused: 'text-rose-700', unreadable: 'text-amber-700' };
+parts.push(section('documents', 'Documents', v.documents.length ? `<div class="overflow-x-auto"><table class="rtable w-full text-[12.5px]"><thead class="text-left text-slate-500 bg-slate-50/70"><tr><th class="pl-4 sm:pl-6 pr-2 py-2">Document</th><th class="px-2">Status</th><th class="px-2">Read as</th><th class="px-2">Proof</th><th class="px-2">Supports</th><th class="pr-4 sm:pr-6 pl-2">File</th></tr></thead>
+<tbody class="divide-y divide-slate-100">${v.documents.map(x => `<tr class="${x.status === 'superseded' ? 'opacity-60' : ''}">
+<td class="pl-4 sm:pl-6 pr-2 py-2.5"><div class="font-medium text-slate-800">${esc(x.title)}</div>${x.registration_bill ? '<div class="text-[11.5px] text-slate-500">registration evidence</div>' : ''}</td>
+<td class="px-2 py-2.5" data-label="Status"><span class="tag ${DSTATE[x.status] || ''}">${esc(x.status)}</span>${x.reused_by.length ? `<div class="text-rose-700 mt-0.5">also in ${x.reused_by.map(esc).join(', ')}</div>` : ''}</td>
+<td class="px-2 py-2.5" data-label="Read as">${esc(x.read_as)}<div class="text-slate-500">${esc(x.form)}${x.saved_reading ? ' · saved reading' : ''}</div></td>
+<td class="px-2 py-2.5" data-label="Proof">${x.proof ? proofChip(x.proof) : ''}${x.signed ? '<div class="text-emerald-700">signature valid</div>' : ''}${x.known_file ? '<div class="text-slate-500" title="This exact file is on record (matched by fingerprint), so visual checks are skipped. Its contents are not independently confirmed.">known file · not independently confirmed</div>' : ''}</td>
+<td class="px-2 py-2.5" data-label="Supports">${esc(x.supports.join(', ') || '—')}</td>
+<td class="pr-4 sm:pr-6 pl-2 py-2.5" data-label="File"><a class="text-indigo-700 hover:underline break-all" href="${esc(x.file.href)}" target="_blank" rel="noopener">${esc(x.file.name)}</a><div class="text-slate-500 mono">${x.file.size_kb ? x.file.size_kb + ' KB · ' : ''}${esc(x.file.fingerprint)}</div></td></tr>`).join('')}</tbody></table></div>`
+: `<p class="px-4 sm:px-6 py-4 text-[13px] text-slate-500">${v.origin === 'vendor_master' ? 'Known from the vendor master: no documents were uploaded through this system.' : 'No documents.'}</p>`));
+}
+parts.push(section('applications', 'Applications and decisions', `<ul class="divide-y divide-slate-100">${v.applications.map(a => `<li class="px-4 sm:px-6 py-3.5">
+<div class="flex flex-wrap items-center gap-2"><span class="mono text-[12.5px] text-slate-700">${esc(a.ref)}</span>${statusBadge(a.status)}<span class="text-[12.5px] text-slate-500">${esc(a.came_in)} · ${esc(a.created)}</span></div>
+<div class="mt-2 flex flex-wrap gap-1.5">${a.checks.map(c => `<a href="/runs/${c.run_id}" class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/60 px-2.5 py-1 text-[12px] hover:border-indigo-300 hover:bg-white">Check #${c.run_id}${c.status ? ' · ' + esc(c.status) : ''}
+${c.replay === null ? '' : `<span class="${c.replay ? 'text-emerald-600' : 'text-slate-400'}" title="${c.replay ? 'This decision replays exactly from its saved input' : 'Its saved input does not reproduce the decision exactly'}">${c.replay ? '↺' : '·'}</span>`}</a>`).join('')}</div></li>`).join('')
+|| `<li class="px-6 py-6 text-[13px] text-slate-500">${v.origin === 'vendor_master' ? 'Known from the vendor master: no applications through this system.' : 'No applications.'}</li>`}</ul>
+${v.decisions.length ? `<div class="border-t border-slate-100 px-4 sm:px-6 py-3.5"><div class="text-[12px] font-semibold uppercase tracking-[.05em] text-slate-500">Decisions by people</div>
+<ol class="mt-2 border-l-2 border-slate-200 ml-1 space-y-2">${v.decisions.map(a => `<li class="pl-4 text-[13px] relative"><span class="absolute -left-[5px] top-1.5 h-2 w-2 rounded-full bg-slate-500"></span><span class="text-[11.5px] text-slate-500">${esc(a.when)}</span><br>
+<b class="font-medium">${esc(a.who)}</b> <span class="text-slate-500">(${esc(a.role)})</span>: ${esc(a.action)}${a.comment ? ` · "${esc(a.comment)}"` : ''} <a class="text-indigo-700 hover:underline text-[12px]" href="/runs/${a.run_id}">check #${a.run_id}</a></li>`).join('')}</ol></div>` : ''}`));
+if (v.full) parts.push(`<details class="bg-white border rounded-xl group" id="evidence"><summary class="px-4 sm:px-6 py-4 flex items-center justify-between gap-2"><span><span class="text-[15px] font-semibold">Evidence register</span> <span class="text-[12.5px] text-slate-500">· ${v.evidence.length} items, never edited after they're recorded</span></span><span class="text-xs text-indigo-700 group-open:hidden">show</span><span class="text-xs text-indigo-700 hidden group-open:inline">hide</span></summary>
+<ul class="divide-y divide-slate-100 border-t border-slate-100">${v.evidence.map(e => `<li id="ev-${e.id}" class="px-4 sm:px-6 py-2.5 text-[12.5px] flex flex-wrap items-center gap-x-3 gap-y-1 target:bg-indigo-50"><span class="mono text-slate-400 w-10">#${e.id}</span>${basisTag(e.basis, e.basis_label)}<span class="text-slate-800">${esc(e.label)}</span>
+${e.file ? `<a class="mono text-[11.5px] text-indigo-700 hover:underline" href="${esc(e.file.href)}" target="_blank" rel="noopener">sha256 ${esc(e.file.fingerprint)}</a>` : ''}<span class="ml-auto text-[11.5px] text-slate-400">${esc(e.captured)}</span></li>`).join('')}</ul></details>`);
+view.innerHTML = `<div class="space-y-6">${parts.join('')}</div>`;
+view.addEventListener('click', e => {
+const a = e.target.closest('a[href^="#ev-"]');
+if (!a) return;
+e.preventDefault();
+const target = qs(a.getAttribute('href'), view);
+if (target) { qs('#evidence', view).open = true; target.scrollIntoView({ block: 'center' }); target.classList.add('bg-indigo-50'); }
+});
+},
+};
 let leaveView = null;
+function route(path) {
+if (App.views[path]) return { screen: App.views[path], params: {} };
+for (const [pattern, screen] of Object.entries(App.views)) {
+if (!pattern.includes(':')) continue;
+const names = [];
+const re = new RegExp('^' + pattern.replace(/:([a-z_]+)/g, (_, n) => { names.push(n); return '([^/]+)'; }) + '$');
+const m = path.match(re);
+if (m) return { screen, params: Object.fromEntries(names.map((n, i) => [n, decodeURIComponent(m[i + 1])])) };
+}
+return null;
+}
 async function show(path) {
-const view = qs('#view'), screen = App.views[path];
-if (!screen) { location.href = path + location.search + location.hash; return; }
+const view = qs('#view'), found = route(path);
+if (!found) { location.href = path + location.search + location.hash; return; }
 if (leaveView) { leaveView(); leaveView = null; }
-document.title = `${screen.title} · Mamoni Vendor Onboarding`;
+const { screen, params } = found;
+document.title = `${typeof screen.title === 'function' ? screen.title(params) : screen.title} · Mamoni Vendor Onboarding`;
 qsa('a.side-link, #mainnav a').forEach(a => {
 if (isOn(a.getAttribute('href'), path)) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
 });
 view.setAttribute('aria-busy', 'true');
 try {
-leaveView = (await screen.render(view)) || null;
+leaveView = (await screen.render(view, params)) || null;
+dropDeadLinks(view);
+const note = qs('#pending-note');
+if (note && path.startsWith('/runs/')) note.hidden = true;
+if (location.hash) qs(location.hash.replace(/[^#\w-]/g, ''), view)?.scrollIntoView();
 } catch (e) {
 if (e.status === 401) return;
 view.innerHTML = `<div class="max-w-lg mx-auto mt-16 text-center"><h1 class="text-[28px]">${e.status === 403 ? "You can't open this" : e.status === 404 ? 'Not found' : "Couldn't load this"}</h1>
@@ -885,14 +1287,15 @@ qs('[data-retry]', view).onclick = () => show(path);
 view.removeAttribute('aria-busy');
 }
 }
-function navigate(href) {
+function navigate(href, { replace = false } = {}) {
 const url = new URL(href, location.href);
-if (url.origin !== location.origin || !App.views[url.pathname]) { location.href = url.href; return; }
+if (url.origin !== location.origin || !route(url.pathname)) { location.href = url.href; return; }
 const target = url.pathname + url.search + url.hash;
-if (target !== location.pathname + location.search + location.hash) history.pushState({}, '', target);
+if (target !== location.pathname + location.search + location.hash) history[replace ? 'replaceState' : 'pushState']({}, '', target);
 show(url.pathname);
-scrollTo(0, 0);
+if (!url.hash) scrollTo(0, 0);
 }
+const reload = () => show(location.pathname);
 async function boot() {
 const root = qs('#app');
 let session;
@@ -906,7 +1309,8 @@ document.addEventListener('click', e => {
 const a = e.target.closest('a[href]');
 if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || a.target || a.hasAttribute('download')) return;
 const url = new URL(a.href, location.href);
-if (url.origin !== location.origin || !App.views[url.pathname]) return;
+if (url.origin !== location.origin || !route(url.pathname)) return;
+if (url.pathname === location.pathname && url.search === location.search && url.hash) return;
 e.preventDefault();
 navigate(url.href);
 });

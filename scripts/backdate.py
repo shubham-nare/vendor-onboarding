@@ -47,6 +47,9 @@ async def main(ref: str, days: int) -> None:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
+    args = [a for a in sys.argv[1:] if a != "--production"]
+    if len(args) != 2:
         sys.exit(__doc__)
-    asyncio.run(main(sys.argv[1], int(sys.argv[2])))
+    from onboarding.seeding import confirm_target
+    confirm_target()   # a non-local database needs --production and the host typed back
+    asyncio.run(main(args[0], int(args[1])))

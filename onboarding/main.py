@@ -17,42 +17,97 @@ from fastapi.staticfiles import StaticFiles
 from onboarding import auth, db
 from onboarding.db import is_dropped_connection
 from onboarding.models import Base
-from onboarding.pipeline import sweep_interrupted
 
 log = logging.getLogger("onboarding")
 
 
+async def _create_tables() -> None:
+    async with db.engine().begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)  # no-op when tables exist
+
+
+async def _logins() -> None:
+    from onboarding.pipeline import sessions
+    from onboarding.seeding import ensure_demo_logins
+    async with sessions()() as s:
+        await ensure_demo_logins(s)   # demo mode with DEMO_PASSWORD: the demo logins; otherwise retire the public one
+        await auth.load_revoked(s)    # log-outs from before the restart stay logged out
+        await s.commit()
+
+
+async def _purchase_orders() -> None:
+    """Demo mode: the company's sample purchase orders, once the seeded employees they name exist."""
+    from sqlalchemy import select
+    from onboarding.models import Employee
+    from onboarding.pipeline import sessions
+    from onboarding.seeding import dd, seed_purchase_orders
+    async with sessions()() as s:
+        emp = {e.name: e for e in (await s.execute(select(Employee))).scalars()}
+        needed = {p[k] for p in dd.PURCHASE_ORDERS for k in ("requester", "approver")} | {
+            r["by"] for p in dd.PURCHASE_ORDERS for r in p.get("receipts", [])}
+        if not needed <= set(emp):   # an empty database: nothing to attach them to until the demo data is loaded
+            log.info("sample purchase orders skipped: the demo employees aren't loaded yet")
+            return
+        await seed_purchase_orders(s, emp)
+        await s.commit()
+
+
+async def _sweep() -> None:
+    """Runs a restart cut short: recent ones are re-queued once as a new linked run, the rest go to review."""
+    from onboarding import pipeline
+    rec = await pipeline.recover_interrupted()   # after create_all
+    if rec["requeued"] or rec["parked"]:
+        log.warning("unfinished runs: re-queued %s, sent to review %s", rec["requeued"], rec["parked"])
+
+
+async def startup_steps() -> list[str]:
+    """Each step on its own: one failing (an empty database, a dropped connection) never skips the others.
+    Returns the names of the steps that failed; /readyz and /system show database problems."""
+    from onboarding.config import get_settings
+    steps = [("create tables", _create_tables), ("logins", _logins)]
+    if get_settings().demo_tools and get_settings().feature_payables:
+        steps.append(("sample purchase orders", _purchase_orders))
+    steps.append(("interrupted runs", _sweep))
+    failed = []
+    for name, step in steps:
+        try:
+            await step()
+        except Exception as e:
+            failed.append(name)
+            log.error("startup step '%s' failed: %s", name, type(e).__name__)
+    return failed
+
+
+def demo_remote_warning() -> str | None:
+    """The one startup warning for demo tools on a remote database (fine for the fictional-data demo)."""
+    from onboarding.config import database_host, get_settings, local_database
+    s = get_settings()
+    if s.demo_tools and not local_database(s):
+        return (f"Demo tools ON against a remote database ({database_host(s.database_url)}): "
+                "fine for the fictional-data demo, never for real vendor data.")
+    return None
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    try:
-        async with db.engine().begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)  # no-op when tables exist
-        from onboarding.pipeline import sessions
-        from onboarding.seeding import ensure_demo_logins
-        async with sessions()() as s:  # a fresh deploy can always be logged into
-            await ensure_demo_logins(s)
-            await auth.load_revoked(s)  # log-outs from before the restart stay logged out
-            await s.commit()
-        from onboarding.config import get_settings
-        if get_settings().demo_tools:   # development fixtures: the company's sample purchase orders
-            from sqlalchemy import select
-            from onboarding.models import Employee
-            from onboarding.seeding import seed_purchase_orders
-            async with sessions()() as s:
-                await seed_purchase_orders(s, {e.name: e for e in (await s.execute(select(Employee))).scalars()})
-                await s.commit()
-        n = await sweep_interrupted()
-        if n:
-            log.warning("marked %s unfinished run(s) as interrupted", n)
-        asyncio.get_running_loop().create_task(db.warm_pool())  # in the background: startup isn't held up
+    from onboarding.config import require_secrets
+    require_secrets()   # no SESSION_SECRET outside local demo mode: refuse to start, with a clear message
+    if msg := demo_remote_warning():
+        log.warning(msg)
+    await startup_steps()
+    loop = asyncio.get_running_loop()
+    loop.create_task(db.warm_pool())  # in the background: startup isn't held up
+    from onboarding.config import feature
+    if feature("intel"):
         from onboarding.intel.project import backfill
-        asyncio.get_running_loop().create_task(_intel_backfill(backfill))  # Vendor Intelligence catches up on older runs
-    except Exception as e:  # the app still starts; /readyz and /system show the problem
-        log.error("startup database step failed: %s", type(e).__name__)
-    from onboarding import followups
-    chase = asyncio.get_running_loop().create_task(followups.loop())  # reminders and escalations, every few hours
+        loop.create_task(_intel_backfill(backfill))  # Vendor Intelligence catches up on older runs
+    chase = None
+    if feature("followups"):
+        from onboarding import followups
+        chase = loop.create_task(followups.loop())  # reminders and escalations, every few hours
     yield
-    chase.cancel()
+    if chase:
+        chase.cancel()
 
 
 async def _intel_backfill(fn) -> None:
@@ -64,12 +119,22 @@ async def _intel_backfill(fn) -> None:
         log.exception("vendor intelligence backfill failed (pages still work; it retries on the next start)")
 
 
-app = FastAPI(title="Vendor onboarding", lifespan=lifespan)
+# No interactive API docs or schema in any mode: they listed every route to anyone (S5).
+app = FastAPI(title="Vendor onboarding", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 app.mount("/static", StaticFiles(directory=__file__.rsplit("main.py", 1)[0] + "static"), name="static")
 
 
 # Company pages (the console) need an employee login; vendor pages have their own login (portal.py).
 COMPANY_AREAS = {"console", "act-as", "invites", "runs", "files", "outbox", "check", "assumptions", "system", "demo", "bills", "vendors", "supplier-accounts", "invoices", "purchase-orders", "audit", "change-requests", "applications", "review", "relationships"}
+
+
+@app.middleware("http")
+async def hidden_features(request: Request, call_next):
+    """A switched-off feature (FEATURE_* settings, see onboarding/features.py) answers 404 on its pages and API."""
+    from onboarding.features import hidden
+    if hidden(request.url.path):
+        return await friendly_errors(request, HTTPException(404, "Not found"))
+    return await call_next(request)
 
 
 @app.middleware("http")
@@ -165,12 +230,18 @@ async def healthz():
 
 @app.get("/readyz")
 async def readyz():
-    """Readiness: can we reach the database?"""
+    """Readiness: one cheap query (select 1), nothing else, no login. It also wakes a sleeping Neon database."""
     try:
         await db.ping()
-        return {"ok": True, "db": "ok"}
+        return {"ok": True}
     except Exception as e:  # report the failure type, not secrets
         return JSONResponse({"ok": False, "db": type(e).__name__}, status_code=503)
+
+
+@app.get("/history", include_in_schema=False)
+async def history_moved():
+    """Decision history lives in the console; the old /history address goes to the applications list."""
+    return RedirectResponse("/applications", status_code=303)
 
 
 from onboarding.portal import router as portal_router  # noqa: E402
@@ -217,3 +288,8 @@ async def security_headers(request: Request, call_next):
     if request.url.path.startswith("/api/"):
         h.setdefault("Cache-Control", "no-store")
     return resp
+
+
+from onboarding.security import BodyLimit  # noqa: E402
+
+app.add_middleware(BodyLimit)   # outermost: a body over MAX_REQUEST_BYTES (25 MB) gets 413 before anything parses it

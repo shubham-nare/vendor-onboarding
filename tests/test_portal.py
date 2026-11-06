@@ -12,9 +12,15 @@ from pathlib import Path
 
 import pytest
 
+from tests.flags import flags_on
+from tests.helpers import set_actor
+
+# this module covers bills, supplier accounts, Vendor 360 and the like, which are hidden unless switched on
+_features = flags_on("payables", "intel", "reliability", "followups", "unsolicited")
+
 ROOT = Path(__file__).resolve().parent.parent
-CACHE = ROOT / ".read_cache"
-pytestmark = pytest.mark.skipif(not CACHE.exists() or not any(CACHE.iterdir()), reason="no cached AI readings")
+CACHE = ROOT / "fixtures" / "read_cache"   # committed saved readings of the fictional demo documents
+assert CACHE.exists() and any(CACHE.iterdir()), "fixtures/read_cache/ (committed saved AI readings) is missing: a broken checkout, not a skip"
 PW = "Ks@9" + secrets.token_urlsafe(10)   # meets the policy: upper, lower, number, symbol, 8+
 
 from pathlib import Path  # noqa: E402
@@ -86,7 +92,7 @@ def flows(tmp_path_factory):
             out["console_page"] = (await staff.get("/api/v1/console/home")).text
             out["pending"] = (await staff.get("/api/v1/console/pending")).json()
             out["pending_anon"] = (await other.get("/api/v1/console/pending")).status_code
-            out["applications_page"] = (await staff.get("/assumptions")).text   # a staff page still drawn by the server
+            out["shell_page"] = (await staff.get("/bills")).text   # an app screen
             r = await other.post("/vendor/login", data={"email": DEMO_VENDOR["email"], "password": DEMO_PASSWORD})
             out["demo_vendor"] = (r.status_code, (await other.get("/vendor")).text)
             out["vendor_cookie_on_console"] = (await other.get("/console")).headers.get("location", "")
@@ -106,12 +112,19 @@ def flows(tmp_path_factory):
             f = SCENARIOS["bill_kesari"]["form"]
             data = {k: str(x) for k, x in f.items() if not isinstance(x, bool)} | {"bill_mode": "1", "gst_registered": "on", "demo": "bill_kesari"}
             r = await v.post("/bill", data=data)
-            run_id = int(re.search(r"/runs/(\d+)", r.headers["location"]).group(1))
+            out["bill_landing"] = r.headers["location"]   # a vendor-only browser: the thank-you page, never the staff live view
+            from sqlalchemy import select as _select
+
+            from onboarding.models import Application as _App, Run as _Run
+            from onboarding.pipeline import sessions as _sessions
+            ref = re.search(r"ref=([^&]+)", r.headers["location"]).group(1)
+            async with _sessions()() as s:
+                run_id = (await s.execute(_select(_Run.id).join(_App, _App.id == _Run.application_id).where(_App.ref == ref))).scalar_one()
             out["home_submitted"] = (await v.get(f"/vendor?submitted={run_id}")).text
             await drain()
             out["home_reg"] = (await v.get("/vendor")).text
             for actor, action in ((1, "confirm_engagement"), (3, "activate")):
-                staff.cookies.set("actor", str(actor))
+                set_actor(staff, str(actor))
                 await staff.post(f"/runs/{run_id}/action", data={"action": action})
             out["home_active"] = (await v.get("/vendor")).text
 
@@ -133,7 +146,7 @@ def flows(tmp_path_factory):
             # Priya engaged them (can't approve); Arjun approves; only Finance releases; payment needs its bank reference
             for actor, action, comment in ((1, "approve_payment", ""), (3, "approve_payment", ""), (3, "release_payment", ""),
                                            (4, "release_payment", ""), (4, "mark_paid", ""), (4, "mark_paid", "UTR HDFC261103000417")):
-                staff.cookies.set("actor", str(actor))
+                set_actor(staff, str(actor))
                 codes.append((await staff.post(f"/bills/{bid}/action", data={"action": action, "comment": comment})).status_code)
             out["clean_codes"] = codes
             out["clean_paid_page"] = (await staff.get(f"/bills/{bid}")).text
@@ -141,19 +154,19 @@ def flows(tmp_path_factory):
             bid2 = await bill("newbank")
             out["newbank_page"] = (await staff.get(f"/bills/{bid2}")).text
             out["newbank_vendor"] = (await v.get(f"/vendor/bills/{bid2}")).text
-            staff.cookies.set("actor", "1")
+            set_actor(staff, "1")
             await staff.post(f"/bills/{bid2}/action", data={"action": "confirm_engagement"})
-            staff.cookies.set("actor", "3")
+            set_actor(staff, "3")
             out["newbank_maker"] = (await staff.post(f"/bills/{bid2}/action", data={"action": "approve_payment"})).status_code
-            staff.cookies.set("actor", "4")
+            set_actor(staff, "4")
             out["newbank_checker"] = (await staff.post(f"/bills/{bid2}/action", data={"action": "reject_bill", "comment": "Bank change not confirmed by phone."})).status_code
 
             # three-way match journeys
             bid3 = await bill("overbilled")                     # bills 3 shifts; delivery recorded for 2
-            staff.cookies.set("actor", "3")
+            set_actor(staff, "3")
             out["over_page"] = (await staff.get(f"/bills/{bid3}")).text
             out["over_vendor"] = (await v.get(f"/vendor/bills/{bid3}")).text
-            staff.cookies.set("actor", "4")                      # Finance approves over the discrepancy, with a reason ...
+            set_actor(staff, "4")                      # Finance approves over the discrepancy, with a reason ...
             out["over_override_no_reason"] = (await staff.post(f"/bills/{bid3}/action", data={"action": "approve_payment"})).status_code
             out["over_override"] = (await staff.post(f"/bills/{bid3}/action", data={"action": "approve_payment", "comment": "Third shift done on 3 Nov, confirmed by phone"})).status_code
             out["over_release_self"] = (await staff.post(f"/bills/{bid3}/action", data={"action": "release_payment"})).status_code   # ... but can't release it
@@ -166,14 +179,27 @@ def flows(tmp_path_factory):
             for path in ("/invoices?sort=amount_desc", "/invoices?sort=amount_asc", "/invoices?amin=41000", "/invoices?amax=30000", "/invoices?vendor=V-9999"):
                 out["filter " + path] = (await staff.get("/api/v1" + path)).json()
             po3 = re.search(r'href="/purchase-orders/(\d+)"', out["over_page"]).group(1)
-            staff.cookies.set("actor", "1")                      # Priya, the requester on the order, records the third shift
+            set_actor(staff, "1")                      # Priya, the requester on the order, records the third shift
             out["receipt"] = (await staff.post(f"/purchase-orders/{po3}/receipts", data={"kind": "service", "qty_x": ""} |
-                                               {k: "1" for k in re.findall(r'name="(qty_\d+)"', (await staff.get(f"/purchase-orders/{po3}")).text)})).status_code
-            staff.cookies.set("actor", "3")
-            out["po3_page"] = (await staff.get(f"/purchase-orders/{po3}")).text
+                                               {f"qty_{ln['id']}": "1" for ln in (await staff.get(f"/api/v1/purchase-orders/{po3}")).json()["lines"]})).status_code
+            set_actor(staff, "3")
+            out["po3_page"] = (await staff.get(f"/api/v1/purchase-orders/{po3}")).text
+            # a new order and its delivery, through the API
+            opts = (await staff.get("/api/v1/purchase-orders/options")).json()
+            new_po = dict(po_number="PO-2026-0999", vendor_id=opts["vendors"][0]["id"], cost_centre="PL2-TEST", requester_id=1,
+                          lines=[dict(description="Test service", quantity=2, unit="job", unit_price=1000, tax_rate=18)])
+            out["po_api"] = (await staff.post("/api/v1/purchase-orders", json=new_po)).json()
+            out["po_api_dup"] = await staff.post("/api/v1/purchase-orders", json=new_po)
+            line = (await staff.get(f"/api/v1/purchase-orders/{out['po_api']['id']}")).json()["lines"][0]["id"]
+            set_actor(staff, "2")                      # Rahul is not the requester on it
+            out["po_api_rahul"] = await staff.post(f"/api/v1/purchase-orders/{out['po_api']['id']}/deliveries", json={"quantities": {str(line): 1}})
+            set_actor(staff, "1")                      # Priya is
+            out["po_api_priya"] = await staff.post(f"/api/v1/purchase-orders/{out['po_api']['id']}/deliveries", json={"quantities": {str(line): 2}})
+            out["po_api_after"] = (await staff.get(f"/api/v1/purchase-orders/{out['po_api']['id']}")).json()
+            set_actor(staff, "3")
             out["vendor_dir"] = (await staff.get("/api/v1/vendors")).text
             vnd = next(v["id"] for v in json.loads(out["vendor_dir"])["vendors"] if v["name"].startswith("Kesari"))
-            out["kesari_360"] = (await staff.get(f"/vendors/{vnd}")).text
+            out["kesari_360"] = (await staff.get(f"/api/v1/vendors/{vnd}")).text
             out["vendor_dir_unpaid"] = (await staff.get("/api/v1/vendors?inv=needs_review")).text
 
             # bank-account change request: the vendor asks, Finance (only) approves after an independent check
@@ -183,18 +209,18 @@ def flows(tmp_path_factory):
                              files={"proof": ("new_cheque.pdf", b"%PDF-1.4 test cheque", "application/pdf")})
             out["cr_post"] = r.status_code
             out["profile_after"] = (await v.get("/vendor/profile")).text
-            staff.cookies.set("actor", "3")
+            set_actor(staff, "3")
             out["review_maker"] = (await staff.get("/api/v1/review")).json()
             out["pending_maker_cr"] = (await staff.get("/api/v1/console/pending")).json()
-            staff.cookies.set("actor", "4")
+            set_actor(staff, "4")
             out["review_finance"] = (await staff.get("/api/v1/review")).json()
             out["pending_finance_cr"] = (await staff.get("/api/v1/console/pending")).json()
             out["applications_finance"] = (await staff.get("/api/v1/applications")).json()
             cr_id = out["review_finance"]["changes"][0]["id"]
-            staff.cookies.set("actor", "3")
+            set_actor(staff, "3")
             out["cr_maker"] = (await staff.post(f"/change-requests/{cr_id}/decide", data={"decision": "approve", "note": "looks fine"})).status_code
             out["cr_maker_api"] = await staff.post(f"/api/v1/change-requests/{cr_id}/decision", json={"decision": "approve", "note": "looks fine"})
-            staff.cookies.set("actor", "4")
+            set_actor(staff, "4")
             out["cr_nonote"] = (await staff.post(f"/change-requests/{cr_id}/decide", data={"decision": "approve", "note": ""})).status_code
             out["cr_checker"] = (await staff.post(f"/change-requests/{cr_id}/decide", data={"decision": "approve", "note": "Called the number on record; Sneha confirmed"})).status_code
             out["profile_done"] = (await v.get("/vendor/profile")).text
@@ -202,42 +228,42 @@ def flows(tmp_path_factory):
             out["documents_bills"] = (await staff.get("/api/v1/documents?kind=invoice&show=all")).json()
             for path in ("/review", "/applications", "/relationships", "/audit?entity=change_request"):
                 out[path] = await staff.get(path.replace("/audit", "/api/v1/history"))
-            out["kesari_360_after_change"] = (await staff.get(f"/vendors/{vnd}")).text
+            out["kesari_360_after_change"] = (await staff.get(f"/api/v1/vendors/{vnd}")).text
 
             # who sees what: Priya (1) is named on the bills, Rahul (2) isn't, Arjun (3) reviews, Kavita (4) is Finance
             sha = re.search(r'href="/files/([0-9a-f]+)"', out["newbank_page"]).group(1)
             seen = {}
             for who in (1, 2, 3, 4):
-                staff.cookies.set("actor", str(who))
-                seen[who] = dict(bills=(await staff.get("/bills")).text, bill=await staff.get(f"/bills/{bid2}"), run=await staff.get(f"/runs/{run_id}"),
+                set_actor(staff, str(who))
+                seen[who] = dict(bills=(await staff.get("/api/v1/bills")).text, bill=await staff.get(f"/bills/{bid2}"), run=await staff.get(f"/runs/{run_id}"),
                                  events=(await staff.get(f"/runs/{run_id}/events")).status_code, file=(await staff.get(f"/files/{sha}")).status_code,
                                  outbox=(await staff.get("/api/v1/outbox")).status_code, console=(await staff.get("/api/v1/console/home")).text,
                                  vendors=(await staff.get("/api/v1/supplier-accounts")).text,
                                  accounts_status=(await staff.get("/api/v1/supplier-accounts")).status_code)
             out["seen"] = seen
-            staff.cookies.set("actor", "2")
+            set_actor(staff, "2")
             out["rahul_action"] = (await staff.post(f"/bills/{bid2}/action", data={"action": "confirm_engagement"})).status_code
-            staff.cookies.set("actor", "3")
+            set_actor(staff, "3")
             # tag a teammate: Arjun asks Rahul about the invoice; Rahul sees it, opens it, answers
             out["rahul_bill_before_tag"] = seen[2]["bill"].status_code
             out["tag"] = (await staff.post(f"/bills/{bid2}/tag", data={"to_employee_id": "2", "note": "Did the team ask Kesari for this extra cleaning?"})).status_code
             out["tag_self"] = (await staff.post(f"/bills/{bid2}/tag", data={"to_employee_id": "3", "note": "me"})).status_code
-            staff.cookies.set("actor", "2")
+            set_actor(staff, "2")
             out["rahul_console_tagged"] = (await staff.get("/api/v1/console/home")).text
             page = await staff.get(f"/bills/{bid2}")
             out["rahul_bill_tagged"] = page
             tag_id = re.search(r'/bills/\d+/tag/(\d+)/done', page.text).group(1)
-            staff.cookies.set("actor", "1")
+            set_actor(staff, "1")
             out["tag_wrong_person"] = (await staff.post(f"/bills/{bid2}/tag/{tag_id}/done", data={"reply": "x"})).status_code
-            staff.cookies.set("actor", "2")
+            set_actor(staff, "2")
             out["tag_done"] = (await staff.post(f"/bills/{bid2}/tag/{tag_id}/done", data={"reply": "Yes, I asked them on 2 Nov."})).status_code
             out["rahul_console_after"] = (await staff.get("/api/v1/console/home")).text
-            staff.cookies.set("actor", "3")
+            set_actor(staff, "3")
             out["bill_after_tag"] = (await staff.get(f"/bills/{bid2}")).text
 
             await other.post("/vendor/register", data={"company_name": "Someone Else", "contact_name": "A B", "email": "a@else.example.com", "password": PW})
             out["other_bill"] = (await other.get(f"/vendor/bills/{bid}")).status_code
-            out["bills_list"] = (await staff.get("/bills")).text
+            out["bills_list"] = (await staff.get("/api/v1/bills")).text
             out["vendors_list"] = (await staff.get("/api/v1/supplier-accounts")).text
             v.cookies.set("vendor_session", "1.1.forged")
             out["forged"] = (await v.get("/vendor")).headers.get("location", "")
@@ -387,11 +413,11 @@ def test_payables_pages_and_delivery_recording(flows):
 
 
 def test_vendor_360_is_the_supplier_record(flows):
-    page = flows["kesari_360"]
-    for text in ("Invoices and payments", "KFS/2026-27/0207", "UTR HDFC261103000417", "Supplier master", "Payment eligibility", "Documents",
-                 "Cancelled cheque", "Blocked for investigation"):
-        assert text in page or text.lower() in page.lower(), text
-    assert "Investigate before anything is paid" in page          # the blocked duplicate leads the next actions
+    page, v = flows["kesari_360"], json.loads(flows["kesari_360"])           # GET /api/v1/vendors/{id}
+    for text in ("KFS/2026-27/0207", "UTR HDFC261103000417", "Supplier master", "Payment eligibility", "Cancelled cheque", "Blocked for investigation"):
+        assert text.lower() in page.lower(), text
+    assert v["invoices"]["show"] and v["invoices"]["rows"] and v["documents"]
+    assert "Investigate before anything is paid" in v["next"][0]["title"]    # the blocked duplicate leads the next actions
     assert "Kesari" in flows["vendor_dir"] and ('"eligible"' in flows["vendor_dir"] or '"blocked"' in flows["vendor_dir"])
     assert "Kesari" in flows["vendor_dir_unpaid"]
 
@@ -409,21 +435,20 @@ def test_bank_change_needs_finance_and_an_independent_check(flows):
 
 
 def test_new_bank_account_does_not_inherit_the_old_level(flows):
-    page = flows["kesari_360_after_change"]
-    facts = page.split("Evidence and fact history", 1)[1].split("Relationships", 1)[0]
-    assert "7766" in facts and "change request" in facts and "Not confirmed at source" in facts
-    bank = facts.split("Bank account", 1)[1][:1500]
-    assert "A1" in bank and "7766" in bank      # the current bank fact is the new account, at its own (lower) level
+    v = json.loads(flows["kesari_360_after_change"])
+    bank = next(f for f in v["facts"] if f["label"] == "Bank account")
+    assert "7766" in bank["value"] and bank["where"] == "change request" and "Not confirmed at source" in (bank["note"] or "")
+    assert bank["level"] == "A1"      # the current bank fact is the new account, at its own (lower) level
 
 
 
 def test_vendor_360_reads_as_a_product(flows):
     """Supplier record and latest application are separate cards; known files and registration bills say what they are."""
-    page = flows["kesari_360_after_change"]
-    assert "Supplier master" in page and "Latest application" in page and "Payment eligibility" in page
+    page, v = flows["kesari_360_after_change"], json.loads(flows["kesari_360_after_change"])
+    assert [c["label"] for c in v["cards"]][:3] == ["Supplier master", "Payment eligibility", "Latest application"]
     assert "demo specimen" not in page and "fictional" not in page.lower()
-    if "Onboarding bill" in page:
-        assert "not a payable invoice" in page
+    if any(d["registration_bill"] for d in v["documents"]):
+        assert "not as payable invoices" in APP_JS
 
 
 def test_old_development_wording_is_not_shown_for_known_files():
@@ -448,6 +473,7 @@ def test_weak_passwords_are_refused(flows):
 
 
 def test_after_submitting_the_vendor_sees_under_review_not_thank_you(flows):
+    assert flows["bill_landing"].startswith("/thanks?for=bill")       # vendor-only browser: thank-you page, not the staff view
     page = html.unescape(flows["home_submitted"])
     assert "Submitted · under review" in page and "Thank you" not in page and "bg-amber-50" in page
     assert "isn't final until our team confirms it" in page
@@ -498,7 +524,7 @@ def test_documents_page_lists_every_upload(flows):
 def test_pending_reminder_feed_and_house_style(flows):
     assert flows["pending_anon"] == 401                                          # signed out: the API says so
     assert isinstance(flows["pending"]["count"], int) and len(flows["pending"]["items"]) <= 4
-    page = flows["applications_page"]
+    page = flows["newbank_page"]                                                  # a page still drawn by the server
     assert 'id="pending-note"' in page and "/api/v1/console/pending" in page     # reminder on other pages
     assert "path === '/console'" in APP_JS                                        # ... not on Home, which already lists them
     assert "/static/app.css" in page and "-apple-system" in APP_CSS and "Verdana" not in APP_CSS and "#F5F5F7" in APP_CSS
@@ -569,3 +595,13 @@ def test_applications_is_a_main_tab_with_its_own_count(flows):
     assert "apps" in fin and fin["apps"] <= fin["count"]
     waiting = [a for a in apps["applications"] if a["waiting"]]
     assert len(waiting) == fin["apps"] and apps["applications"][:len(waiting)] == waiting       # waiting ones first
+
+
+
+def test_orders_through_the_api(flows):
+    assert flows["po_api"]["next"].startswith("/purchase-orders/")
+    assert flows["po_api_dup"].status_code == 409 and "already exists" in flows["po_api_dup"].json()["error"]
+    assert flows["po_api_rahul"].status_code == 403
+    assert flows["po_api_priya"].status_code == 200
+    after = flows["po_api_after"]
+    assert after["lines"][0]["delivered"] == 2 and after["totals"]["order"] == 2360 and len(after["deliveries"]) == 1

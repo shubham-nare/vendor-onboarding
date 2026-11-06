@@ -12,9 +12,32 @@ const isOn = (href, path) => path === href || (href !== '/console' && path.start
   (href === '/console' && path.startsWith('/invites')) || (href === '/applications' && path.startsWith('/runs/'));
 const badge = (kind, n) => `<span class="review-count${kind === 'apps' ? ' apps-count' : ''}" data-count="${kind}"${n ? '' : ' hidden'} aria-label="${n} ${kind === 'apps' ? 'applications waiting' : 'waiting'}">${n > 99 ? '99+' : n}</span>`;
 
+// Paths of switched-off features (FEATURE_* settings, from GET /api/v1/session): off the menu, and links to them are removed.
+const FEATURE_PATHS = {
+  payables: /^\/(bill|bills|invoices|purchase-orders|change-requests|audit)(\/|$)/,
+  intel: /^\/(vendors|relationships)(\/|$)/,
+  unsolicited: /^\/(apply|prequalified)$|^\/prequalified\//,
+};
+function featureOff(href) {
+  const f = (App.session && App.session.features) || {};
+  const path = new URL(href, location.href).pathname;
+  return Object.entries(FEATURE_PATHS).some(([name, rx]) => !f[name] && rx.test(path));
+}
+// after a screen is drawn: a link into a hidden feature goes (data-optional) or turns into plain text
+function dropDeadLinks(root) {
+  qsa('a[href^="/"]', root).forEach(a => {
+    if (!featureOff(a.getAttribute('href'))) return;
+    if (a.hasAttribute('data-optional')) { a.remove(); return; }
+    const span = document.createElement('span');
+    span.className = a.className.split(/\s+/).filter(c => !c.startsWith('hover:') && c !== 'underline').join(' ');
+    span.innerHTML = a.innerHTML;
+    a.replaceWith(span);
+  });
+}
+
 function navItems(session) {
   const reviewer = ['maker', 'checker'].includes(session.actor.role);
-  return NAV.map(([group, items]) => [group, items.filter(([href]) => reviewer || !REVIEWER_ONLY.includes(href))]).filter(([, items]) => items.length);
+  return NAV.map(([group, items]) => [group, items.filter(([href]) => !featureOff(href) &&(reviewer || !REVIEWER_ONLY.includes(href)))]).filter(([, items]) => items.length);
 }
 
 function personaMenu(session, where, compact) {
@@ -84,7 +107,7 @@ function paintCounts(c) {
 let reminded = false;
 function remind(d, path) {
   const box = qs('#pending-note');
-  if (reminded || !box || !d.count || path === '/console' || store.get('pending-hidden')) return;
+  if (reminded || !box || !d.count || path === '/console' || path.startsWith('/runs/') || store.get('pending-hidden')) return;
   reminded = true;
   qs('#pending-n').textContent = d.count;
   qs('#pending-list').innerHTML = d.items.map(t => `<li><a class="hover:underline" href="${esc(t.href)}">${esc(t.verb)}: ${esc(t.name)} (${esc(t.ref)})</a></li>`).join('')

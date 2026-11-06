@@ -57,7 +57,8 @@ async def review(request: Request):
         todo = (await _dashboard_ctx(request, s))["todo"]
         full = access.full_view(actor)
         changes = []
-        if full:
+        from onboarding.config import feature
+        if full and feature("payables"):
             r = await _reads(changes=_all(select(ChangeRequest).where(ChangeRequest.status == "submitted").order_by(ChangeRequest.id)),
                              masters=_all(select(VendorMaster)), vendors=_all(select(Vendor)))
             names = {m.vendor_id: m.legal_name for m in r["masters"]}

@@ -4,6 +4,7 @@ set the risk tier, and write the vendor message + internal note. Pure functions.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import asdict, dataclass, field
 
 from onboarding.rules import BILL_HIGH_RISK, ERROR, FAIL, PASS, SKIPPED, WARN, Context, R, inr, money
@@ -13,6 +14,7 @@ APPROVED, PENDING_VENDOR, PENDING_REVIEW, REJECTED = "APPROVED", "PENDING_VENDOR
 # Rules that must PASS for an approval (if they apply).
 REQUIRED = {"R-INV-01", "R-INV-02", "R-COMP-01", "R-COMP-02", "R-ID-01", "R-ID-02", "R-ID-03", "R-ID-04", "R-ID-05", "R-ID-06",
             "R-BANK-01", "R-XD-01", "R-XD-02", "R-XD-04", "R-NAME-01", "R-NAME-03", "R-RISK-01", "R-RISK-02"}
+INVARIANT = "INTERNAL-INVARIANT"   # reason code when decide() would approve without every applicable required rule passing
 LEVEL_NAMES = {"A0": "Declared", "A1": "Evidenced", "A2": "Genuine", "A3": "Cryptographically proven", "A4": "Confirmed at source"}
 
 
@@ -63,17 +65,27 @@ def decide(rules: list[R], ctx: Context, ref: str = "") -> Decision:
     else:
         status, winners = APPROVED, []
 
+    broken: list[str] = []
     if status == APPROVED:  # invariant: every applicable required rule passed (SKIPPED never counts)
         by_id = {r.rule_id: r for r in rules}
-        bad = [rid for rid in REQUIRED if rid in by_id and by_id[rid].result in (FAIL, SKIPPED, ERROR)]
-        assert not bad, f"approval invariant broken: {bad}"
+        broken = sorted(rid for rid in REQUIRED if rid in by_id and by_id[rid].result in (FAIL, SKIPPED, ERROR))
+        if broken:  # a rule-table bug, never an approval and never a crash: a person looks at it
+            status, winners = PENDING_REVIEW, []
 
     fraud = any(r.fraud and r.result == FAIL for r in rules)
     tier = _tier(rules, ctx, fraud)
-    d = Decision(status=status, reason_codes=sorted({r.rule_id for r in winners}), fraud=fraud, risk_tier=tier)
+    d = Decision(status=status, reason_codes=sorted({r.rule_id for r in winners} | ({INVARIANT} if broken else set())), fraud=fraud, risk_tier=tier)
     d.cards = [_card(r, status) for r in winners][:6]
+    if broken:
+        d.cards.insert(0, {"rule": INVARIANT, "title": "Internal error: the checks didn't add up, so this was not approved",
+                           "detail": f"No check failed in a way that stops approval, but these required checks did not pass: {', '.join(broken)}. "
+                                     "Review them and the documents before deciding.",
+                           "fraud": False, "next": "A reviewer decides: approve, ask the vendor, or reject."})
     d.facts = grade(rules, ctx)
     _messages(d, rules, ctx, ref)
+    if broken:
+        d.internal_note += f"\n- [INTERNAL] {INVARIANT}: required checks did not pass but nothing stopped approval: {', '.join(broken)}"
+        logging.getLogger("onboarding.decision").error("approval invariant broken for %s: %s", ref or "?", broken)
     return d
 
 
@@ -93,7 +105,21 @@ def _card(r: R, status: str) -> dict:
     nxt = {REJECTED: "A person confirms the rejection before the vendor is told.",
            PENDING_REVIEW: "A reviewer decides: approve, ask the vendor, or reject.",
            PENDING_VENDOR: "The vendor has been asked to fix this."}.get(status, "")
-    return {"rule": r.rule_id, "title": r.title, "detail": r.internal or r.vendor_text, "fraud": r.fraud, "next": nxt}
+    title, detail = r.title, r.internal or r.vendor_text
+    lead = _PROBLEM_FIRST.get(r.rule_id)
+    if lead and r.result in (FAIL, WARN) and r.title.startswith(lead[0]):
+        # these titles state what the source said ("GST registry: active, name is ..."), which reads like a pass:
+        # lead with the problem, then the facts
+        title, detail = lead[1], " ".join(x for x in (r.title.rstrip(".") + ".", detail) if x)
+    return {"rule": r.rule_id, "title": title, "detail": detail, "fraud": r.fraud, "next": nxt}
+
+
+# rule id -> (the start of a title that reads like a pass, the problem to lead with instead)
+_PROBLEM_FIRST = {
+    "R-SRC-GST": ("GST registry: active", "GST registry: the registered name doesn't match the application"),
+    "R-SRC-PAN": ("PAN registry: valid", "PAN registry: the registered name doesn't match the application"),
+    "R-SRC-BANK": ("Bank confirms the account holder", "Bank account: the account holder doesn't match the applicant"),
+}
 
 
 def grade(rules: list[R], ctx: Context) -> list[Fact]:

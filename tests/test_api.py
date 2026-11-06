@@ -7,7 +7,12 @@ from pathlib import Path
 
 import pytest
 
+from tests.flags import flags_on
+
 ROOT = Path(__file__).resolve().parent.parent
+
+# the API tests cover every screen's endpoint, including the hidden features'
+_features = flags_on("payables", "intel", "reliability", "followups", "unsolicited")
 
 
 @pytest.fixture(scope="module")
@@ -38,10 +43,29 @@ def api(tmp_path_factory):
             out["act"] = await c.post("/api/v1/session/actor", json={"employee_id": priya["id"]})
             out["home as priya"] = (await c.get("/api/v1/console/home")).json()
             out["act bad"] = await c.post("/api/v1/session/actor", json={"employee_id": "x"})
-            out["reset requester"] = await c.post("/api/v1/system/reset", json={"passcode": "change-me"})   # still Priya
+            out["reset requester"] = await c.post("/api/v1/system/reset", json={"passcode": os.environ["ADMIN_PASSCODE"]})   # still Priya
             await c.post("/api/v1/session/actor", json={"employee_id": out["/api/v1/session"].json()["actor"]["id"]})   # back to Arjun
+            from onboarding import security
+            out["reset wrong"] = await c.post("/api/v1/system/reset", json={"passcode": "not-the-passcode"})
+            os.environ["ADMIN_PASSCODE"], saved = "change-me", os.environ["ADMIN_PASSCODE"]   # the old default is refused
+            cfg.get_settings.cache_clear()
             out["reset default"] = await c.post("/api/v1/system/reset", json={"passcode": "change-me"})
+            os.environ["ADMIN_PASSCODE"] = ""
+            cfg.get_settings.cache_clear()
+            out["reset unset"] = await c.post("/api/v1/system/reset", json={"passcode": ""})
+            os.environ["ADMIN_PASSCODE"] = saved
+            cfg.get_settings.cache_clear()
+            for _ in range(security.RESET_WRONG.limit):
+                await c.post("/api/v1/system/reset", json={"passcode": "guess"})
+            out["reset locked"] = await c.post("/api/v1/system/reset", json={"passcode": saved})   # even the right one, after 5 wrong
+            security.RESET_WRONG.reset()
+            out["reset ok"] = await c.post("/api/v1/system/reset", json={"passcode": saved})
+            await c.post("/company/login", data={"email": DEMO_COMPANY_EMAIL, "password": DEMO_PASSWORD})   # the reset reseeded the logins
             out["system"] = await c.get("/api/v1/system")
+            pdf = (ROOT / "fixtures" / "documents" / "happy_nilgiri" / "gst_certificate.pdf").read_bytes()
+            out["check ok"] = await c.post("/api/v1/check", files={"file_a": ("gst.pdf", pdf, "application/pdf")})
+            out["check html"] = await c.post("/api/v1/check", files={"file_a": ("gst.pdf", b"<html><script>x</script>", "application/pdf")})
+            out["help"] = await c.get("/api/v1/help")
             from onboarding import auth
             kept = c.cookies.get(auth.COMPANY_COOKIE)                        # someone copied the cookie before log-out
             out["logout"] = await c.post("/api/v1/session/logout")
@@ -85,11 +109,22 @@ def test_session_and_home(api):
     assert api["act bad"].status_code == 422 and "employee_id" in api["act bad"].json()["error"]
 
 
-def test_reset_is_off_with_the_default_passcode(api):
+def test_reset_needs_a_real_passcode_and_limits_wrong_tries(api):
     assert api["reset requester"].status_code == 403 and "Requesters" in api["reset requester"].json()["error"]
-    r = api["reset default"]
-    assert r.status_code == 403 and "ADMIN_PASSCODE" in r.json()["error"]
+    for key in ("reset default", "reset unset"):          # no default passcode: "change-me" or nothing means reset is off
+        r = api[key]
+        assert r.status_code == 403 and "ADMIN_PASSCODE" in r.json()["error"], key
+    assert api["reset wrong"].status_code == 403 and "Wrong passcode" in api["reset wrong"].json()["error"]
+    assert api["reset locked"].status_code == 429 and "Too many wrong passcodes" in api["reset locked"].json()["error"]
+    assert api["reset ok"].status_code == 200 and api["reset ok"].json() == {"ok": True}
     assert any(c["name"].startswith("Database") for c in api["system"].json()["checks"])
+
+
+def test_checker_and_help(api):
+    r = api["check ok"].json()["results"][0]
+    assert r["mime"] == "application/pdf" and r["proof"]["level"] and isinstance(r["signals"], list)
+    assert api["check html"].status_code == 415 and "PDF, JPG or PNG" in api["check html"].json()["error"]
+    assert any(row["information"].startswith("PAN") for row in api["help"].json()["access"])
 
 
 def test_the_app_shell_has_no_inline_script_and_a_strict_policy(api):

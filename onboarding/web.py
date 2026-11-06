@@ -26,7 +26,8 @@ from urllib.parse import quote
 from onboarding import access, auth, runner, security, staff_cache
 from onboarding import validators as V
 from onboarding.authenticity.assess import assess
-from onboarding.config import get_settings
+from onboarding.config import db_label, feature, features, get_settings
+from onboarding.features import scenario_on
 from onboarding.db import WARM_CONNECTIONS, is_dropped_connection
 from onboarding.demo_data import BUYER, SCENARIOS
 from onboarding.models import (Application, Bill, Document, Employee, Fact, HumanAction, Invite, Message, Run, RunEvent, RuleResult, StoredFile,
@@ -124,25 +125,17 @@ async def staff_member(request: Request, s) -> Employee | None:
 async def _actor(request: Request, s) -> Employee | None:
     """Who is using the console: the logged-in employee. Only with DEMO_TOOLS on (development) can the person
     switcher act as someone else."""
-    if not get_settings().demo_tools:
-        return await staff_member(request, s)
-    emps = await _employees(s)
-    if not emps:
+    staff_id, actor_id = auth.actor_ids(request)   # the switcher's cookie is signed and bound to this login
+    if not actor_id:
         return None
-    try:
-        wanted = int(request.cookies.get("actor", "0"))
-    except ValueError:
-        wanted = 0
-    if not wanted:
-        me = await staff_member(request, s)
-        wanted = me.id if me else 0
-    return next((e for e in emps if e.id == wanted), None) or next((e for e in emps if e.role == "maker"), emps[0])
+    emps = await _employees(s)
+    return next((e for e in emps if e.id == actor_id), None) or next((e for e in emps if e.id == staff_id), None)
 
 
 async def render(request: Request, s, name: str, **ctx) -> HTMLResponse:
     from onboarding import captcha, google_auth, i18n
     ctx.update(request=request, actor=await _actor(request, s), employees=await _employees(s), path=request.url.path,
-               staff=await staff_member(request, s), DEMO_TOOLS=get_settings().demo_tools,
+               staff=await staff_member(request, s), DEMO_TOOLS=get_settings().demo_tools, FEATURES=features(),
                lang=i18n.lang_of(request), LANGS=i18n.LANGS, captcha_key=captcha.site_key(), google_on=google_auth.configured())
     if "vendor_account" not in ctx:
         ctx["vendor_account"] = await vendor_account(request, s)
@@ -193,6 +186,12 @@ async def claim(s, acct: VendorAccount, *, invite: Invite | None = None, app: Ap
     return link
 
 
+def demo_key(demo: str) -> str:
+    """The `demo` form/query value, honoured only in demo mode and only when it names a known scenario. It pre-fills
+    the form and supplies sample files; it never replaces the vendor login or the invite token check."""
+    return demo if demo and get_settings().demo_tools and demo in demo_catalog() else ""
+
+
 def demo_catalog() -> dict[str, dict]:
     """Demo scenarios the UI can pre-fill: form values + files (fixtures, or private inputs locally)."""
     out = {}
@@ -222,10 +221,25 @@ def demo_catalog() -> dict[str, dict]:
     return out
 
 
-def _new_invite_from(tpl: Invite) -> Invite:
+LAUNCHER = "demo:"   # Invite.scenario_key prefix of invites made by the scenario launcher (/demo/{key}, staff only)
+
+
+def _new_invite_from(tpl: Invite, launcher_key: str = "") -> Invite:
     return Invite(token=secrets.token_urlsafe(18), sponsor_id=tpl.sponsor_id, company_name=tpl.company_name, contact_email=tpl.contact_email,
                   business_reason=tpl.business_reason, spend_category=tpl.spend_category, spend_band=tpl.spend_band,
-                  high_spend=tpl.high_spend, scenario_key="", expires_at=now() + timedelta(days=14))
+                  high_spend=tpl.high_spend, scenario_key=f"{LAUNCHER}{launcher_key}" if launcher_key else "",
+                  expires_at=now() + timedelta(days=14))
+
+
+def _launcher_guest(inv: Invite | None, demo: str) -> bool:
+    """A scenario-launcher invite opened for its own scenario: the demo vendor may fill it in without a vendor login.
+    Needs demo mode and a known scenario (demo_key), and the invite must have been made by the launcher for that same
+    scenario. A real invite with ?demo= still needs the vendor login (S1)."""
+    if not (demo and demo_key(demo) == demo and inv is not None and inv.scenario_key.startswith(LAUNCHER)):
+        return False
+    launched = inv.scenario_key[len(LAUNCHER):]
+    # ... or the scenario that resubmits it (wrongdoc_tejas_resubmit on a wrongdoc_tejas launcher invite)
+    return demo == launched or SCENARIOS.get(demo, {}).get("resubmission_of") == launched
 
 
 async def _latest_run(s, app_id: int) -> Run | None:
@@ -345,12 +359,17 @@ async def _dashboard_ctx(request: Request, s) -> dict:
                      detail="Bank account change" if c.kind == "bank_account" else "Contact change", status="CHANGE",
                      risk="high" if c.kind == "bank_account" else "low", fraud=False, since=c.created_at, waiting=_waiting(c.created_at))
                 for c in cr["c"] if c.kind != "bank_account" or actor.role == "checker"] + todo
+    if not feature("payables"):   # no bills or change requests on the to-do list (or the menu counts) when Payables is off
+        todo = [t for t in todo if t["status"] not in ("BILL", "CHANGE")]
     work =await _work_summary(s, actor, full, counts, todo)
     vnames = {pk: (vid, name) for pk, vid, name in r.get("vnames", [])}
     alerts = [dict(ev=ev, vendor=vend, related=vnames.get(ev.related_vendor_pk)) for ev, vend in r.get("alerts", [])]
     alerts.sort(key=lambda a: a["ev"].severity != "fraud")
+    if not feature("intel"):
+        alerts = []   # risk flags come from Vendor Intelligence
     from onboarding import followups
-    chasing = [w for w in await followups.waiting(s) if full or (actor and w.requester and w.requester.id == actor.id)]
+    chasing = ([w for w in await followups.waiting(s) if full or (actor and w.requester and w.requester.id == actor.id)]
+               if feature("followups") else [])
     open_invites = sum(1 for i in r["invites"] if i.status == "open" and (full or (actor and i.sponsor_id == actor.id))
                        and (not i.expires_at or _utc(i.expires_at) > now()))
     return dict(runs=runs, counts=counts, stats=stats, catalog=demo_catalog(), full=full, open_invites=open_invites,
@@ -454,7 +473,8 @@ async def act_as(request: Request, employee_id: int = Form(...)):
         raise HTTPException(404, "Not found")
     back = request.headers.get("referer") or "/console"
     resp = RedirectResponse(back, status_code=303)
-    resp.set_cookie("actor", str(employee_id), max_age=60 * 60 * 24 * 30, samesite="lax")
+    staff_id = auth.read_session(request.cookies.get(auth.COMPANY_COOKIE), purpose="company")
+    resp.set_cookie(auth.ACTOR_COOKIE, auth.make_actor(employee_id, staff_id), max_age=auth.MAX_AGE, httponly=True, samesite="lax")
     return resp
 
 
@@ -514,7 +534,7 @@ async def demo_start(key: str):
     if not get_settings().demo_tools:
         raise HTTPException(404, "Not found")
     cat = demo_catalog()
-    if key not in cat:
+    if key not in cat or not scenario_on(cat[key]):
         raise HTTPException(404, "Unknown scenario")
     sc = cat[key]
     if sc.get("bill"):
@@ -525,7 +545,7 @@ async def demo_start(key: str):
         tpl = (await s.execute(select(Invite).where(Invite.scenario_key == sc["invite_scenario"]).order_by(Invite.id))).scalars().first()
         if not tpl:
             raise HTTPException(409, "Reference data not loaded. Use 'Reset data' on the System page.")
-        inv = _new_invite_from(tpl)
+        inv = _new_invite_from(tpl, launcher_key=key)
         s.add(inv)
         await s.commit()
         return RedirectResponse(f"/apply/{inv.token}?demo={key}", status_code=303)
@@ -565,10 +585,11 @@ async def _resolve_employee(s, text: str) -> Employee | None:
 
 @router.get("/apply/{token}", response_class=HTMLResponse)
 async def apply_form(request: Request, token: str, demo: str = ""):
+    demo = demo_key(demo)
     async with sessions()() as s:
         inv, bill, app = await _vendor_link(s, token)
         acct = await vendor_account(request, s)
-        if not acct and not demo and await _needs_login(s, app):
+        if not acct and not _launcher_guest(inv, demo) and await _needs_login(s, app):
             return login_redirect(f"/apply/{token}", register=app is None)
         if acct:
             await claim(s, acct, invite=inv, app=app)
@@ -576,7 +597,7 @@ async def apply_form(request: Request, token: str, demo: str = ""):
         prev, message = None, None
         if app:
             prev = await _latest_run(s, app.id)
-            if app.current_status != "PENDING_VENDOR" or (prev and prev.state != "done"):
+            if not _vendor_may_resubmit(app, prev):
                 return RedirectResponse(f"/status/{token}", status_code=303)
             message = (await s.execute(select(Message).where(Message.run_id == prev.id, Message.audience == "vendor"))).scalars().first()
         prev_docs = {d.slot: d for d in (await s.execute(select(Document).where(Document.run_id == prev.id))).scalars()} if prev else {}
@@ -589,8 +610,9 @@ async def apply_form(request: Request, token: str, demo: str = ""):
 
 @router.get("/apply", response_class=HTMLResponse)
 async def apply_unsolicited(request: Request, demo: str = ""):
+    demo = demo_key(demo)
     async with sessions()() as s:
-        if not demo and not await vendor_account(request, s):
+        if not await vendor_account(request, s):
             return login_redirect("/apply")
         return await render(request, s, "apply.html", invite=None, bill=None, token="", app=None, prev=None, prev_docs={}, message=None, **_form_context(demo, {}))
 
@@ -598,9 +620,10 @@ async def apply_unsolicited(request: Request, demo: str = ""):
 @router.get("/bill", response_class=HTMLResponse)
 async def bill_form(request: Request, demo: str = ""):
     """Self-registration for a vendor who already did work for us and wants to be paid."""
+    demo = demo_key(demo)
     async with sessions()() as s:
         acct = await vendor_account(request, s)
-        if not demo and not acct:
+        if not acct:
             return login_redirect("/bill", register=True)
         start = {"bill_mode": True}
         if acct:
@@ -615,12 +638,14 @@ def _form_context(demo: str, values: dict) -> dict:
     if sc:
         values = dict(sc["form"])
     states = sorted({v for k, v in V.GST_STATE_CODES.items() if "legacy" not in v and k not in ("97", "99")})
-    return dict(values=values, demo=demo if sc else "", demo_files={k: p.name for k, p in sc["files"].items()} if sc else {},
+    return dict(values=values, submit_token=secrets.token_urlsafe(16), demo=demo if sc else "", demo_files={k: p.name for k, p in sc["files"].items()} if sc else {},
                 demo_title=sc["title"] if sc else "", states=states, catalog=cat)
 
 
-async def _collect_form(request: Request) -> tuple[dict, dict[str, tuple[str, bytes]], str]:
-    security.SUBMIT_PER_IP.check(security.client_ip(request))   # each submission sends documents to Gemini
+async def _collect_form(request: Request, rate_limit: bool = True) -> tuple[dict, dict[str, tuple[str, bytes]], str]:
+    """rate_limit False: the caller checks SUBMIT_PER_IP itself (apply_submit exempts scenario-launcher invites)."""
+    if rate_limit:
+        security.SUBMIT_PER_IP.check(security.client_ip(request))   # each submission sends documents to Gemini
     data = await request.form()
     f = {k: (str(data.get(k) or "")).strip() for k in ("business_type", "legal_name", "proprietor_name", "gstin", "pan", "cin", "llpin", "address",
                                                        "city", "state", "pin", "contact_name", "contact_email", "contact_phone", "alt_contact_name", "alt_contact_email", "alt_contact_phone", "bank_holder",
@@ -652,13 +677,19 @@ async def _collect_form(request: Request) -> tuple[dict, dict[str, tuple[str, by
     for slot in SLOTS:
         up = data.get(slot)
         if up is not None and hasattr(up, "read") and getattr(up, "filename", ""):
-            raw = await up.read()
+            raw = await security.read_upload(up, SLOT_TITLE[slot])   # stops reading past 10 MB
             if len(raw) > MAX_BYTES:
                 raise HTTPException(413, f"{SLOT_TITLE[slot]} is larger than 10 MB. Please upload a smaller file.")
             if raw:
                 security.require_document(raw, f"The {SLOT_TITLE[slot].lower()}")
                 files[slot] = (up.filename, raw)
-    return f, files, str(data.get("demo") or "")
+    f["_submit_token"] = str(data.get("submit_token") or "")[:100]   # popped by _submit_token(); never stored
+    return f, files, demo_key(str(data.get("demo") or ""))
+
+
+def _submit_token(form: dict) -> str | None:
+    """The form's one-time submit token (apply.html sets a random one per page load): a double submit makes one run."""
+    return form.pop("_submit_token", "") or None
 
 
 def _fill_files(files: dict, demo: str, prev_files: dict[str, tuple[str, bytes]], form: dict) -> dict:
@@ -763,7 +794,10 @@ async def apply_read(request: Request, slot: str = Form(...), file: UploadFile =
         raise HTTPException(400, "Unknown document")
     if get_settings().rate_limits and not security.READ_PER_IP.allow(security.client_ip(request)):
         return JSONResponse({"ok": False, "message": security.READ_PER_IP.message}, status_code=429)
-    raw = await file.read()
+    try:
+        raw = await security.read_upload(file)   # stops reading past 10 MB
+    except HTTPException:
+        return JSONResponse({"ok": False, "message": "Please upload a PDF, JPG or PNG under 10 MB."}, status_code=413)
     if not raw or len(raw) > MAX_BYTES:
         return JSONResponse({"ok": False, "message": "Please upload a PDF, JPG or PNG under 10 MB."}, status_code=400)
     mime = security.sniff(raw) or ""                      # what the file really is, not what its name says
@@ -780,11 +814,15 @@ async def apply_read(request: Request, slot: str = Form(...), file: UploadFile =
 
 @router.post("/apply/{token}")
 async def apply_submit(request: Request, token: str):
-    form, files, demo = await _collect_form(request)
+    form, files, demo = await _collect_form(request, rate_limit=False)
+    submit_token = _submit_token(form)
     async with sessions()() as s:
         inv, bill, app = await _vendor_link(s, token)
+        guest = _launcher_guest(inv, demo)
+        if not guest:   # scenario-launcher invites are exempt in demo mode, so rehearsals and recordings don't hit the limit
+            security.SUBMIT_PER_IP.check(security.client_ip(request))
         acct = await vendor_account(request, s)
-        if not acct and not demo and await _needs_login(s, app):
+        if not acct and not guest and await _needs_login(s, app):
             return login_redirect(f"/apply/{token}")
         if acct:
             await claim(s, acct, invite=inv, app=app)
@@ -794,27 +832,28 @@ async def apply_submit(request: Request, token: str):
         prev_files, parent = {}, None
         if app:
             prev = await _latest_run(s, app.id)
-            if app.current_status != "PENDING_VENDOR":
+            if not _vendor_may_resubmit(app, prev):
                 return RedirectResponse(f"/status/{token}", status_code=303)
             parent = prev.id
             for d in (await s.execute(select(Document).where(Document.run_id == prev.id))).scalars():
                 sf = await s.get(StoredFile, d.sha256)
                 prev_files[d.slot] = (d.filename, sf.data)
         files = _fill_files(files, demo, prev_files, form)
-        run = await create_run(s, form, files, invite_token=token if inv else None, parent_run_id=parent)
-        if app:
-            app.current_status = "IN_PROGRESS"
+        run = await create_run(s, form, files, invite_token=token if inv else None, parent_run_id=parent, submit_token=submit_token)
         if acct:
             await claim(s, acct, invite=inv, app=await s.get(Application, run.application_id))
         ref = (await s.get(Application, run.application_id)).ref
         await s.commit()
     runner.start(run.id)
-    return _after_submit(run, acct, demo, ref, "update" if parent else "registration")
+    return _after_submit(request, run, acct, demo, ref, "update" if parent else "registration")
 
 
-def _after_submit(run: Run, acct: VendorAccount | None, demo: str, ref: str = "", kind: str = "registration") -> RedirectResponse:
-    """Portal vendors see the thank-you page; demo shortcuts open the internal live view."""
-    if acct and not demo:
+def _after_submit(request: Request, run: Run, acct: VendorAccount | None, demo: str, ref: str = "",
+                  kind: str = "registration") -> RedirectResponse:
+    """A vendor sees the thank-you page. The internal live view only for a demo shortcut taken by someone who is also
+    logged in to the company console (the staff scenario launcher); a vendor-only browser never lands on a staff page."""
+    staff = auth.read_session(request.cookies.get(auth.COMPANY_COOKIE), purpose="company") is not None
+    if acct and not (demo and staff):
         return RedirectResponse(f"/thanks?for={kind}&ref={ref}", status_code=303)
     return RedirectResponse(f"/runs/{run.id}?from=vendor", status_code=303)
 
@@ -822,41 +861,44 @@ def _after_submit(run: Run, acct: VendorAccount | None, demo: str, ref: str = ""
 @router.post("/bill")
 async def bill_submit(request: Request):
     form, files, demo = await _collect_form(request)
+    submit_token = _submit_token(form)
     form["bill_mode"] = True
     for k in BILL_FIELDS:
         form.setdefault(k, "")
     files = _fill_files(files, demo, {}, form)
     async with sessions()() as s:
         acct = await vendor_account(request, s)
-        if not acct and not demo:
+        if not acct:
             return login_redirect("/bill")
-        run = await create_run(s, form, files, invite_token=None)
-        emp = await _resolve_employee(s, form.get("bill_engaged_by", ""))
-        s.add(Bill(application_id=run.application_id, token=secrets.token_urlsafe(18), engaged_by_text=form.get("bill_engaged_by", ""),
-                   engaged_employee_id=emp.id if emp else None))
+        run = await create_run(s, form, files, invite_token=None, submit_token=submit_token)
+        if not (await s.execute(select(Bill.id).where(Bill.application_id == run.application_id))).first():   # a double submit: one bill
+            emp = await _resolve_employee(s, form.get("bill_engaged_by", ""))
+            s.add(Bill(application_id=run.application_id, token=secrets.token_urlsafe(18), engaged_by_text=form.get("bill_engaged_by", ""),
+                       engaged_employee_id=emp.id if emp else None))
         if acct:
             await claim(s, acct, app=await s.get(Application, run.application_id))
         ref = (await s.get(Application, run.application_id)).ref
         await s.commit()
     runner.start(run.id)
-    return _after_submit(run, acct, demo, ref, "bill")
+    return _after_submit(request, run, acct, demo, ref, "bill")
 
 
 @router.post("/apply")
 async def apply_unsolicited_submit(request: Request):
     form, files, demo = await _collect_form(request)
+    submit_token = _submit_token(form)
     files = _fill_files(files, demo, {}, form)
     async with sessions()() as s:
         acct = await vendor_account(request, s)
-        if not acct and not demo:
+        if not acct:
             return login_redirect("/apply")
-        run = await create_run(s, form, files, invite_token=None)
+        run = await create_run(s, form, files, invite_token=None, submit_token=submit_token)
         ref = (await s.get(Application, run.application_id)).ref
         if acct:
             await claim(s, acct, app=await s.get(Application, run.application_id))
             await s.commit()
     runner.start(run.id)
-    return _after_submit(run, acct, demo, ref, "future")
+    return _after_submit(request, run, acct, demo, ref, "future")
 
 
 @router.get("/status/{token}", response_class=HTMLResponse)
@@ -924,14 +966,15 @@ async def run_view(request: Request, run_id: int):
         history = r["history"]
         latest = history[-1].id == run.id
         return await render(request, s, "run.html", run=run, app=app, invite=inv, sponsor=sponsor, bill=bill, bill_emp=bill_emp, full=full,
-                            fact_issues=_fact_issues(r["rules"]) if full else {}, profile_id=(r["profile"] or [[None]])[0][0], snap=(r["snap"] or [None])[0],
+                            fact_issues=_fact_issues(r["rules"]) if full else {}, profile_id=(r["profile"] or [[None]])[0][0] if feature("intel") else None, snap=(r["snap"] or [None])[0],
                             rights=_decision_rights(run, app, inv, bill, bill_emp, list(emps.values())) if latest else [],
                             vendor_token=inv.token if inv else (bill.token if bill else ""), events=events, stages=stages_for(run.form), docs=docs,
+                            finished_ago=(now() - _utc(run.finished_at)).total_seconds() if run.finished_at else None,
                             rules=r["rules"], facts=r["facts"], vendor_msg=msgs.get("vendor"),
                             all_vendor_msgs=[m for m in r["msgs"] if m.audience == "vendor"], internal=msgs.get("internal"),
                             actions=r["actions"], history=history, latest=latest, vendor=(r["vendor"] or [None])[0],
                             allowed=_allowed_actions(run, app, inv, actor, bill, bill_emp), from_vendor=request.query_params.get("from") == "vendor",
-                            reliab=await _reliability(s, app.id) if full else None)
+                            reliab=await _reliability(s, app.id) if full and feature("reliability") else None)
 
 
 async def _reliability(s, application_id: int):
@@ -976,7 +1019,7 @@ def _fact_issues(rules: list[RuleResult]) -> dict[str, list[dict]]:
 
 _RIGHT_VERB = {"activate": "activate", "review_approve": "approve", "ask_vendor": "ask the vendor", "review_reject": "reject",
                "confirm_reject": "confirm the rejection", "override_reject": "send it to review", "confirm_engagement": "confirm the work",
-               "deny_engagement": "deny the work"}
+               "deny_engagement": "deny the work", "rerun": "re-run the checks"}
 
 
 def _decision_rights(run, app, inv, bill, bill_emp, employees) -> list[dict]:
@@ -1074,9 +1117,21 @@ ACTIONS = {
 }
 
 
+def _vendor_may_resubmit(app: Application, prev: Run | None) -> bool:
+    """The vendor may send the form again when we asked them to fix something, or when the last run failed or was
+    interrupted (nothing was decided)."""
+    if prev is not None and prev.state in ("failed", "interrupted"):
+        return app.current_status in ("IN_PROGRESS", "PENDING_REVIEW", "PENDING_VENDOR")
+    return app.current_status == "PENDING_VENDOR" and (prev is None or prev.state == "done")
+
+
 def _allowed_actions(run: Run, app: Application, inv: Invite | None, actor: Employee | None, bill: Bill | None = None,
                      bill_emp: Employee | None = None) -> dict:
     """Which actions apply now, and for each, whether the current person may take it (and why not)."""
+    if run.state in ("failed", "interrupted") and app.current_status not in ("ACTIVE", "REJECTED", "PREQUALIFIED"):
+        why = ("Sign in as an employee first." if not actor else
+               "" if actor.role in ("maker", "checker") else "Only Procurement or Finance can re-run the checks.")
+        return {"rerun": dict(label="Re-run checks", blocked=why, needs_comment=False)}
     if run.state != "done":
         return {}
     status = app.current_status
@@ -1115,7 +1170,10 @@ def _allowed_actions(run: Run, app: Application, inv: Invite | None, actor: Empl
 async def _activate(s, run: Run, app: Application) -> VendorMaster:
     n = (await s.execute(select(func.count(VendorMaster.id)).where(VendorMaster.source_run_id.is_not(None)))).scalar() or 0
     f = run.form
-    vm = VendorMaster(vendor_id=f"V-{1001 + n}", legal_name=f.get("legal_name", ""), pan=f.get("pan", "").upper(), gstin=f.get("gstin", "").upper(),
+    k = 1001 + n
+    while (await s.execute(select(VendorMaster.id).where(VendorMaster.vendor_id == f"V-{k}"))).first():   # never reuse a taken ID
+        k += 1
+    vm = VendorMaster(vendor_id=f"V-{k}", legal_name=f.get("legal_name", ""), pan=f.get("pan", "").upper(), gstin=f.get("gstin", "").upper(),
                       account=f.get("bank_account", ""), ifsc=f.get("ifsc", "").upper(), status="Active", source_run_id=run.id)
     s.add(vm)
     app.current_status = "ACTIVE"
@@ -1134,7 +1192,7 @@ async def run_action(request: Request, run_id: int, action: str = Form(...), com
         run = await s.get(Run, run_id)
         if not run:
             raise HTTPException(404, "No such run")
-        app = await s.get(Application, run.application_id)
+        app = (await s.execute(select(Application).where(Application.id == run.application_id).with_for_update())).scalar_one()  # one decision at a time
         latest = await _latest_run(s, app.id)
         if latest.id != run.id:
             raise HTTPException(409, "A newer submission exists; act on that one.")
@@ -1152,7 +1210,13 @@ async def run_action(request: Request, run_id: int, action: str = Form(...), com
             raise HTTPException(403, allowed[action]["blocked"])
         if allowed[action]["needs_comment"] and len(comment.strip()) < 5:
             raise HTTPException(400, "Please write a short reason: it goes on the audit trail.")
-        if action in ("activate", "review_approve") and reliability_ack != "1":
+        if action == "rerun":   # a new run from the stored form and documents; the failed one stays as it was
+            s.add(HumanAction(run_id=run.id, employee_id=actor.id, action=action, comment=auth.audit_comment(request, comment)))
+            from onboarding.pipeline import rerun
+            new = await rerun(s, run)
+            runner.start(new.id)
+            return RedirectResponse(f"/runs/{new.id}", status_code=303)
+        if feature("reliability") and action in ("activate", "review_approve") and reliability_ack != "1":
             rc = await _reliability(s, app.id)
             if rc and rc.level == "high":
                 raise HTTPException(400, "This vendor's reliability check found serious concerns. Read the warning on the page before approving.")
@@ -1193,11 +1257,12 @@ async def run_action(request: Request, run_id: int, action: str = Form(...), com
             app.current_status = "REJECTED"
             s.add(Message(run_id=run.id, audience="vendor", subject=f"Your vendor registration (Ref {app.ref}): unable to proceed", state="sent",
                           body=f"{hi}\n\nThank you for your interest. After review, we're unable to proceed with your registration at this time.\n\nVendor Onboarding Team"))
-        ha = HumanAction(run_id=run.id, employee_id=actor.id, action=action, comment=comment)
+        ha = HumanAction(run_id=run.id, employee_id=actor.id, action=action, comment=auth.audit_comment(request, comment))
         s.add(ha)
         await s.commit()
-    from onboarding.intel.project import on_decision
-    await on_decision(ha.id)   # Vendor Intelligence: evidence of the decision, closes the risk flags it addressed; never raises
+    if feature("intel"):
+        from onboarding.intel.project import on_decision
+        await on_decision(ha.id)   # Vendor Intelligence: evidence of the decision, closes the risk flags it addressed; never raises
     from onboarding import mailer
     mailer.start(run.id)       # email the vendor the message this decision released, in the background
     return RedirectResponse(f"/runs/{run_id}#actions", status_code=303)
@@ -1230,14 +1295,11 @@ async def outbox(request: Request) -> dict:
         return dict(rows=rows, mails=mails, kind=kind, inbox=inbox, note_to={k: emps.get(v) for k, v in emp_by_note.items()})
 
 
-@router.get("/check", response_class=HTMLResponse)
-async def doc_check(request: Request, sample: str = ""):
-    async with sessions()() as s:
-        access.require_full(await _actor(request, s), "The document check")
-        results = []
-        if sample == "genuine" and PUBLIC_SAMPLE.exists():
-            results.append(_check_one(PUBLIC_SAMPLE.name, PUBLIC_SAMPLE.read_bytes()))
-        return await render(request, s, "check.html", results=results)
+@router.get("/check")
+async def doc_check():
+    """Drawn by the browser app; it posts files to /api/v1/check."""
+    from onboarding.appshell import app_shell
+    return app_shell()
 
 
 def _check_one(filename: str, raw: bytes, label: str = "") -> dict:
@@ -1248,28 +1310,28 @@ def _check_one(filename: str, raw: bytes, label: str = "") -> dict:
     return dict(filename=filename + (f" ({label})" if label else ""), size=len(raw), mime=mime, auth=d)
 
 
-@router.post("/check", response_class=HTMLResponse)
-async def doc_check_post(request: Request, file_a: UploadFile = File(None), file_b: UploadFile = File(None), with_sample: str = Form("")):
+async def check_files(request: Request, files: list, with_sample: bool) -> list[dict]:
+    """Forensic check of up to two files, without the AI (reviewers and Finance only)."""
     async with sessions()() as s:
         access.require_full(await _actor(request, s), "The document check")
     results = []
     if with_sample and PUBLIC_SAMPLE.exists():
         results.append(_check_one(PUBLIC_SAMPLE.name, PUBLIC_SAMPLE.read_bytes(), "genuine sample"))
-    for up in (file_a, file_b):
-        if up is not None and up.filename:
-            raw = await up.read()
+    for up in files:
+        if up is not None and getattr(up, "filename", ""):
+            raw = await security.read_upload(up)   # stops reading past 10 MB
             if len(raw) > MAX_BYTES:
                 raise HTTPException(413, "File larger than 10 MB")
             security.require_document(raw)
             results.append(_check_one(up.filename, raw))
-    async with sessions()() as s:
-        return await render(request, s, "check.html", results=results)
+    return results
 
 
-@router.get("/assumptions", response_class=HTMLResponse)
-async def assumptions(request: Request):
-    async with sessions()() as s:
-        return await render(request, s, "assumptions.html", access_matrix=access.MATRIX)
+@router.get("/assumptions")
+async def assumptions():
+    """Help: drawn by the browser app (its table comes from GET /api/v1/help)."""
+    from onboarding.appshell import app_shell
+    return app_shell()
 
 
 @router.get("/system")
@@ -1292,7 +1354,7 @@ async def system(request: Request) -> dict:
         async def db_counts():
             try:  # one query for all the counts, sent while the bank lookup is in flight
                 row = (await s.execute(select(*(select(func.count()).select_from(m).scalar_subquery() for m in models)))).one()
-                return ("Database (Neon Postgres)", True, f"connected in {round((time.monotonic() - t) * 1000)} ms; "
+                return (db_label(st.database_url), True, f"connected in {round((time.monotonic() - t) * 1000)} ms; "
                         + ", ".join(f"{m.__tablename__}: {v}" for m, v in zip(models, row)))
             except Exception as e:
                 return ("Database", False, type(e).__name__)
@@ -1305,7 +1367,7 @@ async def system(request: Request) -> dict:
         from onboarding import followups
         from onboarding.models import FollowUp
         last = (await s.execute(select(FollowUp).order_by(FollowUp.id.desc()).limit(1))).scalar()
-        chasing = await followups.waiting(s)
+        chasing = await followups.waiting(s) if feature("followups") else []
         return dict(checks=checks, chasing=chasing, last_fu=last)
 
 
@@ -1336,15 +1398,20 @@ async def reset_data(request: Request, passcode: str) -> None:
     """Delete every run and reload the reference data. Needs a reviewer and the admin passcode."""
     async with sessions()() as s:
         access.require_full(await _actor(request, s), "Resetting the demo")
-    code = get_settings().admin_passcode
-    if code in ("", "change-me"):   # the default would let any reviewer wipe the data
-        raise HTTPException(403, "Reset is switched off: set ADMIN_PASSCODE on the server first.")
-    if not secrets.compare_digest(passcode, code):
+    from onboarding.config import reset_passcode
+    code = reset_passcode()   # no default: blank, short or "change-me" means reset is off
+    if not code:
+        raise HTTPException(403, "Reset is switched off: set ADMIN_PASSCODE (at least 12 characters) on the server first.")
+    who = security.client_ip(request)
+    if not security.RESET_WRONG.allow_more(who):
+        raise HTTPException(429, security.RESET_WRONG.message)
+    if not secrets.compare_digest(passcode.encode(), code.encode()):
+        security.RESET_WRONG.allow(who)   # count the wrong try
         raise HTTPException(403, "Wrong passcode")
     if runner.busy():
         raise HTTPException(409, "A run is in progress; try again in a minute.")
     from onboarding.seeding import seed
-    await seed(reset=True, dispose=False)
+    await seed(reset=True, dispose=False, allow_remote=True)   # the passcode is the confirmation here
 
 
 # --- Vendor Intelligence: vendor directory and Vendor 360 ------------------------------------------------------------
@@ -1456,8 +1523,14 @@ async def vendor_directory(request: Request, q: str = "", status: str = "", risk
         return dict(rows=rows, full=full)
 
 
-@router.get("/vendors/{vendor_key}", response_class=HTMLResponse)
-async def vendor_profile(request: Request, vendor_key: str):
+@router.get("/vendors/{vendor_key}")
+async def vendor_profile_page(vendor_key: str):
+    """Drawn by the browser app from GET /api/v1/vendors/{id}."""
+    from onboarding.appshell import app_shell
+    return app_shell()
+
+
+async def vendor_profile(request: Request, vendor_key: str) -> dict:
     """Vendor 360: who the vendor is, what proves it, who it's connected to, what's risky and what to do next."""
     async with read_sessions()() as s:
         actor = await _actor(request, s)
@@ -1554,11 +1627,11 @@ async def vendor_profile(request: Request, vendor_key: str):
                                 why=x["next"][1], detail="", evidence=[], who=["Finance"] if x["status"] in ("Approved for payment", "Payment in progress", "Payment on hold") else ["Procurement or Finance"],
                                 href=f"/bills/{x['b'].id}", kind="invoice"))
         nba = [a for a in nba if a["kind"] != "none"] or nba
-        return await render(request, s, "vendor360.html", v=v, apps=apps, idents=r["idents"], facts=facts, conns=conns, risks=risks, doubts=doubts,
-                            invoices=invoices, pos=r3["pos"], documents=documents, pay=pay, msum=msum, BL=BL,
-                            evidence=evidence, actions=r["actions"] if full else [], nba=nba, full=full, vendors_by_pk=vendors_by_pk,
-                            lay=V360.layout(v, r["my_edges"], conns) if full else None, my_edges=r["my_edges"] if full else [],
-                            snaps={rid: (ok, rec) for rid, ok, rec in r["snaps"]}, full_bank=full_bank, V360=V360)
+        return dict(v=v, apps=apps, idents=r["idents"], facts=facts, conns=conns, risks=risks, doubts=doubts,
+                    invoices=invoices, pos=r3["pos"], documents=documents, pay=pay, msum=msum,
+                    evidence=evidence, actions=r["actions"] if full else [], nba=nba, full=full, vendors_by_pk=vendors_by_pk,
+                    lay=V360.layout(v, r["my_edges"], conns) if full else None, my_edges=r["my_edges"] if full else [],
+                    snaps={rid: (ok, rec) for rid, ok, rec in r["snaps"]}, full_bank=full_bank)
 
 
 @router.post("/runs/{run_id}/simulate", response_class=HTMLResponse)

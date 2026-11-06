@@ -51,14 +51,20 @@ def test_log_in_guessing_is_limited(monkeypatch):
         lim.reset()
     try:
         from fastapi import Request
-        req = Request({"type": "http", "headers": [(b"x-forwarded-for", b"203.0.113.9, 10.0.0.1")], "client": ("10.0.0.1", 1)})
-        assert security.client_ip(req) == "203.0.113.9"                       # the visitor, not Render's proxy
+        req = Request({"type": "http", "headers": [(b"x-forwarded-for", b"203.0.113.9")], "client": ("10.0.0.1", 1)})
+        assert security.client_ip(req) == "203.0.113.9"                       # the visitor Render's proxy saw, not the proxy
         for _ in range(security.LOGIN_PER_ACCOUNT.limit):
             security.check_login(req, "kavita.rao@mamoni.in")
         with pytest.raises(HTTPException) as e:
             security.check_login(req, "KAVITA.RAO@mamoni.in ")
         assert e.value.status_code == 429 and "Too many log-in attempts" in e.value.detail
         security.check_login(req, "arjun.mehta@mamoni.in")                     # another account still works
+        # a made-up X-Forwarded-For entry is to the LEFT of what the proxy appended: it no longer resets the limit
+        spoofed = Request({"type": "http", "headers": [(b"x-forwarded-for", b"198.51.100.77, 203.0.113.9")], "client": ("10.0.0.1", 1)})
+        assert security.client_ip(spoofed) == "203.0.113.9"
+        with pytest.raises(HTTPException) as e:
+            security.check_login(spoofed, "kavita.rao@mamoni.in")
+        assert e.value.status_code == 429
     finally:
         monkeypatch.setenv("RATE_LIMITS", os.environ.get("RATE_LIMITS", "false"))
         monkeypatch.setenv("RATE_LIMITS", "false")

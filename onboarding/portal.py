@@ -94,7 +94,7 @@ async def company_login(request: Request, email: str = Form(""), password: str =
         login.last_login_at = now()
         await s.commit()
         resp = _cookie(RedirectResponse(nxt, status_code=303), request, emp.id, "company")
-        resp.set_cookie("actor", str(emp.id), max_age=auth.MAX_AGE, samesite="lax")   # start as yourself
+        resp.delete_cookie(auth.ACTOR_COOKIE)   # start as yourself (no actor cookie = the logged-in employee)
         return resp
 
 
@@ -439,7 +439,7 @@ async def _bill_fields(request: Request) -> tuple[dict, tuple[str, bytes] | None
     f = {"engaged_by": str(data.get("engaged_by") or "").strip()}   # number, date, amount, work and PO are read from the bill
     up, file = data.get("invoice"), None
     if up is not None and hasattr(up, "read") and getattr(up, "filename", ""):
-        raw = await up.read()
+        raw = await security.read_upload(up, "The bill")   # stops reading past 10 MB
         if len(raw) > MAX_BYTES:
             raise HTTPException(413, "The bill is larger than 10 MB. Please upload a smaller file.")
         if raw:
@@ -553,8 +553,15 @@ async def vendor_bill_resubmit(request: Request, bill_id: int):
 
 
 # --- company side: bills and vendors --------------------------------------------------------------
-@router.get("/bills", response_class=HTMLResponse)
-async def bills_list(request: Request):
+@router.get("/bills")
+async def bills_list_page():
+    """Drawn by the browser app from GET /api/v1/bills."""
+    from onboarding.appshell import app_shell
+    return app_shell()
+
+
+async def bills_list(request: Request) -> dict:
+    """Bills from active vendors and bills sent with a registration (requesters: the ones that name them)."""
     async with read_sessions()() as s:
         emps = {e.id: e for e in await _employees(s)}
         actor = await _actor(request, s)
@@ -573,7 +580,7 @@ async def bills_list(request: Request):
             regs.append(dict(bill=bill, app=app, run=latest_run.get(app.id), emp=emps.get(bill.engaged_employee_id)))
         if not full:  # a requester sees the bills that name them
             rows = [(b, vm) for b, vm in rows if access.can_open_bill(actor, b)]
-        return await render(request, s, "bills.html", rows=rows, emps=emps, regs=regs, B=B, full=full)
+        return dict(rows=rows, emps=emps, regs=regs, full=full)
 
 
 @router.get("/bills/{bill_id}", response_class=HTMLResponse)
@@ -785,7 +792,7 @@ async def vendor_change_request(request: Request):
             up = data.get("proof")
             if up is None or not getattr(up, "filename", ""):
                 raise HTTPException(400, "Please attach a cancelled cheque or a bank letter for the new account.")
-            raw = await up.read()
+            raw = await security.read_upload(up, "The bank proof")   # stops reading past 10 MB
             if len(raw) > MAX_BYTES:
                 raise HTTPException(413, "The file is larger than 10 MB.")
             security.require_document(raw, "The bank proof")

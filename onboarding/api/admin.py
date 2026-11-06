@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from onboarding import followups as FU
 from onboarding.api.common import staff_or_401, when
+from onboarding.config import feature
 from onboarding.pipeline import read_sessions
 
 router = APIRouter()
@@ -19,7 +20,7 @@ async def system(request: Request):
         await staff_or_401(request, s)
     d = await system_data(request)
     return {"checks": [{"name": n, "ok": bool(ok), "detail": detail} for n, ok, detail in d["checks"]],
-            "followups": {"every_hours": FU.EVERY_HOURS, "remind_after_days": FU.REMIND_AFTER_DAYS, "escalate_after_days": FU.ESCALATE_AFTER_DAYS,
+            "followups": {"enabled": feature("followups"), "every_hours": FU.EVERY_HOURS, "remind_after_days": FU.REMIND_AFTER_DAYS, "escalate_after_days": FU.ESCALATE_AFTER_DAYS,
                           "waiting": len(d["chasing"]), "last": when(d["last_fu"].at) if d["last_fu"] else None}}
 
 

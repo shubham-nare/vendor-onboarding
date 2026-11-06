@@ -10,9 +10,15 @@ from pathlib import Path
 
 import pytest
 
+from tests.flags import flags_on
+from tests.helpers import set_actor
+
+# this module covers the optional features too (bills, Vendor Intelligence, reliability, follow-ups, pre-qualified suppliers)
+_features = flags_on("payables", "intel", "reliability", "followups", "unsolicited")
+
 ROOT = Path(__file__).resolve().parent.parent
-CACHE = ROOT / ".read_cache"
-pytestmark = pytest.mark.skipif(not CACHE.exists() or not any(CACHE.iterdir()), reason="no cached AI readings")
+CACHE = ROOT / "fixtures" / "read_cache"   # committed saved readings of the fictional demo documents
+assert CACHE.exists() and any(CACHE.iterdir()), "fixtures/read_cache/ (committed saved AI readings) is missing: a broken checkout, not a skip"
 
 from pathlib import Path as _Path  # noqa: E402
 
@@ -58,11 +64,12 @@ def flows(tmp_path_factory):
         cat = web.demo_catalog()
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://t") as c:
-            from onboarding.seeding import DEMO_COMPANY_EMAIL, DEMO_PASSWORD
+            from onboarding.seeding import DEMO_COMPANY_EMAIL, DEMO_PASSWORD, DEMO_VENDOR
             await c.post("/company/login", data={"email": DEMO_COMPANY_EMAIL, "password": DEMO_PASSWORD})
+            await c.post("/vendor/login", data={"email": DEMO_VENDOR["email"], "password": DEMO_PASSWORD})   # demo pre-fill needs a vendor login too
 
             async def as_(who):
-                c.cookies.set("actor", str(emp[who]))
+                set_actor(c, str(emp[who]))
 
             async def submit(key, files=None, token=None, demo=None, extra=None):
                 if token is None:
@@ -199,7 +206,7 @@ def flows(tmp_path_factory):
             out["console_chasing"] = (await c.get("/api/v1/console/home")).text
 
             for p in ("/", "/outbox", "/assumptions", "/system", "/check?sample=genuine", "/invites"):
-                out[p] = await c.get("/api/v1" + p if p in ("/outbox", "/system") else p)
+                out[p] = await c.get("/api/v1" + p if p in ("/outbox", "/system") else "/api/v1/check/sample" if p.startswith("/check") else p)
             for who in ("maker", "checker", "Rahul Desai"):  # each person's "Needs your action" queue
                 await as_(who)
                 out[f"todo_{who}"] = json.dumps((await c.get("/api/v1/console/home")).json()["todo"])   # the Waiting for you list
@@ -312,7 +319,8 @@ def test_only_sponsors_send_invites(flows):
 def test_other_pages_render(flows):
     for p in ("/", "/outbox", "/assumptions", "/system", "/check?sample=genuine", "/invites"):
         assert flows[p].status_code == 200, p
-    assert "Intact and cryptographically valid" in flows["/check?sample=genuine"].text
+    sample = flows["/check?sample=genuine"].json()["results"][0]
+    assert sample["signature"]["verified"] and sample["stamp"] == "verified" and "Intact and cryptographically valid" in APP_JS
 
 
 def _rules(events, stage="bill"):

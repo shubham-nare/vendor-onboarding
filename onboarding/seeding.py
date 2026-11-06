@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import os
 import secrets
+import sys
 from datetime import timedelta
 
 from sqlalchemy import delete, select
@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from onboarding import demo_data as dd
 from onboarding.db import engine
 from onboarding import auth
+from onboarding.config import database_host, get_settings, local_database
 from onboarding.models import Base, Blocklist, Employee, Invite, SimRegistry, StaffLogin, VendorAccount, VendorMaster, now
 
 EMPLOYEES = [
@@ -21,11 +22,17 @@ EMPLOYEES = [
     dict(name="Kavita Rao", department="Finance", role="checker", email="kavita.rao@mamoni.in"),
 ]
 
-# Demo logins (fictional people, shown on the login pages so anyone reviewing the demo can sign in).
-# Every employee logs in with their own email; one vendor account is ready, with no registration yet.
-DEMO_PASSWORD = os.environ.get("DEMO_PASSWORD", "demo_pass")
+# Demo logins (fictional people, shown on the login pages so anyone reviewing the demo can sign in): only in demo mode
+# and only when DEMO_PASSWORD is set, with that password. Every employee logs in with their own email; one vendor
+# account is ready, with no registration yet.
+DEMO_PASSWORD = get_settings().demo_password
+LEGACY_PUBLIC_PASSWORD = "demo_pass"   # was the default in the public repo: logins still using it are switched off
 DEMO_COMPANY_EMAIL = "arjun.mehta@mamoni.in"
 DEMO_VENDOR = dict(email=dd.KESARI["contact"]["email"], company_name=dd.KESARI["legal_name"], contact_name=dd.KESARI["contact"]["name"])
+# The live happy-path beat of the demo video: Nilgiri's own contact person signs in to Nilgiri's invite. Not the
+# invite's accounts@ address, which the golden tests register from the invite link.
+DEMO_VENDOR_NILGIRI = dict(email="anitha@nilgiripack.example.com", company_name=dd.NILGIRI["legal_name"], contact_name=dd.NILGIRI["contact"]["name"])
+DEMO_VENDORS = (DEMO_VENDOR, DEMO_VENDOR_NILGIRI)
 
 INVITES = {  # scenario_key -> (sponsor, company, reason, category, band, high)
     "happy_nilgiri": ("Priya Nair", dd.NILGIRI["legal_name"], "Corrugated boxes and protective packaging for Plant 2, replacing a supplier with late deliveries", "Packaging", "10-25 lakh", False),
@@ -79,8 +86,12 @@ def sim_records() -> list[dict]:
     return recs
 
 
-async def seed(reset: bool = False, dispose: bool = True) -> dict:
+async def seed(reset: bool = False, dispose: bool = True, allow_remote: bool = False) -> dict:
+    """Load the demo data. reset=True drops every table first: refused on a non-local database unless allow_remote
+    (the in-app reset passes it after checking the passcode; the command line after confirm_target)."""
     from onboarding import staff_cache
+    if reset:
+        refuse_remote_reset(allow_remote)
     staff_cache.clear()
     eng = engine()
     async with eng.begin() as conn:
@@ -166,19 +177,92 @@ async def load_payables_sample(dispose: bool = True) -> dict:
     return out
 
 
+_VERIFIED: set[tuple[str, str]] = set()   # (hash, password) pairs already checked in this process (scrypt is slow)
+
+
+async def _matches(stored: str, password: str) -> bool:
+    if (stored, password) in _VERIFIED:
+        return True
+    ok = bool(password) and await auth.verify_password_async(password, stored)
+    if ok:
+        _VERIFIED.add((stored, password))
+    return ok
+
+
+async def _hash(password: str) -> str:
+    h = await auth.hash_password_async(password)
+    _VERIFIED.add((h, password))
+    return h
+
+
+DISABLED = "disabled"   # a password hash nothing verifies against
+
+
 async def ensure_demo_logins(s: AsyncSession) -> None:
-    """Give every seeded employee a console login and create the demo vendor account, if missing.
-    Called by seed() and at app start (so a fresh deploy can always be logged into)."""
-    have = {sl.employee_id for sl in (await s.execute(select(StaffLogin))).scalars()}
+    """Demo mode with DEMO_PASSWORD set: every seeded employee has a console login and the demo vendor account exists,
+    all with that password (an older password, such as the public "demo_pass", is replaced). Otherwise no demo login is
+    created, and seeded demo logins still using the public "demo_pass" (or DEMO_PASSWORD outside demo mode) are
+    switched off. Called by seed() and at app start."""
+    st = get_settings()
+    pw = st.demo_password if st.demo_tools else ""
+    retired = {p for p in (LEGACY_PUBLIC_PASSWORD, st.demo_password) if p and p != pw}
+    logins = {sl.employee_id: sl for sl in (await s.execute(select(StaffLogin))).scalars()}
     seeded_email = {d["name"]: d["email"] for d in EMPLOYEES}
     for e in (await s.execute(select(Employee))).scalars():
         if e.name in seeded_email and e.email != seeded_email[e.name]:
             e.email = seeded_email[e.name]  # the demo company was renamed: keep logins on the current domain
-        if e.id not in have:
-            s.add(StaffLogin(employee_id=e.id, password_hash=await auth.hash_password_async(DEMO_PASSWORD)))
-    if not (await s.execute(select(VendorAccount).where(VendorAccount.email == DEMO_VENDOR["email"]))).scalar_one_or_none():
-        s.add(VendorAccount(password_hash=await auth.hash_password_async(DEMO_PASSWORD), **DEMO_VENDOR))
+        sl = logins.get(e.id)
+        if pw and sl is None:
+            s.add(StaffLogin(employee_id=e.id, password_hash=await _hash(pw)))
+        elif sl is not None and e.name in seeded_email:
+            await _refresh(sl, pw, retired)
+    for vendor in DEMO_VENDORS:
+        acct = (await s.execute(select(VendorAccount).where(VendorAccount.email == vendor["email"]))).scalar_one_or_none()
+        if acct is None and pw:
+            s.add(VendorAccount(password_hash=await _hash(pw), **vendor))
+        elif acct is not None:
+            await _refresh(acct, pw, retired)
     await s.flush()
+
+
+async def _refresh(row, pw: str, retired: set[str]) -> None:
+    """A seeded login: on the current demo password, or switched off if it still uses a retired one."""
+    if pw:
+        if not await _matches(row.password_hash, pw):
+            row.password_hash = await _hash(pw)
+    elif row.password_hash != DISABLED:
+        for old in retired:
+            if await _matches(row.password_hash, old):
+                row.password_hash = DISABLED
+                break
+
+
+class RemoteDatabaseRefused(RuntimeError):
+    pass
+
+
+def refuse_remote_reset(allow_remote: bool) -> None:
+    """seed(reset=True) wipes every table: on a non-local database only with explicit permission (the in-app reset,
+    after its passcode, or a CLI run confirmed with confirm_target)."""
+    if not allow_remote and not local_database():
+        raise RemoteDatabaseRefused(f"Refusing to reset a non-local database ({database_host(get_settings().database_url)}). "
+                                    "From the command line, run with --production and type the host to confirm.")
+
+
+def confirm_target(argv: list[str] | None = None, ask=input) -> bool:
+    """Command-line guard for scripts that write to the database. Prints the target host (never the URL or its
+    credentials). A non-local database needs --production AND the host typed back exactly; otherwise exit.
+    Returns True when the target is remote and was confirmed (pass it on as allow_remote)."""
+    argv = sys.argv if argv is None else argv
+    host = database_host(get_settings().database_url)
+    print(f"Target database: {host}")
+    if local_database():
+        return False
+    if "--production" not in argv:
+        sys.exit(f"Refusing to write to a non-local database ({host}). Re-run with --production to be asked for confirmation.")
+    if ask(f"Type the database host ({host}) to confirm: ").strip() != host:
+        sys.exit("The host you typed doesn't match. Nothing was changed.")
+    return True
 
 
 async def seed_purchase_orders(s: AsyncSession, emp: dict) -> None:
@@ -209,4 +293,10 @@ async def seed_purchase_orders(s: AsyncSession, emp: dict) -> None:
             for pl, q in zip(lines, rc["qty"]):
                 s.add(ReceiptLine(receipt_id=g.id, po_line_id=pl.id, quantity=q))
     await s.flush()
+
+
+if __name__ == "__main__":   # python -m onboarding.seeding [--reset] [--production]
+    import asyncio
+    remote_ok = confirm_target()
+    print(asyncio.run(seed(reset="--reset" in sys.argv, allow_remote=remote_ok)))
 

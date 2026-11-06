@@ -9,7 +9,8 @@ class ApiError extends Error {
 // One way to call the API: JSON in, JSON out. A 401 sends the person to the right log-in page.
 async function api(path, { method = 'GET', body } = {}) {
   const opts = { method, credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } };
-  if (body !== undefined) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+  if (body instanceof FormData) opts.body = body;            // files: the browser sets the multipart boundary
+  else if (body !== undefined) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
   let r;
   try { r = await fetch('/api/v1' + path, opts); }
   catch (e) { throw new ApiError(0, 'Could not reach the server. Check your connection and try again.'); }

@@ -105,4 +105,6 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
+    from onboarding.seeding import confirm_target
+    confirm_target()   # a non-local database needs --production and the host typed back
     asyncio.run(main())

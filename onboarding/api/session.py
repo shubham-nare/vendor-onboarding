@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 
 from onboarding import auth
 from onboarding.api.common import ApiError, chasing_item, counts, iso, person, staff_or_401, todo_item, when  # noqa: F401
-from onboarding.config import get_settings  # noqa: F401
+from onboarding.config import features, get_settings  # noqa: F401
 from onboarding.pipeline import read_sessions
 
 router = APIRouter()
@@ -25,7 +25,7 @@ async def session(request: Request):
         todo = (await _dashboard_ctx(request, s))["todo"]
         return {"staff": person(staff), "actor": person(actor), "demo": demo,
                 "people": [person(e) for e in await _employees(s)] if demo else [],
-                "counts": counts(todo)}
+                "counts": counts(todo), "features": features()}
 
 
 class ActAs(BaseModel):
@@ -43,7 +43,8 @@ async def act_as(request: Request, body: ActAs):
         if not any(e.id == body.employee_id for e in await _employees(s)):
             raise ApiError(400, "No such employee.")
     resp = JSONResponse({"ok": True})
-    resp.set_cookie("actor", str(body.employee_id), max_age=60 * 60 * 24 * 30, samesite="lax")
+    staff_id = auth.read_session(request.cookies.get(auth.COMPANY_COOKIE), purpose="company")
+    resp.set_cookie(auth.ACTOR_COOKIE, auth.make_actor(body.employee_id, staff_id), max_age=auth.MAX_AGE, httponly=True, samesite="lax")
     return resp
 
 
