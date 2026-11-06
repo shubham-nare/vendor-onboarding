@@ -3,7 +3,7 @@
 Goal: show the happy path running live, then edge cases, narrating what the process does and why. Based on the
 video plan (kept outside the repo); this file is the in-repo, code-checked version.
 
-**Cast** (all `@mamoni.in`, password = `DEMO_PASSWORD`): Priya Nair and Rahul Desai (requesters), Arjun Mehta
+**Cast** (all `@parakh.tech`, password = `DEMO_PASSWORD`): Priya Nair and Rahul Desai (requesters), Arjun Mehta
 (Procurement, "maker"), Kavita Rao (Finance, "checker"). The vendor in beat 1 is Nilgiri's own contact person,
 Anitha Raghavan: the seeded demo vendor login `anitha@nilgiripack.example.com` (password `DEMO_PASSWORD`; seeded only
 in demo mode with `DEMO_PASSWORD` set). Don't use the Kesari demo vendor for beat 1: a Kesari login submitting
@@ -23,7 +23,7 @@ Nilgiri's registration looks wrong on camera. Fallback: register a new vendor ac
 
 ## Revision (2026-11-06): real documents for the happy path
 
-Beat 1 now uses **NIT Raipur's real, self-published documents** (GST REG-06, PAN, bank details; nitrr.ac.in). They are kept in the local demo kit (`Desktop/Mamoni demo kit/8_real_institution_nit_raipur/`), **not in this repo**. Its README has the exact form values. NIT Raipur's public registry record is in the simulated registry (`demo_data.NITRR`), so the registry checks find it as the real GST lookup would.
+Beat 1 now uses **NIT Raipur's real, self-published documents** (GST REG-06, PAN, bank details; nitrr.ac.in). They are kept in the local demo kit (`Desktop/Parakh demo kit/8_real_institution_nit_raipur/`), **not in this repo**. Its README has the exact form values. NIT Raipur's public registry record is in the simulated registry (`demo_data.NITRR`), so the registry checks find it as the real GST lookup would.
 
 **Order matters** (anti-fraud rules see re-used documents): reset → **NIT Raipur happy path first** → then the variants.
 

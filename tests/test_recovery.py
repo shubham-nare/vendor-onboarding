@@ -193,7 +193,7 @@ def test_rerun_resubmit_and_concurrent_submits(env):
         await _seeded()
         t = httpx.ASGITransport(app=app, raise_app_exceptions=False)
         staff = {}
-        for name, email in (("Priya", "priya.nair@mamoni.in"), ("Arjun", "arjun.mehta@mamoni.in")):
+        for name, email in (("Priya", "priya.nair@parakh.tech"), ("Arjun", "arjun.mehta@parakh.tech")):
             c = staff[name] = httpx.AsyncClient(transport=t, base_url="http://t")
             assert (await c.post("/company/login", data={"email": email, "password": DEMO_PASSWORD})).status_code == 303
         sponsor, company, reason, cat, band, _high = INVITES[KEY]

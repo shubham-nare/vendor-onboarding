@@ -55,12 +55,12 @@ const avatar = (p, size = 'h-8 w-8 text-[11.5px]') => {
   return `<span class="${size} ${ROLE_TONE[p.role] || 'bg-slate-100 text-slate-700'} shrink-0 inline-flex items-center justify-center rounded-full font-semibold" aria-hidden="true">${esc(w[0][0])}${esc(w[w.length - 1][0])}</span>`;
 };
 
-// the green-glass Mamoni word; it always leads to the home page
+// the green-glass Parakh word; it always leads to the home page
 let brandSeq = 0;
 const brand = () => {
   const id = 'bw-app-' + (++brandSeq);
-  const word = '<tspan class="bw-cap">M</tspan>amoni';
-  return `<a href="/" title="Home" aria-label="Mamoni Vendor Onboarding, home" class="brand-word shrink-0" data-full>
+  const word = '<tspan class="bw-cap">P</tspan>arakh';
+  return `<a href="/" title="Home" aria-label="Parakh Vendor Onboarding, home" class="brand-word shrink-0" data-full>
     <svg viewBox="0 0 170 64" width="118" height="44" aria-hidden="true">
       <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3EDE70"/><stop offset=".45" stop-color="#248B3E"/><stop offset="1" stop-color="#12642F"/></linearGradient></defs>
       <text x="85" y="47" text-anchor="middle" class="bw-text" fill="url(#${id})" stroke="url(#${id})">${word}</text>

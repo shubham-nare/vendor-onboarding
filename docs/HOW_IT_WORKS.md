@@ -36,7 +36,7 @@ It also writes the vendor a clear message saying exactly what is needed.
 
 The home page (`/`) asks **"Who are you?"**:
 
-- **"I work at Mamoni"** → **Employee log in** (`/company/login`), then the internal console (`/console`): dashboard, runs, bills, vendors, invites. Every company page needs an employee login, because the console shows vendors' bank details, PAN and documents. In production this would be the company's single sign-on.
+- **"I work at Parakh"** → **Employee log in** (`/company/login`), then the internal console (`/console`): dashboard, runs, bills, vendors, invites. Every company page needs an employee login, because the console shows vendors' bank details, PAN and documents. In production this would be the company's single sign-on.
 - **"I'm a vendor or supplier"** → the **supplier portal**:
   - **Accounts:** a vendor **creates an account** (company, name, work email, password) and **logs in** on later visits.
     - Passwords are stored only as salted **scrypt** hashes.
@@ -67,7 +67,7 @@ The home page (`/`) asks **"Who are you?"**:
 
 | Who | Email | What they see |
 |---|---|---|
-| Company (Arjun Mehta, Procurement reviewer) | `arjun.mehta@mamoni.in` | The console. Priya, Rahul and Kavita log in the same way with their own `@mamoni.in` emails. |
+| Company (Arjun Mehta, Procurement reviewer) | `arjun.mehta@parakh.tech` | The console. Priya, Rahul and Kavita log in the same way with their own `@parakh.tech` emails. |
 | Vendor (Sneha Kulkarni, Kesari Facility Services) | `billing@kesarifacility.example.com` | An empty vendor account, ready to register with a bill (a demo link pre-fills Kesari's details and documents). |
 
 After logging in, the **"Acting as"** menu (bottom of the left sidebar; top right on a phone) lets the demo switch person without logging out. It lists each person with their role and what they're allowed to do, so you can watch the permissions change. In production each person logs in as themselves and the menu doesn't exist.

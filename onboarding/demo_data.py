@@ -161,14 +161,14 @@ SHINDE = {  # proprietorship: legal name = owner, trade name = business
 
 # The buying company (us). Bills must be addressed to it; its state decides CGST+SGST vs IGST.
 BUYER = {
-    "legal_name": "Mamoni",
-    "short_name": "Mamoni",
+    "legal_name": "Parakh",
+    "short_name": "Parakh",
     "pan": "AAKFN3382N",
     "gstin": gstin("27", "AAKFN3382N"),
     "address": "Gat No. 418, Chakan Industrial Area Phase I, Pune, Maharashtra, 410501",
     "state": "Maharashtra",
-    "support_email": "suppliers@mamoni.in",
-    "payments_email": "payables@mamoni.in",
+    "support_email": "suppliers@parakh.tech",
+    "payments_email": "payables@parakh.tech",
 }
 
 # Bill-first vendors: they already did work for us and register to get paid.
@@ -483,7 +483,7 @@ SCENARIOS: dict[str, dict] = {
         "expected": "PENDING_VENDOR",
         "bill": True,
         "form": form(BRINDAVAN, "PVT_LTD", cin=BRINDAVAN["cin"]) | {
-            "bill_mode": True, "bill_engaged_by": "rahul.desai@mamoni.in"},
+            "bill_mode": True, "bill_engaged_by": "rahul.desai@parakh.tech"},
         "documents": {
             "gst_certificate": gst_cert(BRINDAVAN),
             "pan_card": pan_card(BRINDAVAN["legal_name"], BRINDAVAN["pan"], date_label="Date of Incorporation/Formation", date=BRINDAVAN["incorporated"]),

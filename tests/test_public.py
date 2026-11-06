@@ -78,13 +78,13 @@ def test_public_pages_have_the_top_bar(pub):
     for p in ("/", "/tour", "/contact", "/thanks?for=bill&ref=VOB-0004"):
         page = pub[p].text
         assert pub[p].status_code == 200, p
-        assert "Mamoni" in page and "View demo" in page and "Contact us" in page and 'action="/lang"' in page, p
+        assert "Parakh" in page and "View demo" in page and "Contact us" in page and 'action="/lang"' in page, p
         assert "Register for future work" in page and "Submit a bill" in page, p
 
 
 def test_the_thank_you_page(pub):
     page = pub["/thanks?for=bill&ref=VOB-0004"].text
-    assert "Thank you for submitting your bill." in page and "VOB-0004" in page and "suppliers@mamoni.in" in page
+    assert "Thank you for submitting your bill." in page and "VOB-0004" in page and "suppliers@parakh.tech" in page
     assert "<script>x" not in pub["/thanks?ref=<script>x"].text                 # the reference is cleaned
 
 
@@ -110,7 +110,7 @@ def test_bot_check_on_sign_up_and_log_in(pub):
 def test_home_has_the_employee_log_in_and_the_ropeway(pub):
     page = pub["/"].text
     assert 'id="home-login"' in page and 'action="/company/login"' in page and 'name="password"' in page
-    assert "I work at Mamoni" in page and "Nare" not in page
+    assert "I work at Parakh" in page and "Nare" not in page
     assert 'id="cables"' in page and "rope-tip" in page
 
 

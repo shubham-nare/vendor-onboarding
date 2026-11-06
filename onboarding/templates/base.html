@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}Vendor onboarding{% endblock %} · Mamoni Vendor Onboarding</title>
+  <title>{% block title %}Vendor onboarding{% endblock %} · Parakh Vendor Onboarding</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -74,12 +74,12 @@
   {%- endmacro %}
   {# the name in green glass, like the home page; it always leads home. key keeps the gradient ids apart #}
   {% macro brand(sub, key='b') -%}
-    <a href="/" title="Home" aria-label="Mamoni Vendor Onboarding, home" class="brand-word shrink-0">
+    <a href="/" title="Home" aria-label="Parakh Vendor Onboarding, home" class="brand-word shrink-0">
       <svg viewBox="0 0 170 64" width="118" height="44" aria-hidden="true">
         <defs><linearGradient id="bw-{{ key }}" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stop-color="#3EDE70"/><stop offset=".45" stop-color="#248B3E"/><stop offset="1" stop-color="#12642F"/></linearGradient></defs>
-        <text x="85" y="47" text-anchor="middle" class="bw-text" fill="url(#bw-{{ key }})" stroke="url(#bw-{{ key }})"><tspan class="bw-cap">M</tspan>amoni</text>
-        <text x="84.6" y="46.4" text-anchor="middle" class="bw-text bw-rim" fill="none" stroke="#fff"><tspan class="bw-cap">M</tspan>amoni</text>
+        <text x="85" y="47" text-anchor="middle" class="bw-text" fill="url(#bw-{{ key }})" stroke="url(#bw-{{ key }})"><tspan class="bw-cap">P</tspan>arakh</text>
+        <text x="84.6" y="46.4" text-anchor="middle" class="bw-text bw-rim" fill="none" stroke="#fff"><tspan class="bw-cap">P</tspan>arakh</text>
       </svg>
     </a>
   {%- endmacro %}

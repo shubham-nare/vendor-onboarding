@@ -1,6 +1,6 @@
 """The two front doors and everything behind the vendor one.
 
-  /                     choose: "I work at Mamoni" (console) or "I'm a vendor" (portal)
+  /                     choose: "I work at Parakh" (console) or "I'm a vendor" (portal)
   /vendor/register      create a vendor account        /vendor/login, /vendor/logout
   /vendor               the vendor's home: registration status, messages, next step, bills
   /vendor/bills/new     an ACTIVE vendor submits another bill

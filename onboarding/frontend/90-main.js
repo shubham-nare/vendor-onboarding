@@ -22,7 +22,7 @@ async function show(path) {
   if (!found) { location.href = path + location.search + location.hash; return; }
   if (leaveView) { leaveView(); leaveView = null; }
   const { screen, params } = found;
-  document.title = `${typeof screen.title === 'function' ? screen.title(params) : screen.title} · Mamoni Vendor Onboarding`;
+  document.title = `${typeof screen.title === 'function' ? screen.title(params) : screen.title} · Parakh Vendor Onboarding`;
   qsa('a.side-link, #mainnav a').forEach(a => {
     if (isOn(a.getAttribute('href'), path)) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
   });
