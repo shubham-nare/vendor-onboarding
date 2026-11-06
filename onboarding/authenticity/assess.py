@@ -26,6 +26,9 @@ from onboarding.authenticity.metadata import FileFacts, inspect_file
 from onboarding.authenticity.signature import SignatureCheck, check_pdf_signature
 
 SEVERITY = ["info", "warn", "vendor", "review", "fraud"]
+# Our own fictional fixtures carry this banner ("SPECIMEN · FICTIONAL TEST DATA · NOT A REAL DOCUMENT"); so does any
+# sample/specimen someone downloads and uploads. Either way it is not the vendor's real document.
+SPECIMEN_MARK = re.compile(r"SPECIMEN|FICTIONAL TEST DATA|NOT A REAL DOCUMENT|SAMPLE (?:DOCUMENT|CERTIFICATE|ONLY)", re.I)
 CERTIFICATES = {"GST_CERTIFICATE", "UDYAM_CERTIFICATE"}
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -99,7 +102,11 @@ async def assess_async(raw: bytes, mime: str, read: DocRead | None) -> Authentic
 def assess(raw: bytes, mime: str, read: DocRead | None) -> Authenticity:
     facts: FileFacts = inspect_file(raw, mime)
     sig: SignatureCheck = check_pdf_signature(raw) if facts.kind == "pdf" else SignatureCheck(present=False)
+    from onboarding.config import get_settings
     specimen = hashlib.sha256(raw).hexdigest() in specimen_hashes()
+    marked = specimen or bool(SPECIMEN_MARK.search(facts.text or "")) or bool(
+        read and any(SPECIMEN_MARK.search(w or "") for w in [*read.visible_watermarks_or_logos, *read.integrity_notes]))
+    accept_specimens = get_settings().accept_specimen_documents   # tests only; never on the live site
     out: list[Signal] = []
     add = lambda *a, **k: out.append(Signal(*a, **k))  # noqa: E731
 
@@ -180,8 +187,14 @@ def assess(raw: bytes, mime: str, read: DocRead | None) -> Authenticity:
     if facts.ai_markers:
         add("AU-11", "review", "File carries AI/content-provenance markers", ", ".join(facts.ai_markers))
 
-    # --- Our own fictional fixtures --------------------------------------------------------
-    if specimen:
+    # --- Specimens: an absolute flag on the live site ------------------------------------------
+    if marked and not accept_specimens:
+        out.append(Signal("AU-15", "fraud", "Not a real document: it is marked as a specimen / fictional test data",
+                          "The page or the file says SPECIMEN / FICTIONAL TEST DATA / NOT A REAL DOCUMENT"
+                          + (" (also matched by fingerprint to a known specimen file)" if specimen else ""),
+                          "The file you uploaded is a sample or specimen, not your actual document. Please upload your own original document."))
+    # --- Our own fictional fixtures, accepted ONLY when the tests ask for it (ACCEPT_SPECIMEN_DOCUMENTS) ----------
+    if specimen and accept_specimens:
         for s in out:
             if s.code in ("AU-1", "AU-2") and s.severity != "info":
                 s.detail = f"[not applied: known file] {s.detail}"
@@ -194,9 +207,9 @@ def assess(raw: bytes, mime: str, read: DocRead | None) -> Authenticity:
         level = "A3"
     elif worst in ("", "info") and form in ("ORIGINAL_DIGITAL", "SCAN_OR_PHOTOCOPY", "PHOTO_OF_PHYSICAL_ORIGINAL"):
         level = "A2"
-    elif specimen and worst in ("", "info"):
+    elif specimen and accept_specimens and worst in ("", "info"):
         level = "A2"
     else:
         level = "A1"
-    return Authenticity(level=level, worst=worst, specimen=specimen, signals=out,
+    return Authenticity(level=level, worst=worst, specimen=specimen and accept_specimens, signals=out,
                         signature=sig.as_dict(), facts=facts.as_dict())

@@ -92,3 +92,9 @@ This records what changed, why, and any behaviour a user would notice. The basel
 - **Required fields on the server:** a registration without a legal name or contact email is refused (400), not only by the browser.
 - **Staff-only /documents:** `/documents` is in `COMPANY_AREAS`, so anonymous visitors go to the staff login.
 - **Vendor IDs in Applications:** the list shows the vendor ID from the vendor master when Vendor Intelligence is off.
+
+## Specimens are fake documents (2026-11-06, Shubham's decision)
+- **The problem:** the demo fixtures carry a "SPECIMEN · FICTIONAL TEST DATA · NOT A REAL DOCUMENT" banner, but `assess.py` allow-listed them by fingerprint. It downgraded their AI and forgery signals to info and graded them A2, so fake documents were approved on the live site.
+- **New signal AU-15 (fraud):** a document marked as a specimen is caught by its fingerprint, the PDF text or the AI reading's watermarks. **R-AU-15 rejects** the application (held until a person confirms; fraud flag).
+- **Test-only acceptance:** the old acceptance remains only under `ACCEPT_SPECIMEN_DOCUMENTS=true`, which `tests/conftest.py` sets so the fixtures can still exercise the other rules. It is false by default and is never set on the site.
+- **Demo consequence:** on the live site every launcher scenario is rejected as a specimen. The video uses real, self-published documents (NIT Raipur, IIT BHU) for every outcome, plus the fake-document beats.

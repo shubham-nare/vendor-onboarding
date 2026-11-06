@@ -589,3 +589,48 @@ def test_console_screens_ignore_the_routers_params_object():
     for name in second:
         body = js[js.index(f"async render(view, {name}"):][:600]
         assert f"typeof {name}" in body, f"render(view, {name}) uses its argument without checking it is a string"
+
+
+# --- specimens are fake documents on the live site (ACCEPT_SPECIMEN_DOCUMENTS is only for these tests) -------------
+def test_a_specimen_document_is_an_absolute_fraud_flag(monkeypatch):
+    from pathlib import Path
+
+    from onboarding.authenticity.assess import assess
+    from onboarding.config import get_settings
+    monkeypatch.setattr(get_settings(), "accept_specimen_documents", False)
+    root = Path(__file__).resolve().parent.parent / "fixtures"
+    fixture = (root / "documents" / "happy_nilgiri" / "gst_certificate.pdf").read_bytes()
+    known = assess(fixture, "application/pdf", None)                                     # matched by fingerprint
+    copied = assess(fixture + b"\n%re-saved\n", "application/pdf", None)                 # different file, same banner text
+    real = assess((root / "public" / "gst_certificate_signed_igr_maharashtra.pdf").read_bytes(), "application/pdf", None)
+    for a in (known, copied):
+        codes = {s.code: s.severity for s in a.signals}
+        assert codes.get("AU-15") == "fraud" and a.level == "A1" and not a.specimen and "SPECIMEN" not in codes
+    assert "AU-15" not in {s.code for s in real.signals} and real.level == "A3"           # a genuine signed certificate
+
+
+def test_a_registration_with_specimen_documents_is_rejected(db, monkeypatch):
+    from onboarding import mailer, runner
+    from onboarding.config import get_settings
+    monkeypatch.setattr(get_settings(), "accept_specimen_documents", False)
+    pending: list[asyncio.Task] = []
+    monkeypatch.setattr(runner, "PACE", 0)
+    monkeypatch.setattr(runner, "start", lambda run_id, prefer_cache=False: pending.append(asyncio.create_task(runner._run(run_id, True))))
+    monkeypatch.setattr(mailer, "start", lambda run_id: pending.append(asyncio.create_task(mailer.deliver_for_run(run_id))))
+
+    async def go():
+        async with _client() as staff:
+            await _staff(staff)
+            loc = (await staff.get("/demo/happy_nilgiri", follow_redirects=False)).headers["location"]
+            async with _client() as guest:
+                r = await guest.post(loc.split("?")[0], data=_guest_form("happy_nilgiri"))
+            rid = int(re.search(r"/runs/(\d+)", r.headers["location"]).group(1))
+            while pending:
+                batch = list(pending)
+                pending.clear()
+                await asyncio.gather(*batch)
+            ev = (await staff.get(f"/runs/{rid}/events")).json()["events"]
+            row = next(a for a in (await staff.get("/api/v1/applications")).json()["applications"] if a["run_id"] == rid)
+            return row, {x["rule_id"] for e in ev for x in ((e.get("evidence") or {}).get("rules") or []) if x["result"] == "FAIL"}
+    row, fails = asyncio.run(go())
+    assert row["status"] == "REJECTED" and "R-AU-15" in fails       # the clean-looking Nilgiri specimens never pass
