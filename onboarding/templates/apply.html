@@ -70,7 +70,7 @@
         {% for slot in ['gst_certificate', 'pan_card', 'bank_proof', 'udyam_certificate'] %}
         <div class="grid gap-2 sm:grid-cols-[11rem_1fr] lg:grid-cols-[12rem_1fr_12rem] sm:items-center sm:gap-4 rounded-lg border px-3 py-3 sm:py-2.5" {{ 'data-msme' if slot == 'udyam_certificate' }} {{ 'data-in' if slot in ('gst_certificate', 'pan_card') }} {{ 'data-show="PVT_LTD PUBLIC_LTD LLP PARTNERSHIP PROPRIETORSHIP"' | safe if slot == 'pan_card' }}>
           <div class="font-medium">{{ SLOT_LABEL[slot] }}{{ REQ }}</div>
-          <input type="file" data-read="{{ slot }}" name="{{ slot }}" {{ 'data-req' if not (prev_docs.get(slot) or demo_files.get(slot)) }} {{ 'data-gst' if slot == 'gst_certificate' }} aria-label="{{ SLOT_LABEL[slot] }}" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/*" class="text-xs min-w-0 max-w-full">
+          <input type="file" data-read="{{ slot }}" name="{{ slot }}" {{ 'data-req' if not (prev_docs.get(slot) or demo_files.get(slot)) }} {{ 'data-gst' if slot == 'gst_certificate' and not (prev_docs.get(slot) or demo_files.get(slot)) }} aria-label="{{ SLOT_LABEL[slot] }}" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/*" class="text-xs min-w-0 max-w-full">
           <div class="text-xs text-slate-500 sm:col-span-2 lg:col-span-1 lg:text-right truncate empty:hidden">
             {%- if demo_files.get(slot) %}attached: <span class="mono">{{ demo_files[slot] }}</span>
             {%- elif prev_docs.get(slot) %}keeps: <span class="mono">{{ prev_docs[slot].filename }}</span>{% endif -%}

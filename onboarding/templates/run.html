@@ -601,6 +601,7 @@ if (FINISHED && {{ 'true' if done else 'false' }} && FINISHED_AGO !== null && FI
   if (!FINISHED) startLive();
 }
 function startLive() {
+  markSeen();   // followed live: the reload after it finishes shows the static result, not a second replay
   let es;
   try {
     es = new EventSource(`/runs/${RUN_ID}/stream?after=${last}`);

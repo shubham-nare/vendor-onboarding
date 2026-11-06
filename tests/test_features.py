@@ -353,6 +353,34 @@ def _guest_form(key: str) -> dict:
     return form
 
 
+def _gst_file_input(html: str) -> str:
+    return re.search(r'<input type="file"[^>]*name="gst_certificate"[^>]*>', html).group(0)
+
+
+def test_launcher_forms_do_not_demand_a_gst_file_that_is_already_attached(db):
+    """apply.html's script makes [data-gst] inputs required when the vendor is GST-registered; an attached demo or
+    previous GST certificate must not carry data-gst/data-req, or the browser blocks the submit ("Please select a file")."""
+    async def go():
+        async with _client() as staff:
+            await _staff(staff)
+            out = {}
+            for key in ("borrowed_gstin_kaveri", "shared_bank_rangoli", "wrongdoc_tejas"):
+                loc = (await staff.get(f"/demo/{key}", follow_redirects=False)).headers["location"]
+                async with _client() as guest:
+                    out[key] = _gst_file_input((await guest.get(loc)).text)
+            return out
+    for key, tag in asyncio.run(go()).items():
+        assert "data-req" not in tag and "data-gst" not in tag, (key, tag)
+
+
+def test_a_run_followed_live_is_not_replayed_after_its_reload():
+    """run.html: following a run live marks it seen, so the reload when it finishes shows the static result."""
+    from pathlib import Path
+    src = (Path(__file__).resolve().parent.parent / "onboarding" / "templates" / "run.html").read_text(encoding="utf-8")
+    body = src[src.index("function startLive() {"):]
+    assert body.index("markSeen();") < body.index("new EventSource")
+
+
 def test_launcher_tejas_then_the_guest_resubmission_is_approved_with_the_diff(db, monkeypatch):
     from onboarding import mailer, runner
     from onboarding.models import Run
@@ -378,7 +406,10 @@ def test_launcher_tejas_then_the_guest_resubmission_is_approved_with_the_diff(db
             r = await guest.post(link, data=_guest_form("wrongdoc_tejas"))
             first = int(re.search(r"/runs/(\d+)", r.headers["location"]).group(1))
             await drain()
-            out["page"] = (await guest.get(f"{link}?demo=wrongdoc_tejas_resubmit")).status_code
+            page = await guest.get(f"{link}?demo=wrongdoc_tejas_resubmit")
+            out["page"] = page.status_code
+            out["gst_input_resubmit"] = _gst_file_input(page.text)
+            out["gst_input_prev_only"] = _gst_file_input((await guest.get(link)).text)   # previous documents, no demo files
             r = await guest.post(link, data=_guest_form("wrongdoc_tejas_resubmit"))
             out["resubmit"] = (r.status_code, r.headers.get("location", ""))
             second = int(re.search(r"/runs/(\d+)", r.headers["location"]).group(1))
@@ -390,6 +421,8 @@ def test_launcher_tejas_then_the_guest_resubmission_is_approved_with_the_diff(db
 
     o = asyncio.run(go())
     assert o["first"] == "PENDING_VENDOR" and o["page"] == 200 and o["resubmit"][0] == 303
+    for k in ("gst_input_resubmit", "gst_input_prev_only"):   # a file already on hand: the browser must not demand one
+        assert "data-req" not in o[k] and "data-gst" not in o[k] and " required" not in o[k], (k, o[k])
     assert o["second"] == ("APPROVED", True, {"resolved": ["R-COMP-02", "R-DOC-01"], "still_open": [], "new": []})
 
 

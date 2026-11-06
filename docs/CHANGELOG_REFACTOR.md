@@ -78,3 +78,7 @@ This records what changed, why, and any behaviour a user would notice. The basel
   - A launcher invite also accepts its scenario's own resubmission (`wrongdoc_tejas_resubmit` on a `demo:wrongdoc_tejas` invite).
   - After submitting, a vendor-only browser always lands on `/thanks`. Only someone who is also logged in as staff (the scenario launcher) goes to the live view. `test_portal` now finds the run from the ref and asserts the `/thanks` landing.
   - **Run page replay:** the stored stage events play back in order, about 0.5 s per stage. It starts automatically when the page is opened mid-run or within 2 minutes of the run finishing, labelled with the real run duration. A "▶ Replay the checks" button is always available. The result appears only when the replay reaches the decision. It plays once per tab session and writes nothing.
+- **Browser-pass fixes** (found by the review session in a real browser):
+  - **The GST certificate input blocked the submit.** On launcher forms and on resubmissions with a previous certificate, the browser showed "Please select a file." on the GST certificate input even though the page said a file was attached. `apply.html` now emits `data-gst` on the file input only when no file is already attached. This bug was older than the refactor, so it is likely on the live site too.
+  - **Launcher runs played twice.** A run followed live, then reloaded on finish, was replayed again. Following a run live now marks it seen, so only pages opened after the run auto-replay.
+  - **Run times:** DEMO_SCRIPT now gives 5–10 s per run.
