@@ -83,6 +83,8 @@ CONTACT_PER_IP = RateLimit(5, 3600, "Too many messages from your network. Please
 # wrong reset passcodes: always on (not switched off with RATE_LIMITS), so the passcode can't be guessed
 RESET_WRONG = RateLimit(5, 3600, "Too many wrong passcodes. Reset is locked for an hour.")
 ALL_LIMITS = [LOGIN_PER_ACCOUNT, LOGIN_PER_IP, SIGNUP_PER_IP, SUBMIT_PER_IP, READ_PER_IP, CONTACT_PER_IP, RESET_WRONG]
+# usage budgets that a demo reset starts afresh. Log-in and wrong-passcode lockouts are kept, so a reset never helps a guesser.
+USAGE_LIMITS = [SIGNUP_PER_IP, SUBMIT_PER_IP, READ_PER_IP, CONTACT_PER_IP]
 
 
 def check_login(request: Request, email: str) -> None:

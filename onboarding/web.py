@@ -1423,6 +1423,8 @@ async def reset_data(request: Request, passcode: str) -> None:
         raise HTTPException(409, "A run is in progress; try again in a minute.")
     from onboarding.seeding import seed
     await seed(reset=True, dispose=False, allow_remote=True)   # the passcode is the confirmation here
+    for limit in security.USAGE_LIMITS:   # a fresh demo also gets a fresh hourly budget of sign-ups and submissions
+        limit.reset()
 
 
 # --- Vendor Intelligence: vendor directory and Vendor 360 ------------------------------------------------------------
