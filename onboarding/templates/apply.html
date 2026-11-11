@@ -222,6 +222,8 @@ function toggleType() {
   // required only when it is on screen, and GST items only for GST-registered vendors in India
   const gst = document.getElementById('gst'), g = india && (!gst || gst.checked);
   document.querySelectorAll('[data-req]').forEach(el => el.required = shown(el) && (!el.hasAttribute('data-gst') || g));
+  // a slot that's no longer on screen (e.g. the PAN card for an institution) can't block Submit: the browser couldn't show why
+  document.querySelectorAll('input[type=file][data-read]').forEach(el => { if (!shown(el)) el.setCustomValidity(''); });
   document.querySelectorAll('[data-gst]:not([data-req])').forEach(el => el.required = g && shown(el));
   setTaxBox();
   if (typeof checkPin === 'function') checkPin();
@@ -322,23 +324,38 @@ function pfFill(field, s, source) {
   pfChip(el, s.check ? `Check this: hard to read on your ${source}` : `From your ${source}`, s.check ? 'check' : 'doc');
   return 1;
 }
+// A file we recognise as the wrong document blocks Submit until it's replaced, so the vendor fixes it here and
+// not after a review. Only a confident "this is a different document" blocks: a file we couldn't read never does.
+// The vendor can still say it's the right file (a misread must never lock out a genuine vendor); the checks
+// after submission then read it again (R-DOC-01).
+function wrongFile(inp, st, message) {
+  inp.setCustomValidity(`${message} Please upload the right file here before you submit.`);
+  st.dataset.tone = 'bad'; st.textContent = `${message} Please upload the right file here before you submit. `;
+  const keep = document.createElement('button');
+  keep.type = 'button'; keep.className = 'underline font-normal text-slate-600'; keep.textContent = "It's the right document";
+  keep.onclick = () => { inp.setCustomValidity(''); st.dataset.tone = 'warn'; st.textContent = "OK. We'll check this file again after you submit."; };
+  st.append(keep);
+}
 document.querySelectorAll('input[type=file][data-read]').forEach(inp => inp.addEventListener('change', async () => {
   const slot = inp.dataset.read, st = document.querySelector(`.pf-status[data-slot=${slot}]`);
+  inp.setCustomValidity('');
   if (!inp.files.length || !isIndia()) { st.textContent = ''; return; }
   st.dataset.tone = 'wait'; st.textContent = 'Reading your document…';
+  inp.setCustomValidity('We are still reading this document. Please wait a moment.');
   const body = new FormData(); body.append('slot', slot); body.append('file', inp.files[0]);
   try {
     const r = await fetch('/apply/read', { method: 'POST', body, credentials: 'same-origin' });
     const d = await r.json();
+    inp.setCustomValidity('');
     if (!d.ok) { st.dataset.tone = 'warn'; st.textContent = d.message || "We couldn't read this file. Please type the details below."; return; }
-    if (!d.right_slot) { st.dataset.tone = 'bad'; st.textContent = d.message; return; }
+    if (!d.right_slot) { wrongFile(inp, st, d.message); return; }
     const order = ['business_type', 'legal_name', 'gstin', 'pan', 'proprietor_name', 'address', 'city', 'state', 'pin', 'bank_holder', 'bank_account', 'ifsc', 'msme', 'udyam_no'];
     let n = 0;
     order.forEach(f => { if (d.fields[f]) { n += pfFill(f, d.fields[f], d.source); if (f === 'business_type') toggleType(); } });
     pfSave(); checkIds(); checkPin();
     st.dataset.tone = n ? 'ok' : 'warn';
     st.textContent = n ? `Filled ${n} detail${n === 1 ? '' : 's'} from your ${d.source}. Please check them below.` : (d.message || `Nothing new to fill from your ${d.source}.`);
-  } catch (e) { st.dataset.tone = 'warn'; st.textContent = "We couldn't read this file just now. Please type the details below; we'll still check it after you submit."; }
+  } catch (e) { inp.setCustomValidity(''); st.dataset.tone = 'warn'; st.textContent = "We couldn't read this file just now. Please type the details below; we'll still check it after you submit."; }
 }));
 // a value the vendor changes after we filled it is marked, and stays theirs
 document.querySelectorAll('form input, form select').forEach(el => ['input', 'change'].forEach(ev => el.addEventListener(ev, e => {
