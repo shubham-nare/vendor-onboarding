@@ -59,7 +59,14 @@ def api(tmp_path_factory):
                 await c.post("/api/v1/system/reset", json={"passcode": "guess"})
             out["reset locked"] = await c.post("/api/v1/system/reset", json={"passcode": saved})   # even the right one, after 5 wrong
             security.RESET_WRONG.reset()
+            for _ in range(security.SUBMIT_PER_IP.limit):     # this network has used its hourly submission budget
+                security.SUBMIT_PER_IP.allow("10.9.9.9")
+            security.SIGNUP_PER_IP.allow("10.9.9.9")
+            security.LOGIN_PER_IP.allow("10.9.9.9")
+            out["budget used"] = not security.SUBMIT_PER_IP.allow_more("10.9.9.9")
             out["reset ok"] = await c.post("/api/v1/system/reset", json={"passcode": saved})
+            out["budget after reset"] = security.SUBMIT_PER_IP.allow_more("10.9.9.9") and "10.9.9.9" not in security.SIGNUP_PER_IP._hits
+            out["login lockout kept"] = "10.9.9.9" in security.LOGIN_PER_IP._hits
             await c.post("/company/login", data={"email": DEMO_COMPANY_EMAIL, "password": DEMO_PASSWORD})   # the reset reseeded the logins
             out["system"] = await c.get("/api/v1/system")
             pdf = (ROOT / "fixtures" / "documents" / "happy_nilgiri" / "gst_certificate.pdf").read_bytes()
@@ -117,6 +124,8 @@ def test_reset_needs_a_real_passcode_and_limits_wrong_tries(api):
     assert api["reset wrong"].status_code == 403 and "Wrong passcode" in api["reset wrong"].json()["error"]
     assert api["reset locked"].status_code == 429 and "Too many wrong passcodes" in api["reset locked"].json()["error"]
     assert api["reset ok"].status_code == 200 and api["reset ok"].json() == {"ok": True}
+    # a demo reset gives a fresh hourly budget of submissions and sign-ups, but keeps log-in lockouts
+    assert api["budget used"] and api["budget after reset"] and api["login lockout kept"]
     assert any(c["name"].startswith("Database") for c in api["system"].json()["checks"])
 
 
